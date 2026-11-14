@@ -18,7 +18,7 @@ const {
     updateTeacherValidator
 } = require('../validators/teacher.validator');
 const validateRequest = require('../middlewares/validate.middleware');
-const { verifyJWT, authorizeRoles } = require('../middlewares/auth.middleware');
+const { protect, restrictTo } = require('../middlewares/auth.middleware');
 const { ROLES } = require('../constants/system.constants');
 
 const router = express.Router();
@@ -29,20 +29,20 @@ router.post('/public/self-register', publicSelfRegisterValidator, validateReques
 router.get('/public/registry-card/:uid', getPublicRegistryCardByUid);
 
 // প্রোটেক্টেড রাউট (লগইন আবশ্যক)
-router.use(verifyJWT);
+router.use(protect);
 
 // শিক্ষক নিজে লগইন করে নিজের ড্যাশবোর্ড ও হিসাব দেখার রাউট
 router.get('/my-portal/dashboard', getMyPortalDashboard);
 
 // অ্যাডমিন কন্ট্রোল রাউটসমূহ
-router.post('/recalculate-ranks', authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN), triggerRankRecalculation);
-router.patch('/:id/approve', authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN), approvePendingTeacher);
+router.post('/recalculate-ranks', restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN), triggerRankRecalculation);
+router.patch('/:id/approve', restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN), approvePendingTeacher);
 
 router
     .route('/')
-    .get(authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN), getAllTeachers)
+    .get(restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN), getAllTeachers)
     .post(
-        authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
+        restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN),
         createTeacherValidator,
         validateRequest,
         registerTeacher
@@ -52,7 +52,7 @@ router
     .route('/:id')
     .get(getTeacherById)
     .patch(
-        authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
+        restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN),
         updateTeacherValidator,
         validateRequest,
         updateTeacher
@@ -60,7 +60,7 @@ router
 
 router.patch(
     '/:id/toggle-status',
-    authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
+    restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN),
     toggleTeacherActiveStatus
 );
 

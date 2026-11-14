@@ -14,7 +14,7 @@ const {
     PAYROLL_POLICY,
     PAYMENT_STATUS,
     ATTENDANCE_STATUS,
-    ATTENDANCE_POLICY
+    ATTENDANCE_RULES
 } = require('../constants/system.constants');
 const ApiError = require('../utils/ApiError');
 const ApiResponse = require('../utils/ApiResponse');
@@ -220,7 +220,7 @@ const reviewLeaveRequest = asyncHandler(async (req, res) => {
                                 biometricDeviceId: application.teacherId.biometricDeviceId,
                                 date: dateStr,
                                 status: targetStatus,
-                                deductionWeight: shouldUseQuota ? ATTENDANCE_POLICY.LEAVE_DEDUCTION_WEIGHT : 0,
+                                deductionWeight: shouldUseQuota ? ATTENDANCE_RULES.LEAVE_DEDUCTION_WEIGHT : 0,
                                 directSalaryPenaltyDays: 0,
                                 isIgnored: false,
                                 source: 'Leave_Approval',

@@ -17,6 +17,11 @@ const PAYMENT_METHODS = Object.freeze({
     MOBILE_BANKING: 'Mobile Banking'
 });
 
+const PAYMENT_STATUS = Object.freeze({
+    PENDING: 'Pending',
+    PAID: 'Paid'
+});
+
 const BLOOD_GROUPS = Object.freeze([
     'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'N/A'
 ]);
@@ -122,6 +127,7 @@ module.exports = {
     ROLES,
     EMPLOYMENT_TYPES,
     PAYMENT_METHODS,
+    PAYMENT_STATUS,
     BLOOD_GROUPS,
     DESIGNATION_DETAILS,
     DESIGNATIONS,

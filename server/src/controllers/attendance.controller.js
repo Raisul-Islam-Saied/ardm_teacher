@@ -8,7 +8,7 @@ const {
     runDailyEndOfDayAudit,
     evaluatePunchStatus
 } = require('../services/attendance.service');
-const { ATTENDANCE_STATUS, ATTENDANCE_POLICY } = require('../constants/system.constants');
+const { ATTENDANCE_STATUS, ATTENDANCE_RULES } = require('../constants/system.constants');
 const ApiError = require('../utils/ApiError');
 const ApiResponse = require('../utils/ApiResponse');
 const asyncHandler = require('../utils/asyncHandler');
@@ -183,13 +183,13 @@ const adminOverrideAttendance = asyncHandler(async (req, res) => {
     let directSalaryPenaltyDays = 0;
 
     if (status === ATTENDANCE_STATUS.LATE) {
-        deductionWeight = ATTENDANCE_POLICY.LATE_DEDUCTION_WEIGHT; // 0.5 কোটা কাটবে
+        deductionWeight = ATTENDANCE_RULES.LATE_DEDUCTION_WEIGHT; // 0.5 কোটা কাটবে
     } else if (status === ATTENDANCE_STATUS.LEAVE) {
-        deductionWeight = ATTENDANCE_POLICY.LEAVE_DEDUCTION_WEIGHT; // 1.0 কোটা কাটবে
+        deductionWeight = ATTENDANCE_RULES.LEAVE_DEDUCTION_WEIGHT; // 1.0 কোটা কাটবে
     } else if (status === ATTENDANCE_STATUS.ABSENT) {
         // বিনা অনুমতিতে অনুপস্থিত করলে কোটা কাটবে না, সরাসরি ১ দিনের বেতন কাটা যাবে!
         deductionWeight = 0;
-        directSalaryPenaltyDays = ATTENDANCE_POLICY.ABSENT_PENALTY_DAYS; // 1.0 দিন সরাসরি বেতন কর্তন
+        directSalaryPenaltyDays = ATTENDANCE_RULES.ABSENT_PENALTY_DAYS; // 1.0 দিন সরাসরি বেতন কর্তন
     }
 
     const updated = await Attendance.findOneAndUpdate(
@@ -271,7 +271,7 @@ const getTeacherMonthlySummary = asyncHandler(async (req, res) => {
         }
     }
 
-    const monthlyQuota = teacher.customLeaveQuota ?? ATTENDANCE_POLICY.MONTHLY_PAID_LEAVE_QUOTA;
+    const monthlyQuota = teacher.customLeaveQuota ?? ATTENDANCE_RULES.MONTHLY_PAID_LEAVE_QUOTA;
     const quotaRemaining = Math.max(0, monthlyQuota - totalQuotaUsed);
     const excessQuotaDays = Math.max(0, totalQuotaUsed - monthlyQuota);
 
