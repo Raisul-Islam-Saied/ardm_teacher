@@ -23,6 +23,7 @@ const salarySchema = new mongoose.Schema({
         totalIgnoredDays: { type: Number, default: 0 },
         totalQuotaUsed: { type: Number, default: 0 },
         allowedPaidQuota: { type: Number, default: 2.0 },
+        remainingPaidQuota: { type: Number, default: 2.0 }, // মাসের কোটা থেকে কতদিন বাকি আছে
         excessQuotaDays: { type: Number, default: 0 },
         directAbsentPenaltyDays: { type: Number, default: 0 },
         totalDeductibleDays: { type: Number, default: 0 }

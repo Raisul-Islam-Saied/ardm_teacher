@@ -1,30 +1,67 @@
 const express = require('express');
-const router = express.Router();
 const {
-    getTeacherSelfPortalDashboard,
-    createTeacher,
+    getRegistrationMetadata,
+    registerTeacher,
+    publicSelfRegisterTeacher,
+    getPublicRegistryCardByUid,
+    approvePendingTeacher,
     getAllTeachers,
+    triggerRankRecalculation,
     getTeacherById,
     updateTeacher,
-    toggleTeacherStatus,
-    adminResetTeacherPassword
+    toggleTeacherActiveStatus,
+    getMyPortalDashboard
 } = require('../controllers/teacher.controller');
-const { protect, restrictTo } = require('../middlewares/auth.middleware');
+const {
+    createTeacherValidator,
+    publicSelfRegisterValidator,
+    updateTeacherValidator
+} = require('../validators/teacher.validator');
 const validateRequest = require('../middlewares/validate.middleware');
-const { createTeacherValidationRules, updateTeacherValidationRules } = require('../validators/teacher.validator');
+const { verifyJWT, authorizeRoles } = require('../middlewares/auth.middleware');
 const { ROLES } = require('../constants/system.constants');
 
-router.use(protect);
+const router = express.Router();
 
-// 🌟 ১. শিক্ষকের নিজস্ব অল-ইন-ওয়ান পোর্টাল ড্যাশবোর্ড (Teacher, Admin, SuperAdmin সবাই নিজেরটা দেখতে পারবেন)
-router.get('/my-portal/dashboard', getTeacherSelfPortalDashboard);
+// পাবলিক রাউট (শিক্ষক নিজে ফর্ম পূরণ ও ডিজিটাল রেজিস্ট্রি কার্ড দেখার জন্য)
+router.get('/public/metadata', getRegistrationMetadata);
+router.post('/public/self-register', publicSelfRegisterValidator, validateRequest, publicSelfRegisterTeacher);
+router.get('/public/registry-card/:uid', getPublicRegistryCardByUid);
 
-// 🔒 ২. শুধুমাত্র Admin এবং SuperAdmin এর জন্য সংরক্ষিত রাউটস
-router.post('/', restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN), createTeacherValidationRules, validateRequest, createTeacher);
-router.get('/', restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN), getAllTeachers);
-router.get('/:id', restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN), getTeacherById);
-router.put('/:id', restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN), updateTeacherValidationRules, validateRequest, updateTeacher);
-router.patch('/:id/status', restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN), toggleTeacherStatus);
-router.patch('/:id/reset-password', restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN), adminResetTeacherPassword);
+// প্রোটেক্টেড রাউট (লগইন আবশ্যক)
+router.use(verifyJWT);
+
+// শিক্ষক নিজে লগইন করে নিজের ড্যাশবোর্ড ও হিসাব দেখার রাউট
+router.get('/my-portal/dashboard', getMyPortalDashboard);
+
+// অ্যাডমিন কন্ট্রোল রাউটসমূহ
+router.post('/recalculate-ranks', authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN), triggerRankRecalculation);
+router.patch('/:id/approve', authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN), approvePendingTeacher);
+
+router
+    .route('/')
+    .get(authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN), getAllTeachers)
+    .post(
+        authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
+        createTeacherValidator,
+        validateRequest,
+        registerTeacher
+    );
+
+router
+    .route('/:id')
+    .get(getTeacherById)
+    .patch(
+        authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
+        updateTeacherValidator,
+        validateRequest,
+        updateTeacher
+    );
+
+router.patch(
+    '/:id/toggle-status',
+    authorizeRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
+    toggleTeacherActiveStatus
+);
 
 module.exports = router;

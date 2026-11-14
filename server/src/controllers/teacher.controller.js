@@ -6,278 +6,421 @@ const SalaryHistory = require('../models/SalaryHistory');
 const LeaveRequest = require('../models/LeaveRequest');
 const LoanAdvance = require('../models/LoanAdvance');
 const SystemSettings = require('../models/SystemSettings');
-const { ATTENDANCE_STATUS } = require('../constants/system.constants');
+const AuditLog = require('../models/AuditLog');
+const {
+    ATTENDANCE_STATUS,
+    DESIGNATION_DETAILS,
+    BLOOD_GROUPS
+} = require('../constants/system.constants');
+const {
+    generateTenDigitTeacherId,
+    getNextAvailableBiometricId,
+    recalculateAllTeachersRank,
+    generateRegistryTokens
+} = require('../services/teacher.service');
+const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const ApiResponse = require('../utils/ApiResponse');
-const asyncHandler = require('../utils/asyncHandler');
 
-// =========================================================================
-// 📱 শিক্ষকের নিজস্ব পোর্টাল মাস্টার ড্যাশবোর্ড (Teacher Self-Service Hub)
-// =========================================================================
-const getTeacherSelfPortalDashboard = asyncHandler(async (req, res) => {
+// ০. পদবীর তালিকা (বাংলা ও ইংরেজি সহ) এবং মেটাডেটা পাওয়ার এন্ডপয়েন্ট
+const getRegistrationMetadata = asyncHandler(async (req, res) => {
+    const nextBioId = await getNextAvailableBiometricId();
+    res.status(200).json(new ApiResponse(200, {
+        designations: DESIGNATION_DETAILS,
+        bloodGroups: BLOOD_GROUPS,
+        defaultAddress: {
+            postOffice: 'Sarafbhata',
+            postCode: '4360',
+            upazila: 'Rangunia',
+            district: 'Chittagong'
+        },
+        nextSuggestedBiometricDeviceId: nextBioId
+    }, 'রেজিস্ট্রেশন মেটাডেটা সফলভাবে পাওয়া গেছে'));
+});
+
+// ১. অ্যাডমিন কর্তৃক নতুন শিক্ষক/স্টাফ নিবন্ধন (সরাসরি Approved)
+const registerTeacher = asyncHandler(async (req, res) => {
+    const {
+        teacherCode,
+        biometricDeviceId,
+        phone,
+        nidNumber,
+        birthRegNumber,
+        email,
+        indexNumber,
+        dateOfBirth,
+        joiningDate,
+        designation
+    } = req.body;
+
+    // ডুপ্লিকেট চেক (ফোন, এনআইডি, জন্ম নিবন্ধন, ইমেইল, ইনডেক্স নম্বর)
+    const orConditions = [{ phone }];
+    if (nidNumber) orConditions.push({ nidNumber });
+    if (birthRegNumber) orConditions.push({ birthRegNumber });
+    if (email) orConditions.push({ email });
+    if (indexNumber) orConditions.push({ indexNumber });
+
+    const existingDuplicate = await Teacher.findOne({ $or: orConditions });
+    if (existingDuplicate) {
+        throw new ApiError(409, 'প্রদত্ত মোবাইল নম্বর, NID, জন্ম নিবন্ধন অথবা ইনডেক্স নম্বর দিয়ে ইতিমধ্যে একজন শিক্ষক নিবন্ধিত আছেন!');
+    }
+
+    // ১০ সংখ্যার টিচার আইডি ও বায়োমেট্রিক ডিভাইস আইডি অটো-জেনারেশন (যদি না দেওয়া থাকে)
+    const finalTeacherCode = teacherCode || await generateTenDigitTeacherId(joiningDate, dateOfBirth, designation);
+    const finalBiometricId = biometricDeviceId ? Number(biometricDeviceId) : await getNextAvailableBiometricId();
+
+    const bioConflict = await Teacher.findOne({
+        $or: [{ teacherCode: finalTeacherCode }, { biometricDeviceId: finalBiometricId }]
+    });
+    if (bioConflict) {
+        throw new ApiError(409, `টিচার আইডি (${finalTeacherCode}) অথবা বায়োমেট্রিক আইডি (${finalBiometricId}) ইতিমধ্যে ব্যবহৃত হয়েছে!`);
+    }
+
+    const { uid, editToken } = generateRegistryTokens();
+
+    const teacher = await Teacher.create({
+        ...req.body,
+        teacherCode: finalTeacherCode,
+        biometricDeviceId: finalBiometricId,
+        uid,
+        editToken,
+        password: req.body.password || finalTeacherCode, // পাসওয়ার্ড না দিলে ১০ সংখ্যার আইডিটিই ডিফল্ট পাসওয়ার্ড হবে
+        registrationStatus: 'Approved',
+        isActive: true
+    });
+
+    // সমগ্র মাদ্রাসার র‍্যাংকিং (1, 2, 3...) পুনরায় সাজানো
+    await recalculateAllTeachersRank();
+    const updatedTeacher = await Teacher.findById(teacher._id);
+
+    await AuditLog.recordLog({
+        req,
+        action: 'REGISTER_TEACHER',
+        module: 'Teacher',
+        targetId: String(teacher._id),
+        description: `নতুন শিক্ষক নিবন্ধিত হয়েছেন: ${teacher.fullNameBng} (ID: ${finalTeacherCode}, Rank: #${updatedTeacher.rankingMetrics.overallMadrasahRank})`
+    });
+
+    res.status(201).json(new ApiResponse(201, updatedTeacher, 'শিক্ষক সফলভাবে নিবন্ধিত হয়েছেন এবং র‍্যাংক নির্ধারিত হয়েছে!'));
+});
+
+// ২. পাবলিক সেল্ফ-রেজিস্ট্রেশন (লিংক থেকে শিক্ষক নিজে ফর্ম পূরণ করলে Pending মোডে থাকবে এবং ডিজিটাল আইডি কার্ড পাবে)
+const publicSelfRegisterTeacher = asyncHandler(async (req, res) => {
+    const {
+        phone,
+        nidNumber,
+        birthRegNumber,
+        email,
+        dateOfBirth,
+        joiningDate,
+        designation
+    } = req.body;
+
+    const orConditions = [{ phone }];
+    if (nidNumber) orConditions.push({ nidNumber });
+    if (birthRegNumber) orConditions.push({ birthRegNumber });
+    if (email) orConditions.push({ email });
+
+    const existingDuplicate = await Teacher.findOne({ $or: orConditions });
+    if (existingDuplicate) {
+        throw new ApiError(409, 'প্রদত্ত মোবাইল নম্বর, NID অথবা জন্ম নিবন্ধন নম্বর দিয়ে ইতিমধ্যে নিবন্ধন করা হয়েছে!');
+    }
+
+    const finalTeacherCode = await generateTenDigitTeacherId(joiningDate, dateOfBirth, designation);
+    const finalBiometricId = await getNextAvailableBiometricId();
+    const { uid, editToken } = generateRegistryTokens();
+
+    const teacher = await Teacher.create({
+        ...req.body,
+        teacherCode: finalTeacherCode,
+        biometricDeviceId: finalBiometricId,
+        uid,
+        editToken,
+        basicSalary: 0, // অ্যাডমিন অ্যাপ্রুভ করার সময় মূল বেতন বসাবেন
+        password: req.body.password || finalTeacherCode,
+        registrationStatus: 'Pending',
+        isActive: false
+    });
+
+    res.status(201).json(new ApiResponse(201, {
+        teacherId: teacher.teacherCode,
+        uid: teacher.uid,
+        editToken,
+        registrationStatus: teacher.registrationStatus,
+        teacher
+    }, 'আপনার নিবন্ধন সফলভাবে জমা হয়েছে এবং ডিজিটাল রেজিস্ট্রি কার্ড তৈরি হয়েছে!'));
+});
+
+// ৩. UID দিয়ে পাবলিক রেজিস্ট্রি কার্ড দেখা (আপনার আগের HTML ফর্মের Returning-user check এর জন্য)
+const getPublicRegistryCardByUid = asyncHandler(async (req, res) => {
+    const { uid } = req.params;
+    const teacher = await Teacher.findOne({ uid }).lean();
+    if (!teacher) {
+        throw new ApiError(404, 'এই UID দিয়ে কোনো নিবন্ধিত রেকর্ড পাওয়া যায়নি!');
+    }
+    res.status(200).json(new ApiResponse(200, teacher, 'রেজিস্ট্রি কার্ড সফলভাবে লোড হয়েছে'));
+});
+
+// ৪. অ্যাডমিন কর্তৃক Pending শিক্ষকের রেজিস্ট্রেশন অনুমোদন ও মূল বেতন নির্ধারণ
+const approvePendingTeacher = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { basicSalary, biometricDeviceId, customLeaveQuota, paymentMethod } = req.body;
+
+    if (basicSalary === undefined || Number(basicSalary) < 0) {
+        throw new ApiError(400, 'অনুমোদনের সময় শিক্ষকের মূল বেতন (basicSalary) প্রদান করা আবশ্যক!');
+    }
+
+    const teacher = await Teacher.findById(id);
+    if (!teacher) {
+        throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
+    }
+
+    teacher.basicSalary = Number(basicSalary);
+    if (biometricDeviceId) teacher.biometricDeviceId = Number(biometricDeviceId);
+    if (customLeaveQuota !== undefined) teacher.customLeaveQuota = Number(customLeaveQuota);
+    if (paymentMethod) teacher.paymentMethod = paymentMethod;
+    teacher.registrationStatus = 'Approved';
+    teacher.isActive = true;
+
+    await teacher.save();
+    await recalculateAllTeachersRank();
+
+    const updated = await Teacher.findById(id);
+
+    await AuditLog.recordLog({
+        req,
+        action: 'APPROVE_TEACHER_REGISTRATION',
+        module: 'Teacher',
+        targetId: String(teacher._id),
+        description: `${teacher.fullNameBng}-এর নিবন্ধন অনুমোদন করা হয়েছে (বেতন: ${basicSalary} টাকা, Rank: #${updated.rankingMetrics.overallMadrasahRank})`
+    });
+
+    res.status(200).json(new ApiResponse(200, updated, 'শিক্ষকের নিবন্ধন অনুমোদিত হয়েছে এবং র‍্যাংক নির্ধারিত হয়েছে!'));
+});
+
+// ৫. সকল শিক্ষক/স্টাফের তালিকা (র‍্যাংক অনুযায়ী সাজানো: সুপার ১, সহ-সুপার ২...)
+const getAllTeachers = asyncHandler(async (req, res) => {
+    const { isActive, designation, staffCategory, registrationStatus, search } = req.query;
+    const filter = {};
+
+    if (isActive !== undefined) filter.isActive = isActive === 'true';
+    if (designation) filter.designation = designation;
+    if (staffCategory) filter.staffCategory = staffCategory;
+    if (registrationStatus) filter.registrationStatus = registrationStatus;
+
+    if (search) {
+        filter.$or = [
+            { fullNameBng: { $regex: search, $options: 'i' } },
+            { fullNameEng: { $regex: search, $options: 'i' } },
+            { teacherCode: { $regex: search, $options: 'i' } },
+            { phone: { $regex: search, $options: 'i' } }
+        ];
+    }
+
+    const teachers = await Teacher.find(filter)
+        .sort({
+            'rankingMetrics.overallMadrasahRank': 1,
+            'rankingMetrics.designationPriority': 1,
+            biometricDeviceId: 1
+        })
+        .lean();
+
+    res.status(200).json(new ApiResponse(200, {
+        totalCount: teachers.length,
+        teachers
+    }, 'র‍্যাংক অনুযায়ী শিক্ষকদের তালিকা সফলভাবে পাওয়া গেছে'));
+});
+
+// ৬. এক ক্লিকে সবার র‍্যাংকিং পুনরায় ক্যালকুলেট করার এন্ডপয়েন্ট
+const triggerRankRecalculation = asyncHandler(async (req, res) => {
+    const totalRanked = await recalculateAllTeachersRank();
+    res.status(200).json(new ApiResponse(200, { totalRanked }, 'সকল শিক্ষকের পদবী, শিক্ষাগত যোগ্যতা ও GPA অনুযায়ী র‍্যাংকিং সফলভাবে আপডেট করা হয়েছে!'));
+});
+
+// ৭. একক শিক্ষকের বিস্তারিত প্রোফাইল
+const getTeacherById = asyncHandler(async (req, res) => {
+    const teacher = await Teacher.findById(req.params.id).lean();
+    if (!teacher) {
+        throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
+    }
+    res.status(200).json(new ApiResponse(200, teacher, 'শিক্ষকের তথ্য পাওয়া গেছে'));
+});
+
+// ৮. শিক্ষকের তথ্য আপডেট এবং স্বয়ংক্রিয় র‍্যাংক পুনর্বিন্যাস
+const updateTeacher = asyncHandler(async (req, res) => {
+    delete req.body.password;
+
+    const teacher = await Teacher.findById(req.params.id);
+    if (!teacher) {
+        throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
+    }
+
+    Object.assign(teacher, req.body);
+    await teacher.save();
+    await recalculateAllTeachersRank();
+
+    const updated = await Teacher.findById(req.params.id);
+    res.status(200).json(new ApiResponse(200, updated, 'শিক্ষকের তথ্য ও র‍্যাংক সফলভাবে আপডেট করা হয়েছে'));
+});
+
+// ৯. শিক্ষককে নিষ্ক্রিয়/সক্রিয় করা (Soft Deactivate)
+const toggleTeacherActiveStatus = asyncHandler(async (req, res) => {
+    const teacher = await Teacher.findById(req.params.id);
+    if (!teacher) {
+        throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
+    }
+
+    teacher.isActive = !teacher.isActive;
+    if (!teacher.isActive && !teacher.resignationDate) {
+        teacher.resignationDate = new Date();
+    } else if (teacher.isActive) {
+        teacher.resignationDate = null;
+    }
+    await teacher.save();
+    await recalculateAllTeachersRank();
+
+    res.status(200).json(new ApiResponse(200, teacher, `শিক্ষকের অ্যাকাউন্ট এখন ${teacher.isActive ? 'সক্রিয় (Active)' : 'নিষ্ক্রিয় (Inactive)'} করা হয়েছে`));
+});
+
+// ১০. শিক্ষক পোর্টাল (Self-Service): নিজের পূর্ণাঙ্গ ড্যাশবোর্ড এবং মাসের কোটা কতদিন খেয়েছে ও কতদিন বাকি আছে তার নিখুঁত হিসাব
+const getMyPortalDashboard = asyncHandler(async (req, res) => {
     const teacherId = req.user._id;
     const now = moment.tz('Asia/Dhaka');
+    const month = Number(req.query.month || (now.month() + 1));
+    const year = Number(req.query.year || now.year());
     const todayStr = now.format('YYYY-MM-DD');
-    const month = parseInt(req.query.month, 10) || (now.month() + 1);
-    const year = parseInt(req.query.year, 10) || now.year();
 
     const startDate = moment.tz(`${year}-${String(month).padStart(2, '0')}-01`, 'Asia/Dhaka').startOf('month').format('YYYY-MM-DD');
     const endDate = moment.tz(`${year}-${String(month).padStart(2, '0')}-01`, 'Asia/Dhaka').endOf('month').format('YYYY-MM-DD');
 
+    const settings = await SystemSettings.getSettings();
+
     const [
         teacherProfile,
-        settings,
         todayAttendance,
-        monthlyAttendanceLogs,
-        allSalaries,
+        monthlyLogs,
+        allTimeSalaries,
         salaryRevisions,
-        myApplications,
-        myLoans
+        recentApplications,
+        activeLoans
     ] = await Promise.all([
         Teacher.findById(teacherId).lean(),
-        SystemSettings.getSettings(),
         Attendance.findOne({ teacherId, date: todayStr }).lean(),
         Attendance.find({ teacherId, date: { $gte: startDate, $lte: endDate } }).sort({ date: -1 }).lean(),
         Salary.find({ teacherId }).sort({ year: -1, month: -1 }).lean(),
         SalaryHistory.find({ teacherId }).sort({ createdAt: -1 }).lean(),
-        LeaveRequest.find({ teacherId }).sort({ createdAt: -1 }).limit(30).lean(),
-        LoanAdvance.find({ teacherId }).sort({ createdAt: -1 }).lean()
+        LeaveRequest.find({ teacherId }).sort({ createdAt: -1 }).limit(15).lean(),
+        LoanAdvance.find({ teacherId, status: 'Active' }).lean()
     ]);
 
-    if (!teacherProfile) {
-        throw new ApiError(404, 'আপনার প্রোফাইল খুঁজে পাওয়া যায়নি!');
-    }
+    let presentDays = 0;
+    let lateDays = 0;
+    let leaveDays = 0;
+    let absentDays = 0;
+    let quotaUsed = 0;
+    let directPenaltyDays = 0;
 
-    // ১. চলতি মাসের হাজিরা, লেট, লিভ, অ্যাবসেন্ট ও কোটার হিসাব
-    let totalPresent = 0;
-    let totalExcusedLateOrDuty = 0;
-    let totalLateCount = 0;
-    let totalLeaveCount = 0;
-    let totalUnexcusedAbsentCount = 0;
-    let totalApprovedLeaveCount = 0;
-    let totalIgnoredDays = 0;
-    let totalQuotaUsed = 0;
-    let directAbsentPenaltyDays = 0;
-
-    for (const log of monthlyAttendanceLogs) {
-        if (log.isIgnored) {
-            totalIgnoredDays++;
-            continue;
-        }
-        if (log.status === ATTENDANCE_STATUS.PRESENT || log.status === ATTENDANCE_STATUS.HOLIDAY_DUTY) {
-            totalPresent++;
-        } else if (log.status === ATTENDANCE_STATUS.EXCUSED_LATE || log.status === ATTENDANCE_STATUS.OFFICIAL_DUTY) {
-            totalPresent++;
-            totalExcusedLateOrDuty++;
-        } else if (log.status === ATTENDANCE_STATUS.LATE) {
-            totalLateCount++;
-            totalQuotaUsed += log.deductionWeight; // 0.5
-        } else if (log.status === ATTENDANCE_STATUS.LEAVE) {
-            totalLeaveCount++;
-            totalQuotaUsed += log.deductionWeight; // 1.0
-        } else if (log.status === ATTENDANCE_STATUS.ABSENT) {
-            totalUnexcusedAbsentCount++;
-            directAbsentPenaltyDays += (log.directSalaryPenaltyDays || 1.0);
-        } else if (
-            log.status === ATTENDANCE_STATUS.APPROVED_SICK_LEAVE ||
-            log.status === ATTENDANCE_STATUS.APPROVED_CASUAL_LEAVE
+    for (const log of monthlyLogs) {
+        if (log.isIgnored) continue;
+        if (
+            log.status === ATTENDANCE_STATUS.PRESENT ||
+            log.status === ATTENDANCE_STATUS.EXCUSED_LATE ||
+            log.status === ATTENDANCE_STATUS.OFFICIAL_DUTY ||
+            log.status === ATTENDANCE_STATUS.HOLIDAY_DUTY
         ) {
-            totalApprovedLeaveCount++;
+            presentDays++;
+        } else if (log.status === ATTENDANCE_STATUS.LATE) {
+            lateDays++;
+            quotaUsed += log.deductionWeight;
+        } else if (log.status === ATTENDANCE_STATUS.LEAVE) {
+            leaveDays++;
+            quotaUsed += log.deductionWeight;
+        } else if (log.status === ATTENDANCE_STATUS.ABSENT) {
+            absentDays++;
+            directPenaltyDays += (log.directSalaryPenaltyDays || 1.0);
         }
     }
 
-    const monthlyAllowedQuota = teacherProfile.customLeaveQuota ?? settings.attendancePolicy.monthlyPaidLeaveQuota;
-    const quotaRemaining = Math.max(0, monthlyAllowedQuota - totalQuotaUsed);
-    const excessQuotaDays = Math.max(0, totalQuotaUsed - monthlyAllowedQuota);
-    const totalDaysForSalaryCut = excessQuotaDays + directAbsentPenaltyDays;
-    const perDaySalary = Number((teacherProfile.basicSalary / (settings.payrollPolicy.daysInSalaryMonth || 30)).toFixed(2));
-    const currentMonthEstimatedCut = Math.round(totalDaysForSalaryCut * perDaySalary);
+    const allowedQuota = teacherProfile.customLeaveQuota ?? settings.attendancePolicy.monthlyPaidLeaveQuota;
+    const quotaRemaining = Math.max(0, Number((allowedQuota - quotaUsed).toFixed(2)));
+    const excessQuotaCutDays = Math.max(0, Number((quotaUsed - allowedQuota).toFixed(2)));
+    const totalDaysForSalaryCut = Number((excessQuotaCutDays + directPenaltyDays).toFixed(2));
 
-    // ২. সর্বমোট আয়, সর্বমোট কর্তন ও বোনাস (Lifetime & Yearly Financial Analytics)
-    let lifetimeTotalEarned = 0;         // আজ পর্যন্ত মোট কত টাকা বেতন পেয়েছেন (Paid + Pending)
-    let lifetimeTotalPaidCash = 0;       // হাতে পাওয়া মোট পরিশোধিত টাকা (Paid)
-    let lifetimeTotalPendingCash = 0;    // বকেয়া বেতন (Pending)
-    let lifetimeTotalLeaveAbsentCut = 0; // আজ পর্যন্ত লেট, লিভ ও অ্যাবসেন্টের কারণে মোট কত টাকা কাটা গেছে
-    let lifetimeTotalBonusReceived = 0;  // আজ পর্যন্ত মোট কত টাকা বোনাস পেয়েছেন
-    let lifetimeTotalLoanDeducted = 0;   // বেতন থেকে আজ পর্যন্ত মোট কত টাকা লোন কিস্তি কাটা হয়েছে
+    const daysInSelectedMonth = settings.payrollPolicy?.useExactCalendarDays !== false
+        ? moment.tz(`${year}-${String(month).padStart(2, '0')}-01`, 'Asia/Dhaka').daysInMonth()
+        : (settings.payrollPolicy?.daysInSalaryMonth || 30);
+    const perDaySalary = Number((teacherProfile.basicSalary / daysInSelectedMonth).toFixed(2));
+    const currentMonthEstimatedCut = Math.round(totalDaysForSalaryCut * (teacherProfile.basicSalary / daysInSelectedMonth));
 
-    for (const sal of allSalaries) {
-        lifetimeTotalEarned += (sal.netPayableSalary || 0);
+    let lifetimeTotalEarned = 0;
+    let lifetimeTotalPaidReceived = 0;
+    let lifetimeTotalUnpaidPending = 0;
+    let lifetimeTotalBonusEarned = 0;
+    let lifetimeTotalLeaveAbsentCut = 0;
+
+    for (const sal of allTimeSalaries) {
+        lifetimeTotalEarned += sal.netPayableSalary;
+        lifetimeTotalBonusEarned += (sal.bonusAmount || 0);
+        lifetimeTotalLeaveAbsentCut += (sal.leaveAndAbsentDeductionAmount || 0);
         if (sal.paymentStatus === 'Paid') {
-            lifetimeTotalPaidCash += (sal.netPayableSalary || 0);
-        } else if (sal.paymentStatus === 'Pending') {
-            lifetimeTotalPendingCash += (sal.netPayableSalary || 0);
+            lifetimeTotalPaidReceived += sal.netPayableSalary;
+        } else {
+            lifetimeTotalUnpaidPending += sal.netPayableSalary;
         }
-        lifetimeTotalLeaveAbsentCut += (sal.leaveAndAbsentDeductionAmount || sal.leaveDeductionAmount || 0);
-        lifetimeTotalBonusReceived += (sal.bonusAmount || 0);
-        lifetimeTotalLoanDeducted += (sal.loanDeduction?.installmentAmount || 0);
     }
 
-    // ৩. লোনের বর্তমান অবস্থা
-    const activeLoans = myLoans.filter((l) => l.status === 'Active');
-    const totalRemainingLoanBalance = activeLoans.reduce((sum, l) => sum + l.remainingBalance, 0);
-
-    // ৪. দরখাস্তের সামারি
-    const applicationStats = {
-        totalSubmitted: myApplications.length,
-        pending: myApplications.filter((a) => a.status === 'Pending').length,
-        approved: myApplications.filter((a) => a.status === 'Approved').length,
-        rejected: myApplications.filter((a) => a.status === 'Rejected').length
-    };
-
-    return res.status(200).json(
-        new ApiResponse(200, `স্বাগতম, ${teacherProfile.fullNameBng}! আপনার ব্যক্তিগত ড্যাশবোর্ড প্রস্তুত।`, {
-            profile: teacherProfile,
-            todayLiveStatus: {
-                date: todayStr,
-                hasPunchedToday: !!(todayAttendance && todayAttendance.punchTime),
-                punchTime: todayAttendance?.punchTime
-                    ? moment.tz(todayAttendance.punchTime, 'Asia/Dhaka').format('hh:mm:ss A')
-                    : null,
-                status: todayAttendance?.status || 'এখনো পাঞ্চ করেননি',
-                remarks: todayAttendance?.remarks || null
-            },
-            selectedMonthAttendance: {
-                month,
-                year,
-                totalPresent,
-                totalExcusedLateOrDuty,
-                totalLateCount,
-                totalLeaveCount,
-                totalUnexcusedAbsentCount,
-                totalApprovedLeaveCount,
-                totalIgnoredDays,
-                quotaBreakdown: {
-                    monthlyAllowedQuota,
-                    totalQuotaUsed,
-                    quotaRemaining,
-                    excessQuotaDays,
-                    directAbsentPenaltyDays,
-                    totalDaysForSalaryCut,
-                    perDaySalary,
-                    currentMonthEstimatedCut
-                },
-                dailyHistory: monthlyAttendanceLogs
-            },
-            financialOverview: {
-                currentBasicSalary: teacherProfile.basicSalary,
-                perDaySalary,
-                lifetimeTotalEarned,          // মোট অর্জিত বেতন
-                lifetimeTotalPaidCash,        // মোট পরিশোধিত (হাতে পেয়েছেন)
-                lifetimeTotalPendingCash,     // মোট বকেয়া (Pending)
-                lifetimeTotalLeaveAbsentCut,  // লেট/ছুটি/অ্যাবসেন্টের কারণে মোট কর্তনকৃত টাকা
-                lifetimeTotalBonusReceived,   // মোট প্রাপ্ত বোনাস
-                lifetimeTotalLoanDeducted,    // বেতন থেকে কেটে নেওয়া মোট লোন কিস্তি
-                totalRemainingLoanBalance,    // এখনো লোনের যত টাকা শোধ করা বাকি
-                monthlyPayslips: allSalaries, // প্রতি মাসের বিস্তারিত বেতন শিট
-                salaryIncrementHistory: salaryRevisions // কবে কত টাকা বেতন বেড়েছে বা কমেছে তার হিস্ট্রি
-            },
-            applicationsHub: {
-                stats: applicationStats,
-                recentApplications: myApplications // তার জমা দেওয়া সব দরখাস্ত ও স্ট্যাটাস
-            },
-            loansHistory: myLoans
-        })
-    );
-});
-
-// =========================================================================
-// 🛠️ অ্যাডমিন কর্তৃক শিক্ষক ম্যানেজমেন্ট ফাংশনসমূহ
-// =========================================================================
-const createTeacher = asyncHandler(async (req, res) => {
-    const newTeacher = await Teacher.create(req.body);
-    const teacherData = newTeacher.toObject();
-    delete teacherData.password;
-    return res.status(201).json(new ApiResponse(201, 'নতুন শিক্ষক সফলভাবে যুক্ত হয়েছেন!', teacherData));
-});
-
-const getAllTeachers = asyncHandler(async (req, res) => {
-    const { search, isActive, employmentType, designation, page = 1, limit = 50 } = req.query;
-    const query = {};
-    if (isActive !== undefined) query.isActive = isActive === 'true';
-    if (employmentType) query.employmentType = employmentType;
-    if (designation) query.designation = designation;
-    if (search) {
-        const searchRegex = new RegExp(search.trim(), 'i');
-        query.$or = [
-            { fullNameEng: searchRegex },
-            { fullNameBng: searchRegex },
-            { phone: searchRegex },
-            { teacherCode: searchRegex },
-            { indexNumber: searchRegex }
-        ];
-    }
-
-    const pageNum = Math.max(1, parseInt(page, 10));
-    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10)));
-    const skip = (pageNum - 1) * limitNum;
-
-    const [teachers, totalCount] = await Promise.all([
-        Teacher.find(query).sort({ biometricDeviceId: 1 }).skip(skip).limit(limitNum).lean(),
-        Teacher.countDocuments(query)
-    ]);
-
-    return res.status(200).json(
-        new ApiResponse(200, 'শিক্ষকদের তালিকা', teachers, {
-            totalTeachers: totalCount,
-            currentPage: pageNum,
-            totalPages: Math.ceil(totalCount / limitNum)
-        })
-    );
-});
-
-const getTeacherById = asyncHandler(async (req, res) => {
-    const teacher = await Teacher.findById(req.params.id).lean();
-    if (!teacher) throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
-    return res.status(200).json(new ApiResponse(200, 'শিক্ষকের বিস্তারিত তথ্য', teacher));
-});
-
-const updateTeacher = asyncHandler(async (req, res) => {
-    if (req.body.password) delete req.body.password;
-    const updatedTeacher = await Teacher.findByIdAndUpdate(
-        req.params.id,
-        { $set: req.body },
-        { new: true, runValidators: true }
-    ).lean();
-    if (!updatedTeacher) throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
-    return res.status(200).json(new ApiResponse(200, 'শিক্ষকের তথ্য আপডেট করা হয়েছে!', updatedTeacher));
-});
-
-const toggleTeacherStatus = asyncHandler(async (req, res) => {
-    const { isActive, resignationDate, remarks } = req.body;
-    const teacher = await Teacher.findById(req.params.id);
-    if (!teacher) throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
-
-    teacher.isActive = typeof isActive === 'boolean' ? isActive : !teacher.isActive;
-    if (!teacher.isActive && resignationDate) teacher.resignationDate = resignationDate;
-    if (remarks !== undefined) teacher.remarks = remarks;
-    await teacher.save({ validateBeforeSave: false });
-
-    return res.status(200).json(new ApiResponse(200, 'শিক্ষকের স্ট্যাটাস পরিবর্তন করা হয়েছে।', teacher));
-});
-
-const adminResetTeacherPassword = asyncHandler(async (req, res) => {
-    const { newPassword } = req.body;
-    if (!newPassword || newPassword.length < 6) {
-        throw new ApiError(400, 'নতুন পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে!');
-    }
-    const teacher = await Teacher.findById(req.params.id).select('+password +failedLoginAttempts +lockUntil');
-    if (!teacher) throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
-
-    teacher.password = newPassword;
-    teacher.failedLoginAttempts = 0;
-    teacher.lockUntil = null;
-    await teacher.save();
-
-    return res.status(200).json(new ApiResponse(200, `${teacher.fullNameBng}-এর পাসওয়ার্ড রিসেট করা হয়েছে।`));
+    res.status(200).json(new ApiResponse(200, {
+        profile: teacherProfile,
+        todayStatus: todayAttendance || {
+            date: todayStr,
+            status: 'Not Punched Yet',
+            inTime: null
+        },
+        selectedMonthAttendance: {
+            month,
+            year,
+            daysInSelectedMonth,
+            presentDays,
+            lateDays,
+            leaveDays,
+            absentDays,
+            allowedQuota,
+            quotaUsed: Number(quotaUsed.toFixed(2)),       // মাসের কোটা থেকে কতদিন খেয়েছে
+            quotaRemaining,                                // মাসের কোটা থেকে আর কতদিন বাকি আছে
+            excessQuotaCutDays,                            // কোটা শেষ হয়ে অতিরিক্ত কতদিন কেটেছে
+            directPenaltyDays,
+            totalDaysForSalaryCut,
+            currentMonthEstimatedCut,
+            logs: monthlyLogs
+        },
+        lifetimeFinancialSummary: {
+            currentBasicSalary: teacherProfile.basicSalary,
+            paymentMethod: teacherProfile.paymentMethod,
+            perDaySalary,
+            totalMonthsGenerated: allTimeSalaries.length,
+            lifetimeTotalEarned,
+            lifetimeTotalPaidReceived,
+            lifetimeTotalUnpaidPending,
+            lifetimeTotalBonusEarned,
+            lifetimeTotalLeaveAbsentCut,
+            activeLoans
+        },
+        salarySheets: allTimeSalaries,
+        salaryRevisionHistory: salaryRevisions,
+        myApplications: recentApplications
+    }, 'শিক্ষকের সেল্ফ-সার্ভিস পোর্টাল ড্যাশবোর্ড সফলভাবে লোড হয়েছে'));
 });
 
 module.exports = {
-    getTeacherSelfPortalDashboard,
-    createTeacher,
+    getRegistrationMetadata,
+    registerTeacher,
+    publicSelfRegisterTeacher,
+    getPublicRegistryCardByUid,
+    approvePendingTeacher,
     getAllTeachers,
+    triggerRankRecalculation,
     getTeacherById,
     updateTeacher,
-    toggleTeacherStatus,
-    adminResetTeacherPassword
+    toggleTeacherActiveStatus,
+    getMyPortalDashboard
 };

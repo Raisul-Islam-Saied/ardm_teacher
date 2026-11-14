@@ -277,7 +277,9 @@ const getTeacherMonthlySummary = asyncHandler(async (req, res) => {
 
     // মোট যত দিনের বেতন কাটা যাবে = (কোটার অতিরিক্ত দিন) + (বিনা অনুমতিতে Absent থাকা দিন)
     const totalSalaryCutDays = excessQuotaDays + directAbsentPenaltyDays;
-    const estimatedSalaryDeduction = Math.round(totalSalaryCutDays * (teacher.basicSalary / 30));
+    const daysInThisMonth = moment.tz(`${year}-${String(month).padStart(2, '0')}-01`, 'Asia/Dhaka').daysInMonth();
+    const perDaySalary = Number((teacher.basicSalary / daysInThisMonth).toFixed(2));
+    const estimatedSalaryDeduction = Math.round(totalSalaryCutDays * (teacher.basicSalary / daysInThisMonth));
 
     return res.status(200).json(
         new ApiResponse(200, 'মাসিক উপস্থিতির বিস্তারিত সামারি', {
@@ -296,6 +298,8 @@ const getTeacherMonthlySummary = asyncHandler(async (req, res) => {
                 quotaRemaining,
                 excessQuotaDays,
                 directAbsentPenaltyDays,
+                daysInThisMonth,
+                perDaySalary,
                 totalDaysForSalaryCut: totalSalaryCutDays,
                 estimatedSalaryDeduction
             },

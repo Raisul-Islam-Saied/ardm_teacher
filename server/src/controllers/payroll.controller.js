@@ -380,7 +380,8 @@ const adjustMonthlyPayrollBulkOrSingle = asyncHandler(async (req, res) => {
 
     const updatedSheets = [];
     for (const sheet of salarySheets) {
-        const calc = calculateAdjustmentByMode(sheet.basicSalarySnapshot, adjustmentMode, adjustmentValue);
+        const daysInTargetMonth = moment.tz(`${year}-${String(month).padStart(2, '0')}-01`, 'Asia/Dhaka').daysInMonth();
+        const calc = calculateAdjustmentByMode(sheet.basicSalarySnapshot, adjustmentMode, adjustmentValue, daysInTargetMonth);
         sheet.customAdjustment = {
             mode: adjustmentMode,
             value: Number(adjustmentValue),

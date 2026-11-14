@@ -18,26 +18,25 @@ const systemSettingsSchema = new mongoose.Schema({
         type: String,
         default: 'সরফভাটা, রাঙ্গুনিয়া, চট্টগ্রাম'
     },
-    // ডায়নামিক হাজিরা পলিসি (রমজান বা যেকোনো সময় ড্যাশবোর্ড থেকে পরিবর্তনযোগ্য)
     attendancePolicy: {
-        defaultInTime: { type: String, default: '09:00' },           // সকাল ৯:০০
-        defaultLateLimit: { type: String, default: '10:00' },        // সকাল ১০:০০
-        lateDeductionWeight: { type: Number, default: 0.5 },         // প্রতি লেটে ০.৫ দিন
-        leaveDeductionWeight: { type: Number, default: 1.0 },        // প্রতি ছুটিতে ১.০ দিন
-        absentPenaltyDays: { type: Number, default: 1.0 },           // বিনা অনুমতিতে Absent হলে ১ দিনের বেতন কর্তন
-        monthlyPaidLeaveQuota: { type: Number, default: 2.0 },       // মাসে ২ দিন পেইড ছুটি
-        autoIgnoreThresholdPercent: { type: Number, default: 30 },   // ৩০% এর নিচে উপস্থিতি হলে দিন বাদ
-        weekendDays: { type: [Number], default: [5] }                // 5 = Friday (চাইলে [5, 6] করে শুক্র-শনি করা যাবে)
+        defaultInTime: { type: String, default: '09:00' },
+        defaultLateLimit: { type: String, default: '10:00' },
+        lateDeductionWeight: { type: Number, default: 0.5 },
+        leaveDeductionWeight: { type: Number, default: 1.0 },
+        absentPenaltyDays: { type: Number, default: 1.0 },
+        monthlyPaidLeaveQuota: { type: Number, default: 2.0 },
+        autoIgnoreThresholdPercent: { type: Number, default: 30 },
+        weekendDays: { type: [Number], default: [5] }
     },
-    // ডায়নামিক পে-রোল পলিসি
     payrollPolicy: {
-        defaultBonusPercent: { type: Number, default: 50 },          // ডিফল্ট উৎসব বোনাস ৫০%
-        daysInSalaryMonth: { type: Number, default: 30 },            // বেতন ভাজক (৩০ দিন)
-        enableProRataForMidMonthJoin: { type: Boolean, default: true }, // মাসের মাঝখানে জয়েন করলে আনুপাতিক বেতন
-        autoDeductLoanInstallment: { type: Boolean, default: true }  // বেতন থেকে স্বয়ংক্রিয় লোন কিস্তি কর্তন
+        defaultBonusPercent: { type: Number, default: 50 },
+        useExactCalendarDays: { type: Boolean, default: true }, // true = ওই মাসে যত দিন (২৮/২৯/৩০/৩১) তত দিয়ে ভাগ হবে
+        daysInSalaryMonth: { type: Number, default: 30 },       // ফিক্সড মোডে থাকলে তখন ৩০ কাজ করবে
+        enableProRataForMidMonthJoin: { type: Boolean, default: true },
+        autoDeductLoanInstallment: { type: Boolean, default: true }
     },
     lastCronAuditDate: {
-        type: String, // YYYY-MM-DD (সার্ভার বন্ধ থাকলে মিসড ক্রন ধরার জন্য)
+        type: String,
         default: null
     },
     updatedBy: {
@@ -50,7 +49,6 @@ const systemSettingsSchema = new mongoose.Schema({
     versionKey: false
 });
 
-// ডাটাবেসে সেটিংস না থাকলে ডিফল্ট সেটিংস অটো তৈরি করে দেওয়ার হেল্পার মেথড
 systemSettingsSchema.statics.getSettings = async function () {
     let settings = await this.findOne({ key: 'GLOBAL_SETTINGS' }).lean();
     if (!settings) {

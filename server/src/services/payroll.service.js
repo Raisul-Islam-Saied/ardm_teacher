@@ -9,14 +9,25 @@ const {
 } = require('../constants/system.constants');
 const ApiError = require('../utils/ApiError');
 
-// ১. ৬টি মোডে টাকার হিসাব বের করা
-const calculateAdjustmentByMode = (baseSalary, mode, value, daysInMonth = 30) => {
+// নির্দিষ্ট মাস ও বছরে ক্যালেন্ডার অনুযায়ী মোট কত দিন (২৮, ২৯, ৩০ নাকি ৩১) তা বের করার হেল্পার
+const getEffectiveDaysInMonth = (month, year, payrollPolicy = {}) => {
+    const calendarDays = moment.tz(`${year}-${String(month).padStart(2, '0')}-01`, 'Asia/Dhaka').daysInMonth();
+    if (payrollPolicy.useExactCalendarDays === false) {
+        return payrollPolicy.daysInSalaryMonth || 30;
+    }
+    return calendarDays; // 28, 29, 30, or 31
+};
+
+// ১. ৬টি মোডে টাকার হিসাব বের করা (মাসের প্রকৃত দিন অনুযায়ী ১ দিনের বেতন হিসাব হবে)
+const calculateAdjustmentByMode = (baseSalary, mode, value, daysInMonth = null) => {
     const numValue = Number(value);
     if (isNaN(numValue) || numValue <= 0) {
         throw new ApiError(400, 'অ্যাডজাস্টমেন্ট ভ্যালু অবশ্যই ০ এর চেয়ে বড় সংখ্যা হতে হবে!');
     }
 
-    const perDaySalary = baseSalary / daysInMonth;
+    // যদি দিন সংখ্যা না দেওয়া থাকে, তবে চলতি মাসের ক্যালেন্ডার দিন নেবে
+    const effectiveDays = daysInMonth || moment.tz('Asia/Dhaka').daysInMonth();
+    const perDaySalary = baseSalary / effectiveDays;
     let changedAmount = 0;
 
     switch (mode) {
@@ -43,19 +54,26 @@ const calculateAdjustmentByMode = (baseSalary, mode, value, daysInMonth = 30) =>
     }
 
     const newSalary = Math.max(0, Math.round(baseSalary + changedAmount));
-    return { previousSalary: baseSalary, changedAmount, newSalary };
+    return {
+        previousSalary: baseSalary,
+        daysDivisorUsed: effectiveDays,
+        perDaySalary: Number(perDaySalary.toFixed(2)),
+        changedAmount,
+        newSalary
+    };
 };
 
-// ২. মাসের মাঝখানে জয়েন বা রিজাইন করলে Pro-Rata (আনুপাতিক) বেতন হিসাব করা
-const calculateProRataBasicSalary = (teacher, month, year, daysInSalaryMonth = 30, enableProRata = true) => {
+// ২. মাসের মাঝখানে জয়েন বা রিজাইন করলে ওই মাসের প্রকৃত দিন (২৮/২৯/৩০/৩১) অনুযায়ী Pro-Rata হিসাব
+const calculateProRataBasicSalary = (teacher, month, year, effectiveDaysInMonth, enableProRata = true) => {
     const monthStart = moment.tz(`${year}-${String(month).padStart(2, '0')}-01`, 'Asia/Dhaka').startOf('month');
     const monthEnd = monthStart.clone().endOf('month');
-    const calendarDaysInMonth = monthEnd.date();
+    const calendarDaysInMonth = monthEnd.date(); // 28, 29, 30, or 31
 
     if (!enableProRata) {
         return {
             isProRated: false,
-            activeDaysInMonth: daysInSalaryMonth,
+            totalDaysInMonth: calendarDaysInMonth,
+            activeDaysInMonth: calendarDaysInMonth,
             effectiveBasicSalary: teacher.basicSalary
         };
     }
@@ -63,16 +81,15 @@ const calculateProRataBasicSalary = (teacher, month, year, daysInSalaryMonth = 3
     const joinMoment = teacher.joiningDate ? moment.tz(teacher.joiningDate, 'Asia/Dhaka').startOf('day') : null;
     const resignMoment = teacher.resignationDate ? moment.tz(teacher.resignationDate, 'Asia/Dhaka').endOf('day') : null;
 
-    // যদি ওই মাসের পরের মাসে জয়েন করে থাকে
     if (joinMoment && joinMoment.isAfter(monthEnd)) {
-        return { isProRated: true, activeDaysInMonth: 0, effectiveBasicSalary: 0 };
+        return { isProRated: true, totalDaysInMonth: calendarDaysInMonth, activeDaysInMonth: 0, effectiveBasicSalary: 0 };
     }
 
     const effectiveStart = (joinMoment && joinMoment.isAfter(monthStart)) ? joinMoment : monthStart;
     const effectiveEnd = (resignMoment && resignMoment.isBefore(monthEnd)) ? resignMoment : monthEnd;
 
     if (effectiveEnd.isBefore(effectiveStart)) {
-        return { isProRated: true, activeDaysInMonth: 0, effectiveBasicSalary: 0 };
+        return { isProRated: true, totalDaysInMonth: calendarDaysInMonth, activeDaysInMonth: 0, effectiveBasicSalary: 0 };
     }
 
     const activeCalendarDays = effectiveEnd.diff(effectiveStart, 'days') + 1;
@@ -80,21 +97,23 @@ const calculateProRataBasicSalary = (teacher, month, year, daysInSalaryMonth = 3
     if (activeCalendarDays >= calendarDaysInMonth) {
         return {
             isProRated: false,
-            activeDaysInMonth: daysInSalaryMonth,
+            totalDaysInMonth: calendarDaysInMonth,
+            activeDaysInMonth: calendarDaysInMonth,
             effectiveBasicSalary: teacher.basicSalary
         };
     }
 
-    // আনুপাতিক বেতন = (মূল বেতন / ৩০) * সক্রিয় দিন
-    const effectiveBasicSalary = Math.round((teacher.basicSalary / daysInSalaryMonth) * activeCalendarDays);
+    // আনুপাতিক বেতন = (মূল বেতন / ওই মাসের মোট দিন) * সক্রিয় দিন
+    const effectiveBasicSalary = Math.round((teacher.basicSalary / effectiveDaysInMonth) * activeCalendarDays);
     return {
         isProRated: true,
+        totalDaysInMonth: calendarDaysInMonth,
         activeDaysInMonth: activeCalendarDays,
         effectiveBasicSalary
     };
 };
 
-// ৩. পূর্ণাঙ্গ মাসিক পে-রোল ক্যালকুলেশন (Pro-Rata + Quota + Absent Penalty + Auto Loan EMI + Bonus)
+// ৩. পূর্ণাঙ্গ মাসিক পে-রোল ক্যালকুলেশন
 const calculateTeacherMonthlyPayroll = async ({
     teacher,
     month,
@@ -116,6 +135,9 @@ const calculateTeacherMonthlyPayroll = async ({
 
     const startDate = moment.tz(`${year}-${String(month).padStart(2, '0')}-01`, 'Asia/Dhaka').startOf('month').format('YYYY-MM-DD');
     const endDate = moment.tz(`${year}-${String(month).padStart(2, '0')}-01`, 'Asia/Dhaka').endOf('month').format('YYYY-MM-DD');
+
+    // ওই মাসে ক্যালেন্ডার অনুযায়ী মোট কত দিন (২৮, ২৯, ৩০ বা ৩১ দিন)
+    const daysDivisor = getEffectiveDaysInMonth(month, year, payPolicy);
 
     const logs = await Attendance.find({
         teacherId: teacher._id,
@@ -161,14 +183,14 @@ const calculateTeacherMonthlyPayroll = async ({
     }
 
     const allowedPaidQuota = teacher.customLeaveQuota ?? attPolicy.monthlyPaidLeaveQuota;
-    const excessQuotaDays = Math.max(0, totalQuotaUsed - allowedPaidQuota);
+    const remainingPaidQuota = Math.max(0, Number((allowedPaidQuota - totalQuotaUsed).toFixed(2)));
+    const excessQuotaDays = Math.max(0, Number((totalQuotaUsed - allowedPaidQuota).toFixed(2)));
     const totalDeductibleDays = excessQuotaDays + directAbsentPenaltyDays;
 
     const basicSalary = teacher.basicSalary;
-    const daysDivisor = payPolicy.daysInSalaryMonth || 30;
+    // ওই মাসের প্রকৃত দিন (২৮/২৯/৩০/৩১) দিয়ে ভাগ করে ১ দিনের বেতন বের করা হচ্ছে
     const perDaySalary = Number((basicSalary / daysDivisor).toFixed(2));
 
-    // Pro-Rata হিসাব (মাসের মাঝখানে জয়েন করলে)
     const proRataInfo = calculateProRataBasicSalary(
         teacher,
         month,
@@ -177,15 +199,13 @@ const calculateTeacherMonthlyPayroll = async ({
         payPolicy.enableProRataForMidMonthJoin
     );
 
-    const leaveAndAbsentDeductionAmount = Math.round(totalDeductibleDays * perDaySalary);
+    const leaveAndAbsentDeductionAmount = Math.round(totalDeductibleDays * (basicSalary / daysDivisor));
 
-    // বোনাস হিসাব
     const finalBonusPercent = includeBonus
         ? Number(bonusPercentage ?? payPolicy.defaultBonusPercent)
         : 0;
     const bonusAmount = includeBonus ? Math.round((basicSalary * finalBonusPercent) / 100) : 0;
 
-    // কাস্টম অ্যাডজাস্টমেন্ট (যদি থাকে)
     let customAdjustmentObj = { mode: null, value: 0, amount: 0, reason: null };
     if (adjustmentMode && Number(adjustmentValue) > 0) {
         const adj = calculateAdjustmentByMode(basicSalary, adjustmentMode, adjustmentValue, daysDivisor);
@@ -197,7 +217,6 @@ const calculateTeacherMonthlyPayroll = async ({
         };
     }
 
-    // অটোমেটিক লোন বা অগ্রিম বেতনের কিস্তি (EMI) চেক করা
     let loanDeductionObj = { loanId: null, installmentAmount: 0, remainingAfterThisMonth: 0 };
     if (payPolicy.autoDeductLoanInstallment) {
         const activeLoan = await LoanAdvance.findOne({
@@ -252,6 +271,7 @@ const calculateTeacherMonthlyPayroll = async ({
                     totalIgnoredDays,
                     totalQuotaUsed,
                     allowedPaidQuota,
+                    remainingPaidQuota,
                     excessQuotaDays,
                     directAbsentPenaltyDays,
                     totalDeductibleDays
@@ -277,6 +297,7 @@ const calculateTeacherMonthlyPayroll = async ({
 };
 
 module.exports = {
+    getEffectiveDaysInMonth,
     calculateAdjustmentByMode,
     calculateRevisedSalary: calculateAdjustmentByMode,
     calculateProRataBasicSalary,
