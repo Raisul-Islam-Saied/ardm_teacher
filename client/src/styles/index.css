@@ -1,0 +1,201 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================================================
+   1. ROOT DESIGN TOKENS & AMBIENT BACKGROUND
+   ========================================================================== */
+:root {
+    --ink: #1B2420;
+    --ink-soft: #4A5750;
+    --ink-muted: #76847D;
+    --paper: #FBF7EC;
+    --paper-deep: #F3ECD8;
+    --panel: #FFFDF6;
+    --emerald: #0E3B2E;
+    --emerald-deep: #082B21;
+    --emerald-glass: rgba(14, 59, 46, 0.06);
+    --gold: #C69C3D;
+    --gold-soft: #E4C878;
+    --error: #A5291D;
+    --error-bg: #FBEAE7;
+    --success: #2F6B4F;
+    --rule: rgba(27, 36, 32, 0.14);
+}
+
+@layer base {
+    * {
+        box-sizing: border-box;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    html {
+        scroll-behavior: smooth;
+        font-family: 'Inter', 'Noto Serif Bengali', sans-serif;
+        color: var(--ink);
+        background-color: var(--paper);
+    }
+
+    body {
+        min-height: 100vh;
+        overflow-x: hidden;
+        background:
+            radial-gradient(1200px 600px at 10% -10%, rgba(198, 156, 61, 0.10), transparent 60%),
+            radial-gradient(1000px 500px at 110% 10%, rgba(14, 59, 46, 0.10), transparent 60%),
+            var(--paper);
+        color: var(--ink);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
+    ::selection {
+        background-color: var(--gold-soft);
+        color: var(--emerald-deep);
+    }
+}
+
+/* ==========================================================================
+   2. CUSTOM SCROLLBAR (PC & Mobile Smooth Scroll)
+   ========================================================================== */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--paper-deep);
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(14, 59, 46, 0.35);
+    border-radius: 9999px;
+    border: 2px solid var(--paper-deep);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--emerald);
+}
+
+/* ==========================================================================
+   3. REUSABLE ROYAL MADRASAH LEDGER & COMPONENT UTILITIES
+   ========================================================================== */
+@layer components {
+    /* Top Gold-Emerald Ribbon Card */
+    .ledger-surface {
+        @apply bg-paper-panel rounded-ledger border border-ink-faint shadow-ledger relative overflow-hidden;
+    }
+
+    .ledger-surface::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 6px;
+        background: linear-gradient(90deg, #0E3B2E 0%, #C69C3D 50%, #0E3B2E 100%);
+        z-index: 10;
+    }
+
+    /* Official Crest Circle (আ) */
+    .madrasah-crest {
+        @apply w-[52px] h-[52px] rounded-full border-2 border-gold flex items-center justify-center font-serif font-bold text-emerald bg-paper-panel text-xl select-none;
+        width: 52px;
+        height: 52px;
+        box-shadow: 0 0 0 4px rgba(198, 156, 61, 0.15);
+    }
+
+    /* Official Registry Stamp / Seal */
+    .royal-seal {
+        width: 88px;
+        height: 88px;
+        border-radius: 9999px;
+        border: 3px double var(--gold);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        text-align: center;
+        color: var(--emerald-deep);
+        background: radial-gradient(circle at 30% 30%, rgba(198, 156, 61, 0.18), transparent 60%);
+    }
+
+    /* Classic Ledger Underlined Input (From Your Previous Registration Form) */
+    .ledger-input {
+        @apply w-full border-0 border-b-[1.5px] border-ink-faint bg-transparent py-2.5 px-0.5 text-[15.5px] text-ink outline-none transition-all duration-300;
+    }
+
+    .ledger-input:focus {
+        border-color: var(--gold);
+        box-shadow: 0 1px 0 0 var(--gold);
+    }
+
+    .ledger-input-error {
+        border-color: var(--error) !important;
+        box-shadow: 0 1px 0 0 var(--error) !important;
+    }
+
+    /* Boxed ERP Input (For Admin Modals, Filters & Search Bars) */
+    .erp-input {
+        @apply w-full rounded-xl border border-ink-faint bg-paper-panel px-3.5 py-2.5 text-sm text-ink outline-none transition-all duration-200;
+    }
+
+    .erp-input:focus {
+        @apply border-gold ring-2 ring-gold/20;
+    }
+
+    .erp-input-error {
+        @apply border-danger ring-2 ring-danger/15;
+    }
+
+    /* Custom Select Arrow */
+    .custom-select-arrow {
+        appearance: none;
+        -webkit-appearance: none;
+        cursor: pointer;
+        background-image:
+            linear-gradient(45deg, transparent 50%, var(--ink-soft) 50%),
+            linear-gradient(135deg, var(--ink-soft) 50%, transparent 50%);
+        background-position: calc(100% - 14px) 50%, calc(100% - 8px) 50%;
+        background-size: 6px 6px, 6px 6px;
+        background-repeat: no-repeat;
+        padding-right: 28px !important;
+    }
+
+    /* Shimmer Skeleton Loading Effect */
+    .skeleton-shimmer {
+        background: linear-gradient(90deg, #F3ECD8 25%, #FBF7EC 50%, #F3ECD8 75%);
+        background-size: 200% 100%;
+        @apply animate-shimmer rounded-lg;
+    }
+}
+
+/* ==========================================================================
+   4. ENTERPRISE A4 PRINT ENGINE (For Payslips, Cash Sheet & ID Cards)
+   ========================================================================== */
+@media print {
+    @page {
+        size: A4;
+        margin: 12mm;
+    }
+
+    html, body {
+        background: #FFFFFF !important;
+        color: #000000 !important;
+        font-size: 12pt;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    .no-print {
+        display: none !important;
+    }
+
+    .print-only {
+        display: block !important;
+    }
+
+    .ledger-surface {
+        box-shadow: none !important;
+        border: 1px solid #CCCCCC !important;
+    }
+}
