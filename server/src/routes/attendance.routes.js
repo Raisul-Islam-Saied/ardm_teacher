@@ -4,11 +4,13 @@ const router = express.Router();
 const {
     setSpecialDateConfig,
     getSpecialDates,
+    getDailyAttendance,
     recordPunch,
     uploadUsbAttendanceLogs,
     excuseTeacherLateOrDuty,
     adminOverrideAttendance,
     getTeacherMonthlySummary,
+    deleteSpecialDate,
     triggerEndOfDayAuditManually
 } = require('../controllers/attendance.controller');
 const { protect, restrictTo } = require('../middlewares/auth.middleware');
@@ -26,6 +28,7 @@ const usbUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 
 router.post('/punch', manualPunchValidationRules, validateRequest, recordPunch);
 
 router.use(protect);
+router.get('/daily', restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN), getDailyAttendance);
 router.get('/my-summary', getTeacherMonthlySummary);
 
 // পেনড্রাইভে এক্সপোর্ট করা ফাইল (.dat/.txt) ফ্রন্টএন্ড থেকে আপলোড করার রাউট
@@ -45,6 +48,7 @@ router.post(
 
 router.post('/special-date', restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN), specialDateValidationRules, validateRequest, setSpecialDateConfig);
 router.get('/special-date', restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN), getSpecialDates);
+router.delete('/special-date/:date', restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN), deleteSpecialDate);
 router.put('/override', restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN), overrideAttendanceValidationRules, validateRequest, adminOverrideAttendance);
 router.post('/run-daily-audit', restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN), triggerEndOfDayAuditManually);
 

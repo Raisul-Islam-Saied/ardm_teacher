@@ -11,6 +11,7 @@ const SpecialDate = require('../models/SpecialDate');
 const ApiError = require('../utils/ApiError');
 const ApiResponse = require('../utils/ApiResponse');
 const asyncHandler = require('../utils/asyncHandler');
+const { ATTENDANCE_STATUS } = require('../constants/system.constants');
 
 // =========================================================================
 // ⚙️ ১. ডায়নামিক সিস্টেম সেটিংস (No-Code Policy Update)
@@ -138,7 +139,7 @@ const getAdminDashboardOverview = asyncHandler(async (req, res) => {
         activeLoans,
         recentAuditLogs
     ] = await Promise.all([
-        Teacher.countDocuments({ isActive: true }),
+        Teacher.countDocuments({ isActive: true, registrationStatus: 'Approved' }),
         Attendance.find({ date: todayStr }).populate('teacherId', 'teacherCode fullNameBng designation').lean(),
         LeaveRequest.countDocuments({ status: 'Pending' }),
         Salary.find({ month: currentMonth, year: currentYear }).lean(),
@@ -146,9 +147,21 @@ const getAdminDashboardOverview = asyncHandler(async (req, res) => {
         AuditLog.find().populate('performedBy', 'fullNameBng').sort({ createdAt: -1 }).limit(10).lean()
     ]);
 
-    const todayPresent = todayAttendances.filter((a) => a.punchTime !== null).length;
-    const todayLate = todayAttendances.filter((a) => a.status === 'Late').length;
-    const todayAbsent = todayAttendances.filter((a) => a.status === 'Absent').length;
+    const todayPresent = todayAttendances.filter((a) => [
+        ATTENDANCE_STATUS.PRESENT,
+        ATTENDANCE_STATUS.OFFICIAL_DUTY,
+        ATTENDANCE_STATUS.HOLIDAY_DUTY
+    ].includes(a.status)).length;
+    const todayLate = todayAttendances.filter((a) => [
+        ATTENDANCE_STATUS.LATE,
+        ATTENDANCE_STATUS.EXCUSED_LATE
+    ].includes(a.status)).length;
+    const todayLeave = todayAttendances.filter((a) => [
+        ATTENDANCE_STATUS.LEAVE,
+        ATTENDANCE_STATUS.APPROVED_SICK_LEAVE,
+        ATTENDANCE_STATUS.APPROVED_CASUAL_LEAVE
+    ].includes(a.status)).length;
+    const todayAbsent = todayAttendances.filter((a) => a.status === ATTENDANCE_STATUS.ABSENT).length;
 
     const totalMonthlyPayroll = currentMonthSalaries.reduce((s, item) => s + item.netPayableSalary, 0);
     const totalPaidAmount = currentMonthSalaries
@@ -164,6 +177,7 @@ const getAdminDashboardOverview = asyncHandler(async (req, res) => {
                 totalActiveTeachers,
                 todayPresent,
                 todayLate,
+                todayLeave,
                 todayAbsent,
                 notPunchedYet: Math.max(0, totalActiveTeachers - todayAttendances.length)
             },
@@ -210,8 +224,8 @@ const getBankTransferAdviceSheet = asyncHandler(async (req, res) => {
         fullNameEng: s.teacherId?.fullNameEng,
         designation: s.teacherId?.designation,
         indexNumber: s.teacherId?.indexNumber || 'N/A',
-        bankName: s.teacherId?.bankDetails?.bankName || 'Islami Bank Bangladesh PLC',
-        branchName: s.teacherId?.bankDetails?.branchName || 'Rangunia Branch',
+        bankName: s.teacherId?.bankDetails?.bankName || 'N/A',
+        branchName: s.teacherId?.bankDetails?.branchName || 'N/A',
         accountName: s.teacherId?.bankDetails?.accountName || s.teacherId?.fullNameEng,
         accountNumber: s.teacherId?.bankDetails?.accountNumber || 'N/A',
         netPayableSalary: s.netPayableSalary,
@@ -250,7 +264,7 @@ const exportFullDatabaseBackup = asyncHandler(async (req, res) => {
         loans
     ] = await Promise.all([
         SystemSettings.find().lean(),
-        Teacher.find().select('+password').lean(),
+        Teacher.find().lean(),
         Attendance.find().lean(),
         SpecialDate.find().lean(),
         LeaveRequest.find().lean(),

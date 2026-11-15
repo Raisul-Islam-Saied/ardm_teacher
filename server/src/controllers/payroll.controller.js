@@ -312,7 +312,7 @@ const bulkReviewApplications = asyncHandler(async (req, res) => {
 const reviseBasicSalaryBulkOrSingle = asyncHandler(async (req, res) => {
     const { applyToAll = false, teacherId, teacherIds, adjustmentMode, adjustmentValue, reason, effectiveDate } = req.body;
 
-    let filter = { isActive: true };
+    let filter = { isActive: true, registrationStatus: 'Approved' };
     if (!applyToAll) {
         if (Array.isArray(teacherIds) && teacherIds.length > 0) filter._id = { $in: teacherIds };
         else if (teacherId) filter._id = teacherId;
@@ -455,7 +455,7 @@ const generateMonthlyPayroll = asyncHandler(async (req, res) => {
         );
     }
 
-    const query = { isActive: true };
+    const query = { isActive: true, registrationStatus: 'Approved' };
     if (teacherId) query._id = teacherId;
 
     const teachers = await Teacher.find(query).lean();
@@ -516,7 +516,7 @@ const getMonthlySalaries = asyncHandler(async (req, res) => {
     if (paymentStatus) filter.paymentStatus = paymentStatus;
 
     const salaries = await Salary.find(filter)
-        .populate('teacherId', 'teacherCode fullNameBng fullNameEng designation indexNumber phone bankDetails')
+        .populate('teacherId', 'teacherCode biometricDeviceId fullNameBng fullNameEng designation rankingMetrics.overallMadrasahRank indexNumber phone bankDetails')
         .sort({ createdAt: -1 })
         .lean();
 

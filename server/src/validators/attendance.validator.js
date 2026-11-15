@@ -19,7 +19,8 @@ const manualPunchValidationRules = [
 const overrideAttendanceValidationRules = [
     body('teacherId').isMongoId(),
     body('date').matches(dateRegex),
-    body('status').isIn(Object.values(ATTENDANCE_STATUS))
+    body('status').isIn(Object.values(ATTENDANCE_STATUS)),
+    body('punchTime').optional().isISO8601()
 ];
 
 module.exports = {

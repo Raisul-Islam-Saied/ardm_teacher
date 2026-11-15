@@ -42,8 +42,9 @@ import { cn } from '@utils/cn';
 /**
  * ১০-ডিজিট টিচার আইডি থেকে ডায়নামিক ভিজ্যুয়াল বারকোড জেনারেটর (SVG)
  */
-function TeacherBarcodeSvg({ code = '1026030301' }) {
-    const cleanCode = String(code || '1026030301').replace(/\D/g, '').padEnd(10, '0');
+function TeacherBarcodeSvg({ code }) {
+    const cleanCode = String(code || '').replace(/\D/g, '');
+    if (cleanCode.length !== 10) return null;
     const bars = [];
 
     // প্রতিটি ডিজিট থেকে ইউনিক বার প্যাটার্ন তৈরি
@@ -91,8 +92,7 @@ export default function DigitalRegistryIdCard({
     registryRecord,
     onRefreshFromServer,
     isRefreshing = false,
-    onStartNewRegistration,
-    onLoadSampleDemo
+    onStartNewRegistration
 }) {
     const toast = useToast();
     const [viewMode, setViewMode] = useState('BOTH'); // 'CARD_ONLY' | 'DOSSIER_ONLY' | 'BOTH'
@@ -101,11 +101,8 @@ export default function DigitalRegistryIdCard({
     if (!registryRecord) return null;
 
     const teacher = registryRecord.teacher || registryRecord;
-    const teacherCode =
-        registryRecord.teacherId ||
-        teacher.teacherCode ||
-        '1026030301';
-    const uid = registryRecord.uid || teacher.uid || 'ardm-verified-uid';
+    const teacherCode = registryRecord.teacherId || teacher.teacherCode || '—';
+    const uid = registryRecord.uid || teacher.uid || '—';
     const photoUrl =
         registryRecord.photoUrl ||
         teacher.profilePicture?.url ||
@@ -113,13 +110,13 @@ export default function DigitalRegistryIdCard({
 
     const fullNameBng = teacher.fullNameBng || registryRecord.fullNameBng || '—';
     const fullNameEng = teacher.fullNameEng || registryRecord.fullNameEng || '—';
-    const designationEng = teacher.designation || registryRecord.designation || 'Assistant Teacher';
-    const subject = teacher.subject || 'General';
-    const bloodGroup = teacher.bloodGroup || 'O+';
+    const designationEng = teacher.designation || registryRecord.designation || '—';
+    const subject = teacher.subject || '—';
+    const bloodGroup = teacher.bloodGroup || '—';
     const phone = teacher.phone || '';
     const emergencyPhone = teacher.emergencyContact?.phone || '';
     const emergencyName = teacher.emergencyContact?.contactName || '';
-    const biometricId = teacher.biometricDeviceId || 1;
+    const biometricId = teacher.biometricDeviceId || '—';
     const registrationStatus = teacher.registrationStatus || registryRecord.registrationStatus || 'Pending';
     const academicList = Array.isArray(teacher.academicQualifications)
         ? teacher.academicQualifications
@@ -128,14 +125,7 @@ export default function DigitalRegistryIdCard({
     const rankMetrics = calculateLiveRankMetrics(designationEng, academicList);
     const overallRank = teacher.rankingMetrics?.overallMadrasahRank || null;
 
-    const presentAddr = teacher.presentAddress || {
-        houseOrRoad: 'মীরেরখীল',
-        village: 'সরফভাটা',
-        postOffice: INSTITUTION_INFO.postOffice,
-        postCode: INSTITUTION_INFO.postCode,
-        upazila: INSTITUTION_INFO.upazila,
-        district: INSTITUTION_INFO.district
-    };
+    const presentAddr = teacher.presentAddress || {};
 
     const handleCopyText = (text, keyLabel) => {
         if (!text) return;

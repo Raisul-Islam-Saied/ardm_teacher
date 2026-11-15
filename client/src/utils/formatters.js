@@ -272,3 +272,22 @@ export function formatPhoneDisplay(phone, useBengali = false) {
     const formatted = `${clean.slice(0, 5)}-${clean.slice(5)}`;
     return useBengali ? toBengaliDigits(formatted) : formatted;
 }
+
+/**
+ * বাংলাদেশী টাকা (BDT) ফরম্যাটার (কমা সেপারেটর ও বাংলা/ইংরেজি সংখ্যা সহ)
+ * উদাহরণ: formatBDT(25000, true) => "২৫,০০০ ৳"
+ */
+export function formatBDT(amount, useBengali = false) {
+    const num = Number(amount);
+    if (isNaN(num)) return useBengali ? '০ ৳' : '0 ৳';
+
+    const formatted = new Intl.NumberFormat('en-IN', {
+        maximumFractionDigits: 0
+    }).format(Math.round(num));
+
+    const finalNum = useBengali
+        ? formatted.replace(/\d/g, (d) => '০১২৩৪৫৬৭৮৯'[Number(d)])
+        : formatted;
+
+    return `${finalNum} ৳`;
+}

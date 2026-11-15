@@ -8,6 +8,7 @@ const {
     getAllTeachers,
     triggerRankRecalculation,
     getTeacherById,
+    resetTeacherPassword,
     updateTeacher,
     toggleTeacherActiveStatus,
     getMyPortalDashboard
@@ -37,6 +38,7 @@ router.get('/my-portal/dashboard', getMyPortalDashboard);
 // অ্যাডমিন কন্ট্রোল রাউটসমূহ
 router.post('/recalculate-ranks', restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN), triggerRankRecalculation);
 router.patch('/:id/approve', restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN), approvePendingTeacher);
+router.patch('/:id/reset-password', restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN), resetTeacherPassword);
 
 router
     .route('/')

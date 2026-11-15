@@ -2,6 +2,7 @@ const moment = require('moment-timezone');
 const Attendance = require('../models/Attendance');
 const SpecialDate = require('../models/SpecialDate');
 const Teacher = require('../models/Teacher');
+const SystemSettings = require('../models/SystemSettings');
 const {
     processBiometricPunch,
     parseAndSyncRawZKTecoLogs,
@@ -49,6 +50,89 @@ const setSpecialDateConfig = asyncHandler(async (req, res) => {
 const getSpecialDates = asyncHandler(async (req, res) => {
     const dates = await SpecialDate.find().sort({ date: -1 }).lean();
     return res.status(200).json(new ApiResponse(200, 'বিশেষ দিনগুলোর তালিকা', dates));
+});
+
+const deleteSpecialDate = asyncHandler(async (req, res) => {
+    const specialDate = await SpecialDate.findOne({ date: req.params.date });
+    if (!specialDate || !specialDate.isHoliday) {
+        throw new ApiError(404, 'ছুটির দিনটি খুঁজে পাওয়া যায়নি!');
+    }
+    const hasCustomSchedule =
+        specialDate.customInTime !== '09:00' ||
+        specialDate.customLateLimit !== '10:00' ||
+        specialDate.ignoreThirtyPercentRule;
+    if (!hasCustomSchedule) {
+        await specialDate.deleteOne();
+    } else {
+        specialDate.isHoliday = false;
+        await specialDate.save();
+    }
+
+    const attendanceRecords = await Attendance.find({
+        date: req.params.date,
+        punchTime: { $ne: null }
+    });
+    for (const record of attendanceRecords) {
+        const evaluated = await evaluatePunchStatus(
+            moment.tz(record.punchTime, 'Asia/Dhaka'),
+            record.isLateExcused,
+            record.excuseNote
+        );
+        record.appliedInTime = evaluated.appliedInTime;
+        record.status = evaluated.status;
+        record.deductionWeight = evaluated.deductionWeight;
+        record.directSalaryPenaltyDays = evaluated.directSalaryPenaltyDays;
+        record.remarks = evaluated.remarks;
+        await record.save();
+    }
+    return res.status(200).json(new ApiResponse(200, 'বিশেষ দিনটি মুছে ফেলা হয়েছে।'));
+});
+
+const getDailyAttendance = asyncHandler(async (req, res) => {
+    const date = req.query.date || moment.tz('Asia/Dhaka').format('YYYY-MM-DD');
+    if (!moment(date, 'YYYY-MM-DD', true).isValid()) {
+        throw new ApiError(400, 'তারিখ YYYY-MM-DD ফরম্যাটে হতে হবে।');
+    }
+
+    const monthStartDate = moment.tz(date, 'YYYY-MM-DD', 'Asia/Dhaka').startOf('month').format('YYYY-MM-DD');
+    const [teachers, attendanceLogs, monthAttendanceLogs, specialDate, settings] = await Promise.all([
+        Teacher.find({ isActive: true, registrationStatus: 'Approved' })
+            .select('teacherCode fullNameBng fullNameEng designation biometricDeviceId customLeaveQuota')
+            .sort({ teacherCode: 1 })
+            .lean(),
+        Attendance.find({ date }).lean(),
+        Attendance.find({ date: { $gte: monthStartDate, $lt: date }, status: { $in: [ATTENDANCE_STATUS.LATE, ATTENDANCE_STATUS.LEAVE] }, isIgnored: false })
+            .select('teacherId deductionWeight')
+            .lean(),
+        SpecialDate.findOne({ date }).lean(),
+        SystemSettings.getSettings()
+    ]);
+
+    const logsByTeacherId = new Map(attendanceLogs.map((log) => [String(log.teacherId), log]));
+    const monthlyQuotaByTeacherId = new Map();
+    monthAttendanceLogs.forEach((log) => {
+        const key = String(log.teacherId);
+        monthlyQuotaByTeacherId.set(key, (monthlyQuotaByTeacherId.get(key) || 0) + (Number(log.deductionWeight) || 0));
+    });
+    const weekendDays = settings.attendancePolicy?.weekendDays || [5];
+    const isHoliday = Boolean(specialDate?.isHoliday) || weekendDays.includes(moment.tz(date, 'YYYY-MM-DD', 'Asia/Dhaka').day());
+
+    const records = teachers.map((teacher) => {
+        const log = logsByTeacherId.get(String(teacher._id));
+        return {
+            ...(log || {}),
+            teacherId: teacher._id,
+            teacher,
+            date,
+            status: log?.status || (isHoliday ? 'Holiday' : null),
+            inTime24: log?.punchTime ? moment.tz(log.punchTime, 'Asia/Dhaka').format('HH:mm') : '',
+            remarks: log?.remarks || specialDate?.title || '',
+            monthlyQuotaUsedBefore: monthlyQuotaByTeacherId.get(String(teacher._id)) || 0,
+            monthlyQuotaLimit: teacher.customLeaveQuota ?? settings.attendancePolicy?.monthlyPaidLeaveQuota ?? ATTENDANCE_RULES.MONTHLY_PAID_LEAVE_QUOTA
+        };
+    });
+
+    return res.status(200).json(new ApiResponse(200, 'দৈনিক হাজিরার তালিকা', { date, records }));
 });
 
 // ২. সিঙ্গেল পাঞ্চ রেকর্ড
@@ -175,7 +259,7 @@ const excuseTeacherLateOrDuty = asyncHandler(async (req, res) => {
 
 // ৬. অ্যাডমিন কর্তৃক যেকোনো স্ট্যাটাস ম্যানুয়ালি ওভাররাইড করা (Present, Leave, Absent, Excused Late ইত্যাদি)
 const adminOverrideAttendance = asyncHandler(async (req, res) => {
-    const { teacherId, date, status, remarks } = req.body;
+    const { teacherId, date, status, remarks, punchTime } = req.body;
     const teacher = await Teacher.findById(teacherId).lean();
     if (!teacher) throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
 
@@ -200,6 +284,7 @@ const adminOverrideAttendance = asyncHandler(async (req, res) => {
                 biometricDeviceId: teacher.biometricDeviceId,
                 date,
                 status,
+                ...(punchTime ? { punchTime: new Date(punchTime) } : {}),
                 deductionWeight,
                 directSalaryPenaltyDays,
                 isLateExcused: status === ATTENDANCE_STATUS.EXCUSED_LATE,
@@ -316,6 +401,8 @@ const triggerEndOfDayAuditManually = asyncHandler(async (req, res) => {
 module.exports = {
     setSpecialDateConfig,
     getSpecialDates,
+    deleteSpecialDate,
+    getDailyAttendance,
     recordPunch,
     zkTecoHandshake,
     zkTecoReceiveLogs,

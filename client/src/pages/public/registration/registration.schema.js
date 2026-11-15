@@ -3,7 +3,7 @@
  * Synchronized with Backend Military-Grade Validation Rules
  */
 
-import { INSTITUTION_INFO, STORAGE_KEYS } from '@constants/app.constants';
+import { STORAGE_KEYS } from '@constants/app.constants';
 
 export const REGISTRATION_DRAFT_KEY = 'ardm_teacher_registration_draft_v1';
 
@@ -35,7 +35,7 @@ export const REGISTRATION_STEPS = Object.freeze([
         stepNumber: '03',
         titleEng: 'Address & Contact',
         titleBng: 'ঠিকানা ও যোগাযোগ',
-        subtitleEng: 'Verified Mobile, Distinct Emergency Contact & Sarafbhata Default Address',
+        subtitleEng: 'Verified Mobile, Distinct Emergency Contact & Accurate Address',
         subtitleBng: 'সচল মোবাইল নম্বর, ভিন্ন জরুরি যোগাযোগের নম্বর এবং বর্তমান ও স্থায়ী ঠিকানা।'
     },
     {
@@ -53,23 +53,21 @@ export const REGISTRATION_STEPS = Object.freeze([
  * সম্পূর্ণ রেজিস্ট্রেশন ফর্মের প্রারম্ভিক ডেটা স্ট্রাকচার
  */
 export function createInitialRegistrationData() {
-    const todayIso = new Date().toISOString().split('T')[0];
-
     return {
         // Step 1: Personal & Identity
         fullNameEng: '',
         fullNameBng: '',
-        designation: 'Assistant Teacher',
-        subject: 'General',
-        gender: 'Male',
-        religion: 'Islam',
-        bloodGroup: 'O+',
-        maritalStatus: 'Married',
+        designation: '',
+        subject: '',
+        gender: '',
+        religion: '',
+        bloodGroup: '',
+        maritalStatus: '',
         identityType: 'NID', // 'NID' | 'BIRTH_REG' | 'BOTH'
         nidNumber: '',
         birthRegNumber: '',
         dateOfBirth: '',
-        joiningDate: todayIso,
+        joiningDate: '',
         indexNumber: '',
 
         // Step 2: Parents (Bilingual) & Academic Qualifications
@@ -77,43 +75,32 @@ export function createInitialRegistrationData() {
         fathersNameBng: '',
         mothersNameEng: '',
         mothersNameBng: '',
-        academicQualifications: [
-            {
-                id: 'acad_initial_1',
-                degreeLevel: 'Fazil',
-                examTitle: 'ফাজিল (স্নাতক সমমান)',
-                majorOrGroup: 'ইসলামিক স্টাডিজ',
-                boardOrUniversity: 'ইসলামি আরবি বিশ্ববিদ্যালয়, ঢাকা',
-                passingYear: '2022',
-                gpaOrCgpa: '3.50',
-                scale: 4
-            }
-        ],
+        academicQualifications: [],
 
-        // Step 3: Contact & Address (Editable Default: Sarafbhata, 4360, Rangunia, Chittagong)
+        // Step 3: Contact & Address
         phone: '',
         email: '',
         emergencyContact: {
             contactName: '',
-            relationship: 'Guardian',
+            relationship: '',
             phone: ''
         },
         presentAddress: {
             houseOrRoad: '',
             village: '',
-            postOffice: INSTITUTION_INFO.postOffice,
-            postCode: INSTITUTION_INFO.postCode,
-            upazila: INSTITUTION_INFO.upazila,
-            district: INSTITUTION_INFO.district
+            postOffice: '',
+            postCode: '',
+            upazila: '',
+            district: ''
         },
         sameAsPresentAddress: true,
         permanentAddress: {
             houseOrRoad: '',
             village: '',
-            postOffice: INSTITUTION_INFO.postOffice,
-            postCode: INSTITUTION_INFO.postCode,
-            upazila: INSTITUTION_INFO.upazila,
-            district: INSTITUTION_INFO.district
+            postOffice: '',
+            postCode: '',
+            upazila: '',
+            district: ''
         },
 
         // Step 4: Portal Password & Attestation

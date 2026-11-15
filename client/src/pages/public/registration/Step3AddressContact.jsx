@@ -3,22 +3,18 @@
  * Enforces Military-Grade Validation on:
  * - Primary 11-Digit BD Mobile Number (auto-converts Bengali digits & +88)
  * - Emergency Contact Number (MUST be strictly different from Primary Mobile)
- * - Present & Permanent Address (Editable Default: Sarafbhata, 4360, Rangunia, Chittagong)
+ * - Present & Permanent Address
  */
 
-import React, { useState } from 'react';
 import {
     Phone,
     PhoneCall,
     Mail,
     MapPin,
     Home,
-    Lock,
-    Unlock,
     CopyCheck,
     ShieldAlert
 } from 'lucide-react';
-import { INSTITUTION_INFO } from '@constants/app.constants';
 import { FormInput, FormSelect, Badge } from '@components/ui';
 import {
     validateMobileNumber,
@@ -27,7 +23,6 @@ import {
     sanitizeText
 } from '@utils/validators';
 import { extractPureDigits } from '@utils/formatters';
-import { cn } from '@utils/cn';
 
 const RELATIONSHIP_OPTIONS = [
     { value: 'Father', label: 'পিতা (Father)' },
@@ -108,9 +103,6 @@ export default function Step3AddressContact({
     onBlurField,
     stepErrors = {}
 }) {
-    // সরফভাটা ডিফল্ট ঠিকানা এডিট আনলক স্টেট (অন্য ইউনিয়ন বা উপজেলার শিক্ষকদের জন্য)
-    const [unlockDefaultRegion, setUnlockDefaultRegion] = useState(false);
-
     const phoneLive = validateMobileNumber(formData.phone, 'শিক্ষকের মোবাইল নম্বর');
     const emPhoneLive = validateEmergencyPhone(
         formData.emergencyContact?.phone,
@@ -281,40 +273,16 @@ export default function Step3AddressContact({
             </section>
 
             {/* =================================================================
-                SECTION 2: PRESENT & PERMANENT ADDRESS (Sarafbhata Default + Editable)
+                SECTION 2: PRESENT & PERMANENT ADDRESS
                ================================================================= */}
             <section>
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-4 pb-2 border-b border-ink-faint">
                     <div className="flex items-center gap-2">
                         <MapPin className="w-4 h-4 text-emerald" />
                         <h3 className="font-bengali text-sm font-bold text-emerald-deep">
-                            ২. বর্তমান ও স্থায়ী ঠিকানা (সরফভাটা ডিফল্ট প্রি-সেট সহ)
+                            ২. বর্তমান ও স্থায়ী ঠিকানা
                         </h3>
                     </div>
-
-                    {/* অন্য ইউনিয়ন বা উপজেলার শিক্ষক হলে ডিফল্ট ঠিকানা আনলক করার বাটন */}
-                    <button
-                        type="button"
-                        onClick={() => setUnlockDefaultRegion((prev) => !prev)}
-                        className={cn(
-                            'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bengali font-semibold border transition-all',
-                            unlockDefaultRegion
-                                ? 'bg-gold-subtle border-gold text-emerald-deep'
-                                : 'bg-emerald-subtle border-emerald-border text-emerald hover:bg-emerald hover:text-white'
-                        )}
-                    >
-                        {unlockDefaultRegion ? (
-                            <>
-                                <Unlock className="w-3.5 h-3.5" />
-                                ডাকঘর ও উপজেলা এডিট চালু আছে
-                            </>
-                        ) : (
-                            <>
-                                <Lock className="w-3.5 h-3.5" />
-                                অন্য ইউনিয়ন/উপজেলা হলে ক্লিক করে পরিবর্তন করুন
-                            </>
-                        )}
-                    </button>
                 </div>
 
                 {/* বাড়ি/রাস্তা এবং গ্রাম */}
@@ -359,15 +327,14 @@ export default function Step3AddressContact({
                     />
                 </div>
 
-                {/* ডিফল্ট সরফভাটা, ৪৩৬০, রাঙ্গুনিয়া, চট্টগ্রাম (লক/আনলক সুবিধা সহ) */}
+                {/* বর্তমান ঠিকানার এলাকা */}
                 <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-1 mt-1">
                     <FormInput
                         labelEng="Post Office"
                         labelBng="ডাকঘর"
                         variant="erp"
-                        value={formData.presentAddress?.postOffice || INSTITUTION_INFO.postOffice}
+                        value={formData.presentAddress?.postOffice || ''}
                         onChange={(e) => handlePresentAddressChange('postOffice', e.target.value)}
-                        readOnly={!unlockDefaultRegion}
                         required
                         error={stepErrors.presentPostOffice || ''}
                     />
@@ -377,14 +344,13 @@ export default function Step3AddressContact({
                         labelBng="পোস্ট কোড"
                         variant="erp"
                         inputMode="numeric"
-                        value={formData.presentAddress?.postCode || INSTITUTION_INFO.postCode}
+                        value={formData.presentAddress?.postCode || ''}
                         onChange={(e) =>
                             handlePresentAddressChange(
                                 'postCode',
                                 extractPureDigits(e.target.value).slice(0, 4)
                             )
                         }
-                        readOnly={!unlockDefaultRegion}
                         isMonoText
                         required
                     />
@@ -393,9 +359,8 @@ export default function Step3AddressContact({
                         labelEng="Upazila"
                         labelBng="উপজেলা / থানা"
                         variant="erp"
-                        value={formData.presentAddress?.upazila || INSTITUTION_INFO.upazila}
+                        value={formData.presentAddress?.upazila || ''}
                         onChange={(e) => handlePresentAddressChange('upazila', e.target.value)}
-                        readOnly={!unlockDefaultRegion}
                         required
                         error={stepErrors.presentUpazila || ''}
                     />
@@ -404,9 +369,8 @@ export default function Step3AddressContact({
                         labelEng="District"
                         labelBng="জেলা"
                         variant="erp"
-                        value={formData.presentAddress?.district || INSTITUTION_INFO.district}
+                        value={formData.presentAddress?.district || ''}
                         onChange={(e) => handlePresentAddressChange('district', e.target.value)}
-                        readOnly={!unlockDefaultRegion}
                         required
                         error={stepErrors.presentDistrict || ''}
                     />
@@ -433,9 +397,6 @@ export default function Step3AddressContact({
                         </span>
                     </label>
 
-                    <span className="font-mono text-[11px] text-ink-muted">
-                        Default: {INSTITUTION_INFO.postOffice} ({INSTITUTION_INFO.postCode}), {INSTITUTION_INFO.upazila}
-                    </span>
                 </div>
             </section>
         </div>

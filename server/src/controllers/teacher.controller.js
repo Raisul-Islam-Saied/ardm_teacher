@@ -10,7 +10,8 @@ const AuditLog = require('../models/AuditLog');
 const {
     ATTENDANCE_STATUS,
     DESIGNATION_DETAILS,
-    BLOOD_GROUPS
+    BLOOD_GROUPS,
+    ROLES
 } = require('../constants/system.constants');
 const {
     generateTenDigitTeacherId,
@@ -25,17 +26,11 @@ const ApiResponse = require('../utils/ApiResponse');
 // ০. পদবীর তালিকা (বাংলা ও ইংরেজি সহ) এবং মেটাডেটা পাওয়ার এন্ডপয়েন্ট
 const getRegistrationMetadata = asyncHandler(async (req, res) => {
     const nextBioId = await getNextAvailableBiometricId();
-    res.status(200).json(new ApiResponse(200, {
+    res.status(200).json(new ApiResponse(200, 'রেজিস্ট্রেশন মেটাডেটা সফলভাবে পাওয়া গেছে', {
         designations: DESIGNATION_DETAILS,
         bloodGroups: BLOOD_GROUPS,
-        defaultAddress: {
-            postOffice: 'Sarafbhata',
-            postCode: '4360',
-            upazila: 'Rangunia',
-            district: 'Chittagong'
-        },
         nextSuggestedBiometricDeviceId: nextBioId
-    }, 'রেজিস্ট্রেশন মেটাডেটা সফলভাবে পাওয়া গেছে'));
+    }));
 });
 
 // ১. অ্যাডমিন কর্তৃক নতুন শিক্ষক/স্টাফ নিবন্ধন (সরাসরি Approved)
@@ -84,7 +79,6 @@ const registerTeacher = asyncHandler(async (req, res) => {
         biometricDeviceId: finalBiometricId,
         uid,
         editToken,
-        password: req.body.password || finalTeacherCode, // পাসওয়ার্ড না দিলে ১০ সংখ্যার আইডিটিই ডিফল্ট পাসওয়ার্ড হবে
         registrationStatus: 'Approved',
         isActive: true
     });
@@ -101,7 +95,7 @@ const registerTeacher = asyncHandler(async (req, res) => {
         description: `নতুন শিক্ষক নিবন্ধিত হয়েছেন: ${teacher.fullNameBng} (ID: ${finalTeacherCode}, Rank: #${updatedTeacher.rankingMetrics.overallMadrasahRank})`
     });
 
-    res.status(201).json(new ApiResponse(201, updatedTeacher, 'শিক্ষক সফলভাবে নিবন্ধিত হয়েছেন এবং র‍্যাংক নির্ধারিত হয়েছে!'));
+    res.status(201).json(new ApiResponse(201, 'শিক্ষক সফলভাবে নিবন্ধিত হয়েছেন এবং র‍্যাংক নির্ধারিত হয়েছে!', updatedTeacher));
 });
 
 // ২. পাবলিক সেল্ফ-রেজিস্ট্রেশন (লিংক থেকে শিক্ষক নিজে ফর্ম পূরণ করলে Pending মোডে থাকবে এবং ডিজিটাল আইডি কার্ড পাবে)
@@ -137,18 +131,17 @@ const publicSelfRegisterTeacher = asyncHandler(async (req, res) => {
         uid,
         editToken,
         basicSalary: 0, // অ্যাডমিন অ্যাপ্রুভ করার সময় মূল বেতন বসাবেন
-        password: req.body.password || finalTeacherCode,
         registrationStatus: 'Pending',
         isActive: false
     });
 
-    res.status(201).json(new ApiResponse(201, {
+    res.status(201).json(new ApiResponse(201, 'আপনার নিবন্ধন সফলভাবে জমা হয়েছে এবং ডিজিটাল রেজিস্ট্রি কার্ড তৈরি হয়েছে!', {
         teacherId: teacher.teacherCode,
         uid: teacher.uid,
         editToken,
         registrationStatus: teacher.registrationStatus,
         teacher
-    }, 'আপনার নিবন্ধন সফলভাবে জমা হয়েছে এবং ডিজিটাল রেজিস্ট্রি কার্ড তৈরি হয়েছে!'));
+    }));
 });
 
 // ৩. UID দিয়ে পাবলিক রেজিস্ট্রি কার্ড দেখা (আপনার আগের HTML ফর্মের Returning-user check এর জন্য)
@@ -158,7 +151,7 @@ const getPublicRegistryCardByUid = asyncHandler(async (req, res) => {
     if (!teacher) {
         throw new ApiError(404, 'এই UID দিয়ে কোনো নিবন্ধিত রেকর্ড পাওয়া যায়নি!');
     }
-    res.status(200).json(new ApiResponse(200, teacher, 'রেজিস্ট্রি কার্ড সফলভাবে লোড হয়েছে'));
+    res.status(200).json(new ApiResponse(200, 'রেজিস্ট্রি কার্ড সফলভাবে লোড হয়েছে', teacher));
 });
 
 // ৪. অ্যাডমিন কর্তৃক Pending শিক্ষকের রেজিস্ট্রেশন অনুমোদন ও মূল বেতন নির্ধারণ
@@ -195,7 +188,7 @@ const approvePendingTeacher = asyncHandler(async (req, res) => {
         description: `${teacher.fullNameBng}-এর নিবন্ধন অনুমোদন করা হয়েছে (বেতন: ${basicSalary} টাকা, Rank: #${updated.rankingMetrics.overallMadrasahRank})`
     });
 
-    res.status(200).json(new ApiResponse(200, updated, 'শিক্ষকের নিবন্ধন অনুমোদিত হয়েছে এবং র‍্যাংক নির্ধারিত হয়েছে!'));
+    res.status(200).json(new ApiResponse(200, 'শিক্ষকের নিবন্ধন অনুমোদিত হয়েছে এবং র‍্যাংক নির্ধারিত হয়েছে!', updated));
 });
 
 // ৫. সকল শিক্ষক/স্টাফের তালিকা (র‍্যাংক অনুযায়ী সাজানো: সুপার ১, সহ-সুপার ২...)
@@ -225,25 +218,57 @@ const getAllTeachers = asyncHandler(async (req, res) => {
         })
         .lean();
 
-    res.status(200).json(new ApiResponse(200, {
+    res.status(200).json(new ApiResponse(200, 'র‍্যাংক অনুযায়ী শিক্ষকদের তালিকা সফলভাবে পাওয়া গেছে', {
         totalCount: teachers.length,
         teachers
-    }, 'র‍্যাংক অনুযায়ী শিক্ষকদের তালিকা সফলভাবে পাওয়া গেছে'));
+    }));
 });
 
 // ৬. এক ক্লিকে সবার র‍্যাংকিং পুনরায় ক্যালকুলেট করার এন্ডপয়েন্ট
 const triggerRankRecalculation = asyncHandler(async (req, res) => {
     const totalRanked = await recalculateAllTeachersRank();
-    res.status(200).json(new ApiResponse(200, { totalRanked }, 'সকল শিক্ষকের পদবী, শিক্ষাগত যোগ্যতা ও GPA অনুযায়ী র‍্যাংকিং সফলভাবে আপডেট করা হয়েছে!'));
+    res.status(200).json(new ApiResponse(200, 'সকল শিক্ষকের পদবী, শিক্ষাগত যোগ্যতা ও GPA অনুযায়ী র‍্যাংকিং সফলভাবে আপডেট করা হয়েছে!', { totalRanked }));
 });
 
 // ৭. একক শিক্ষকের বিস্তারিত প্রোফাইল
 const getTeacherById = asyncHandler(async (req, res) => {
+    if (req.user.role === ROLES.TEACHER && String(req.user._id) !== req.params.id) {
+        throw new ApiError(403, 'আপনি শুধু নিজের শিক্ষকের তথ্য দেখতে পারবেন।');
+    }
     const teacher = await Teacher.findById(req.params.id).lean();
     if (!teacher) {
         throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
     }
-    res.status(200).json(new ApiResponse(200, teacher, 'শিক্ষকের তথ্য পাওয়া গেছে'));
+    res.status(200).json(new ApiResponse(200, 'শিক্ষকের তথ্য পাওয়া গেছে', teacher));
+});
+
+const resetTeacherPassword = asyncHandler(async (req, res) => {
+    const { newPassword } = req.body;
+    if (typeof newPassword !== 'string' || newPassword.trim().length < 6) {
+        throw new ApiError(400, 'নতুন পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।');
+    }
+
+    const teacher = await Teacher.findById(req.params.id).select('+password');
+    if (!teacher) throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
+    if (
+        [ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(teacher.role) &&
+        req.user.role !== ROLES.SUPER_ADMIN
+    ) {
+        throw new ApiError(403, 'অ্যাডমিন অ্যাকাউন্টের পাসওয়ার্ড শুধু সুপার অ্যাডমিন পরিবর্তন করতে পারবেন।');
+    }
+
+    teacher.password = newPassword.trim();
+    await teacher.save();
+    await AuditLog.create({
+        action: 'TEACHER_PASSWORD_RESET',
+        module: 'Security',
+        description: `${teacher.teacherCode} শিক্ষকের পোর্টাল পাসওয়ার্ড রিসেট করা হয়েছে`,
+        performedBy: req.user._id,
+        targetTeacherId: teacher._id,
+        ipAddress: req.ip
+    });
+
+    return res.status(200).json(new ApiResponse(200, 'শিক্ষকের পাসওয়ার্ড সফলভাবে রিসেট করা হয়েছে!'));
 });
 
 // ৮. শিক্ষকের তথ্য আপডেট এবং স্বয়ংক্রিয় র‍্যাংক পুনর্বিন্যাস
@@ -260,7 +285,7 @@ const updateTeacher = asyncHandler(async (req, res) => {
     await recalculateAllTeachersRank();
 
     const updated = await Teacher.findById(req.params.id);
-    res.status(200).json(new ApiResponse(200, updated, 'শিক্ষকের তথ্য ও র‍্যাংক সফলভাবে আপডেট করা হয়েছে'));
+    res.status(200).json(new ApiResponse(200, 'শিক্ষকের তথ্য ও র‍্যাংক সফলভাবে আপডেট করা হয়েছে', updated));
 });
 
 // ৯. শিক্ষককে নিষ্ক্রিয়/সক্রিয় করা (Soft Deactivate)
@@ -279,7 +304,7 @@ const toggleTeacherActiveStatus = asyncHandler(async (req, res) => {
     await teacher.save();
     await recalculateAllTeachersRank();
 
-    res.status(200).json(new ApiResponse(200, teacher, `শিক্ষকের অ্যাকাউন্ট এখন ${teacher.isActive ? 'সক্রিয় (Active)' : 'নিষ্ক্রিয় (Inactive)'} করা হয়েছে`));
+    res.status(200).json(new ApiResponse(200, `শিক্ষকের অ্যাকাউন্ট এখন ${teacher.isActive ? 'সক্রিয় (Active)' : 'নিষ্ক্রিয় (Inactive)'} করা হয়েছে`, teacher));
 });
 
 // ১০. শিক্ষক পোর্টাল (Self-Service): নিজের পূর্ণাঙ্গ ড্যাশবোর্ড এবং মাসের কোটা কতদিন খেয়েছে ও কতদিন বাকি আছে তার নিখুঁত হিসাব
@@ -369,7 +394,7 @@ const getMyPortalDashboard = asyncHandler(async (req, res) => {
         }
     }
 
-    res.status(200).json(new ApiResponse(200, {
+    res.status(200).json(new ApiResponse(200, 'শিক্ষকের সেল্ফ-সার্ভিস পোর্টাল ড্যাশবোর্ড সফলভাবে লোড হয়েছে', {
         profile: teacherProfile,
         todayStatus: todayAttendance || {
             date: todayStr,
@@ -408,7 +433,7 @@ const getMyPortalDashboard = asyncHandler(async (req, res) => {
         salarySheets: allTimeSalaries,
         salaryRevisionHistory: salaryRevisions,
         myApplications: recentApplications
-    }, 'শিক্ষকের সেল্ফ-সার্ভিস পোর্টাল ড্যাশবোর্ড সফলভাবে লোড হয়েছে'));
+    }));
 });
 
 module.exports = {
@@ -420,6 +445,7 @@ module.exports = {
     getAllTeachers,
     triggerRankRecalculation,
     getTeacherById,
+    resetTeacherPassword,
     updateTeacher,
     toggleTeacherActiveStatus,
     getMyPortalDashboard

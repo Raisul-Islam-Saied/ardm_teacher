@@ -4,7 +4,6 @@
  * - 4-Step Military-Validated Registration Ledger
  * - Returning User Saved Digital ID Card Recovery (localStorage)
  * - Manual UID Lookup Modal (/teachers/public/registry-card/:uid)
- * - Instant Sample ID Card Preview Mode for testing Print & Barcode
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -16,13 +15,12 @@ import {
     CreditCard,
     Send,
     Search,
-    Sparkles,
-    Eye
+    Sparkles
 } from 'lucide-react';
 import { INSTITUTION_INFO, STORAGE_KEYS } from '@constants/app.constants';
 import { Button, Badge, Modal, FormInput, ConfirmDialog } from '@components/ui';
 import { useToast } from '@context/ToastContext';
-import axiosClient from '@api/axiosClient';
+import axiosClient, { extractApiErrorMessage } from '@api/axiosClient';
 import { uploadSquarePhotoToCloudinary } from '@api/cloudinaryClient';
 import {
     previewTenDigitTeacherId,
@@ -45,72 +43,6 @@ import Step2ParentsAcademic, { validateStep2ParentsAcademicData } from './Step2P
 import Step3AddressContact, { validateStep3AddressContactData } from './Step3AddressContact';
 import Step4PhotoReview, { validateStep4PhotoReviewData } from './Step4PhotoReview';
 import DigitalRegistryIdCard from './DigitalRegistryIdCard';
-
-// তাৎক্ষণিক প্রিন্ট ও ডিজাইন চেক করার জন্য একটি নমুনা (Sample) ভেরিফায়েড রেজিস্ট্রি রেকর্ড
-function createSampleVerifiedRecord() {
-    return {
-        uid: 'ardm-2026-sample-verified-uid-1026030301',
-        teacherId: '1026030301',
-        registrationStatus: 'Approved',
-        registeredAt: new Date().toISOString(),
-        teacher: {
-            teacherCode: '1026030301',
-            biometricDeviceId: 3,
-            fullNameBng: 'মোঃ রায়সুল ইসলাম সাঈদ',
-            fullNameEng: 'Mohmmad Raisul Islam Saied',
-            fathersNameBng: 'মোঃ রফিকুল ইসলাম',
-            fathersNameEng: 'Md. Rafiqul Islam',
-            mothersNameBng: 'নেশা বেগম',
-            mothersNameEng: 'Nesha Begum',
-            designation: 'Assistant Teacher',
-            subject: 'তথ্য ও যোগাযোগ প্রযুক্তি (ICT)',
-            bloodGroup: 'O+',
-            gender: 'Male',
-            religion: 'Islam',
-            maritalStatus: 'Single',
-            nidNumber: '2003159700123',
-            dateOfBirth: '2003-07-30',
-            joiningDate: '2026-08-01',
-            phone: '01812345678',
-            emergencyContact: {
-                contactName: 'মোঃ রফিকুল ইসলাম',
-                relationship: 'Father',
-                phone: '01711223344'
-            },
-            presentAddress: {
-                houseOrRoad: 'মীরেরখীল',
-                village: 'সরফভাটা',
-                postOffice: 'Sarafbhata',
-                postCode: '4360',
-                upazila: 'Rangunia',
-                district: 'Chittagong'
-            },
-            academicQualifications: [
-                {
-                    degreeLevel: 'Honours',
-                    examTitle: 'বি.এসসি (অনার্স)',
-                    majorOrGroup: 'তথ্য ও যোগাযোগ প্রযুক্তি (ICT)',
-                    boardOrUniversity: 'জাতীয় বিশ্ববিদ্যালয়',
-                    passingYear: 2025,
-                    gpaOrCgpa: 3.75,
-                    scale: 4
-                },
-                {
-                    degreeLevel: 'HSC',
-                    examTitle: 'এইচএসসি',
-                    majorOrGroup: 'বিজ্ঞান',
-                    boardOrUniversity: 'চট্টগ্রাম বোর্ড',
-                    passingYear: 2021,
-                    gpaOrCgpa: 5.00,
-                    scale: 5
-                }
-            ],
-            rankingMetrics: {
-                overallMadrasahRank: 3
-            }
-        }
-    };
-}
 
 export default function PublicRegistrationLedger() {
     const toast = useToast();
@@ -142,7 +74,7 @@ export default function PublicRegistrationLedger() {
 
     const [serverMetadata, setServerMetadata] = useState({
         loaded: false,
-        nextSuggestedBiometricDeviceId: 1
+        nextSuggestedBiometricDeviceId: null
     });
     const [existingRegistryToken, setExistingRegistryToken] = useState(() =>
         getSavedRegistryToken()
@@ -161,10 +93,14 @@ export default function PublicRegistrationLedger() {
                 const payload = res.data?.data || {};
                 setServerMetadata({
                     loaded: true,
-                    nextSuggestedBiometricDeviceId: payload.nextSuggestedBiometricDeviceId || 1
+                    nextSuggestedBiometricDeviceId: payload.nextSuggestedBiometricDeviceId || null
                 });
             })
-            .catch(() => {});
+            .catch((error) => {
+                if (!isMounted) return;
+                setServerMetadata({ loaded: true, nextSuggestedBiometricDeviceId: null });
+                toast.error(extractApiErrorMessage(error, 'নিবন্ধন তথ্য সার্ভার থেকে লোড করা যায়নি।'));
+            });
 
         return () => {
             isMounted = false;
@@ -226,12 +162,14 @@ export default function PublicRegistrationLedger() {
         }));
     };
 
-    const idPreview = previewTenDigitTeacherId(
-        formData.joiningDate,
-        formData.dateOfBirth || '2003-07-30',
-        formData.designation,
-        String(serverMetadata.nextSuggestedBiometricDeviceId).padStart(2, '0')
-    );
+    const idPreview = serverMetadata.nextSuggestedBiometricDeviceId && formData.dateOfBirth
+        ? previewTenDigitTeacherId(
+            formData.joiningDate,
+            formData.dateOfBirth,
+            formData.designation,
+            String(serverMetadata.nextSuggestedBiometricDeviceId).padStart(2, '0')
+        )
+        : null;
 
     const rankPreview = calculateLiveRankMetrics(
         formData.designation,
@@ -246,6 +184,10 @@ export default function PublicRegistrationLedger() {
     };
 
     const handleFinalSubmit = async () => {
+        if (!serverMetadata.loaded || !serverMetadata.nextSuggestedBiometricDeviceId || !idPreview) {
+            toast.error('শিক্ষক আইডি তৈরির জন্য সার্ভারের নিবন্ধন তথ্য প্রয়োজন। পরে আবার চেষ্টা করুন।');
+            return;
+        }
         const c1 = validateStep1PersonalData(formData);
         if (!c1.valid) {
             setStepErrors(c1.errors);
@@ -318,6 +260,7 @@ export default function PublicRegistrationLedger() {
             const cleanBirthReg = extractPureDigits(formData.birthRegNumber);
 
             const payload = {
+                teacherCode: String(idPreview?.fullId || '').replace(/\D/g, '').slice(0, 10),
                 fullNameEng: formData.fullNameEng.trim(),
                 fullNameBng: formData.fullNameBng.trim(),
                 fathersNameEng: formData.fathersNameEng.trim(),
@@ -489,7 +432,7 @@ export default function PublicRegistrationLedger() {
                         </span>
                     </p>
 
-                    {/* পূর্বে নিবন্ধিত কার্ড খোঁজা বা ডেমো আইডি কার্ড দেখার কুইক বার */}
+                    {/* পূর্বে নিবন্ধিত কার্ড খোঁজার কুইক বার */}
                     <div className="mt-4 inline-flex flex-wrap items-center justify-center gap-2">
                         <button
                             type="button"
@@ -500,19 +443,6 @@ export default function PublicRegistrationLedger() {
                             পূর্বে নিবন্ধিত? UID দিয়ে আইডি কার্ড খুঁজুন
                         </button>
 
-                        {!submittedRegistryRecord && (
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setSubmittedRegistryRecord(createSampleVerifiedRecord());
-                                    toast.info('নমুনা (Sample) ডিজিটাল রেজিস্ট্রি আইডি কার্ড ও সনদ লোড হয়েছে!');
-                                }}
-                                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-subtle border border-emerald-border hover:bg-emerald hover:text-white text-xs font-bengali font-semibold text-emerald transition-all"
-                            >
-                                <Eye className="w-3.5 h-3.5" />
-                                নমুনা ডিজিটাল আইডি কার্ড দেখুন
-                            </button>
-                        )}
                     </div>
                 </header>
 
@@ -556,13 +486,7 @@ export default function PublicRegistrationLedger() {
                     <DigitalRegistryIdCard
                         registryRecord={submittedRegistryRecord}
                         isRefreshing={isRefreshingCard}
-                        onRefreshFromServer={() => {
-                            if (submittedRegistryRecord.uid?.startsWith('ardm-2026-sample')) {
-                                toast.info('এটি একটি নমুনা (Sample) কার্ড। আসল নিবন্ধনের ক্ষেত্রে সার্ভার থেকে লাইভ স্ট্যাটাস আপডেট হবে।');
-                                return;
-                            }
-                            fetchRegistryCardByUid(submittedRegistryRecord.uid);
-                        }}
+                        onRefreshFromServer={() => fetchRegistryCardByUid(submittedRegistryRecord.uid)}
                         onStartNewRegistration={() => setSubmittedRegistryRecord(null)}
                     />
                 ) : (

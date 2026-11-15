@@ -31,7 +31,7 @@ const teacherSchema = new mongoose.Schema({
         required: [true, '১০ সংখ্যার টিচার আইডি আবশ্যক'],
         unique: true,
         trim: true,
-        match: [/^d{10}$/, 'টিচার আইডি অবশ্যই ১০ সংখ্যার ডিজিট হতে হবে']
+        match: [/^\d{10}$/, 'টিচার আইডি অবশ্যই ১০ সংখ্যার ডিজিট হতে হবে']
     },
     uid: {
         type: String,
@@ -94,23 +94,19 @@ const teacherSchema = new mongoose.Schema({
     },
     gender: {
         type: String,
-        enum: ['Male', 'Female', 'Other'],
-        default: 'Male'
+        enum: ['Male', 'Female', 'Other']
     },
     religion: {
         type: String,
-        enum: ['Islam', 'Hinduism', 'Buddhism', 'Christianity', 'Other'],
-        default: 'Islam'
+        enum: ['Islam', 'Hinduism', 'Buddhism', 'Christianity', 'Other']
     },
     bloodGroup: {
         type: String,
-        enum: BLOOD_GROUPS,
-        default: 'N/A'
+        enum: BLOOD_GROUPS
     },
     maritalStatus: {
         type: String,
-        enum: ['Single', 'Married', 'Widowed', 'Divorced'],
-        default: 'Married'
+        enum: ['Single', 'Married', 'Widowed', 'Divorced']
     },
 
     // ৩. পরিচয়পত্র (NID অথবা জন্ম নিবন্ধন - যেকোনো একটি বাধ্যতামূলক)
@@ -154,22 +150,22 @@ const teacherSchema = new mongoose.Schema({
         }
     },
 
-    // ৫. ঠিকানা (ডিফল্ট সরফভাটা, রাঙ্গুনিয়া, চট্টগ্রাম - তবে পরিবর্তনযোগ্য)
+    // ৫. ঠিকানা
     presentAddress: {
         houseOrRoad: { type: String, required: [true, 'বাড়ি বা রাস্তার নাম আবশ্যক'], trim: true },
         village: { type: String, required: [true, 'গ্রামের নাম আবশ্যক'], trim: true },
-        postOffice: { type: String, default: 'Sarafbhata', trim: true },
-        postCode: { type: String, default: '4360', trim: true },
-        upazila: { type: String, default: 'Rangunia', trim: true },
-        district: { type: String, default: 'Chittagong', trim: true }
+        postOffice: { type: String, trim: true, default: '' },
+        postCode: { type: String, trim: true, default: '' },
+        upazila: { type: String, trim: true, default: '' },
+        district: { type: String, trim: true, default: '' }
     },
     permanentAddress: {
         houseOrRoad: { type: String, trim: true, default: '' },
         village: { type: String, trim: true, default: '' },
-        postOffice: { type: String, default: 'Sarafbhata', trim: true },
-        postCode: { type: String, default: '4360', trim: true },
-        upazila: { type: String, default: 'Rangunia', trim: true },
-        district: { type: String, default: 'Chittagong', trim: true }
+        postOffice: { type: String, trim: true, default: '' },
+        postCode: { type: String, trim: true, default: '' },
+        upazila: { type: String, trim: true, default: '' },
+        district: { type: String, trim: true, default: '' }
     },
 
     // ৬. প্রাতিষ্ঠানিক পদবী, ক্যাটাগরি ও র‍্যাংকিং ইঞ্জিন
@@ -190,7 +186,7 @@ const teacherSchema = new mongoose.Schema({
     subject: {
         type: String,
         trim: true,
-        default: 'General'
+        default: ''
     },
     employmentType: {
         type: String,
@@ -233,7 +229,7 @@ const teacherSchema = new mongoose.Schema({
         default: PAYMENT_METHODS.CASH
     },
     bankDetails: {
-        bankName: { type: String, default: 'Islami Bank Bangladesh PLC', trim: true },
+        bankName: { type: String, default: '', trim: true },
         branchName: { type: String, trim: true, default: '' },
         accountHolderName: { type: String, trim: true, default: '' },
         accountNumber: { type: String, trim: true, default: '' },
@@ -256,6 +252,10 @@ const teacherSchema = new mongoose.Schema({
         type: String,
         required: [true, 'পাসওয়ার্ড আবশ্যক'],
         minlength: [6, 'পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে'],
+        select: false
+    },
+    passwordChangedAt: {
+        type: Date,
         select: false
     },
     role: {
@@ -288,7 +288,7 @@ const teacherSchema = new mongoose.Schema({
 });
 
 // সেভ হওয়ার আগে বাংলা পদবী, স্টাফ ক্যাটাগরি এবং র‍্যাংকিং মেট্রিক্স স্বয়ংক্রিয়ভাবে হিসাব করা
-teacherSchema.pre('save', async function (next) {
+teacherSchema.pre('validate', async function (next) {
     // ১. পদবীর বাংলা নাম ও বেস র‍্যাংক সেট করা
     const desigInfo = DESIGNATION_DETAILS.find(d => d.titleEng === this.designation)
         || DESIGNATION_DETAILS[DESIGNATION_DETAILS.length - 1];
@@ -343,5 +343,17 @@ teacherSchema.pre('save', async function (next) {
 teacherSchema.methods.comparePassword = async function (candidatePassword) {
     return await bcrypt.compare(candidatePassword, this.password);
 };
+
+teacherSchema.methods.isPasswordChangedAfterTokenIssued = function (tokenIssuedAt) {
+    if (!this.passwordChangedAt) return false;
+    return Math.floor(this.passwordChangedAt.getTime() / 1000) > tokenIssuedAt;
+};
+
+teacherSchema.pre('validate', function (next) {
+    if (!this.isNew && this.isModified('password')) {
+        this.passwordChangedAt = new Date(Date.now() - 1000);
+    }
+    next();
+});
 
 module.exports = mongoose.model('Teacher', teacherSchema);

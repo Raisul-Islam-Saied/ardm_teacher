@@ -16,7 +16,7 @@ const protect = asyncHandler(async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const currentUser = await Teacher.findById(decoded.id);
+    const currentUser = await Teacher.findById(decoded.id).select('+passwordChangedAt');
 
     if (!currentUser) {
         throw new ApiError(401, 'এই টোকেনের অন্তর্ভুক্ত ইউজার আর সিস্টেমে বিদ্যমান নেই!');

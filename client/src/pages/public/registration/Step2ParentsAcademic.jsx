@@ -32,20 +32,6 @@ import {
 } from '@utils/formatters';
 import { cn } from '@utils/cn';
 
-// ডিগ্রি লেভেল সিলেক্ট করলে দ্রুত কাজের জন্য স্মার্ট ডিফল্ট সাজেশন
-const DEGREE_PRESET_SUGGESTIONS = {
-    Kamil: { examTitle: 'কামিল (স্নাতকোত্তর সমমান)', board: 'ইসলামি আরবি বিশ্ববিদ্যালয়, ঢাকা', scale: 4 },
-    Masters: { examTitle: 'মাস্টার্স (এম.এ / এম.এসসি / এম.এসএস)', board: 'জাতীয় বিশ্ববিদ্যালয়, গাজীপুর', scale: 4 },
-    Fazil: { examTitle: 'ফাজিল (স্নাতক সমমান)', board: 'ইসলামি আরবি বিশ্ববিদ্যালয়, ঢাকা', scale: 4 },
-    Honours: { examTitle: 'স্নাতক (অনার্স / ডিগ্রি পাস)', board: 'জাতীয় বিশ্ববিদ্যালয়, গাজীপুর', scale: 4 },
-    Alim: { examTitle: 'আলিম (উচ্চ মাধ্যমিক সমমান)', board: 'বাংলাদেশ মাদ্রাসা শিক্ষা বোর্ড, ঢাকা', scale: 5 },
-    HSC: { examTitle: 'এইচএসসি (উচ্চ মাধ্যমিক)', board: 'মাধ্যমিক ও উচ্চ মাধ্যমিক শিক্ষা বোর্ড, চট্টগ্রাম', scale: 5 },
-    Dakhil: { examTitle: 'দাখিল (মাধ্যমিক সমমান)', board: 'বাংলাদেশ মাদ্রাসা শিক্ষা বোর্ড, ঢাকা', scale: 5 },
-    SSC: { examTitle: 'এসএসসি (মাধ্যমিক)', board: 'মাধ্যমিক ও উচ্চ মাধ্যমিক শিক্ষা বোর্ড, চট্টগ্রাম', scale: 5 },
-    JDC: { examTitle: 'জেডিসি / অষ্টম শ্রেণি', board: 'বাংলাদেশ মাদ্রাসা শিক্ষা বোর্ড, ঢাকা', scale: 5 },
-    Other: { examTitle: 'অন্যান্য সনদপত্র', board: 'সংশ্লিষ্ট শিক্ষা বোর্ড / প্রতিষ্ঠান', scale: 5 }
-};
-
 /**
  * পুরো Step 2-এর সকল ফিল্ড একসাথে ভ্যালিডেট করার এক্সপোর্টেড ফাংশন
  */
@@ -139,13 +125,13 @@ export default function Step2ParentsAcademic({
             ...qualifications,
             {
                 id: newId,
-                degreeLevel: 'Alim',
-                examTitle: 'আলিম (উচ্চ মাধ্যমিক সমমান)',
-                majorOrGroup: 'সাধারণ / বিজ্ঞান',
-                boardOrUniversity: 'বাংলাদেশ মাদ্রাসা শিক্ষা বোর্ড, ঢাকা',
-                passingYear: '2018',
-                gpaOrCgpa: '4.50',
-                scale: 5
+                degreeLevel: '',
+                examTitle: '',
+                majorOrGroup: '',
+                boardOrUniversity: '',
+                passingYear: '',
+                gpaOrCgpa: '',
+                scale: ''
             }
         ];
         onUpdateField('academicQualifications', nextList);
@@ -153,7 +139,6 @@ export default function Step2ParentsAcademic({
 
     // নির্দিষ্ট রো ডিলিট করা
     const handleRemoveQualification = (targetId) => {
-        if (qualifications.length <= 1) return;
         const nextList = qualifications.filter((item) => item.id !== targetId);
         onUpdateField('academicQualifications', nextList);
     };
@@ -162,20 +147,6 @@ export default function Step2ParentsAcademic({
     const handleUpdateQualificationRow = (targetId, key, val) => {
         const nextList = qualifications.map((item) => {
             if (item.id !== targetId) return item;
-
-            // যদি ডিগ্রির স্তর পরিবর্তন করা হয়, তবে স্মার্ট সাজেশন বসানো
-            if (key === 'degreeLevel') {
-                const preset = DEGREE_PRESET_SUGGESTIONS[val];
-                if (preset) {
-                    return {
-                        ...item,
-                        degreeLevel: val,
-                        examTitle: preset.examTitle,
-                        boardOrUniversity: preset.board,
-                        scale: preset.scale
-                    };
-                }
-            }
 
             return {
                 ...item,
@@ -367,16 +338,14 @@ export default function Step2ParentsAcademic({
                                         </Badge>
                                     </div>
 
-                                    {qualifications.length > 1 && (
-                                        <button
-                                            type="button"
-                                            onClick={() => handleRemoveQualification(item.id)}
-                                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bengali text-danger hover:bg-danger-bg transition-colors"
-                                        >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                            মুছে ফেলুন
-                                        </button>
-                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => handleRemoveQualification(item.id)}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bengali text-danger hover:bg-danger-bg transition-colors"
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                        মুছে ফেলুন
+                                    </button>
                                 </div>
 
                                 {/* ডিগ্রির ইনপুট গ্রিড */}
@@ -390,7 +359,7 @@ export default function Step2ParentsAcademic({
                                             handleUpdateQualificationRow(item.id, 'degreeLevel', e.target.value)
                                         }
                                         options={degreeOptions}
-                                        placeholder={false}
+                                        placeholder="ডিগ্রির স্তর নির্বাচন করুন"
                                         required
                                         error={rowErr.degreeLevel}
                                     />
@@ -485,7 +454,7 @@ export default function Step2ParentsAcademic({
                                                 { value: 5, label: 'out of 5.00' },
                                                 { value: 4, label: 'out of 4.00' }
                                             ]}
-                                            placeholder={false}
+                                            placeholder="স্কেল নির্বাচন করুন"
                                             isBengaliText={false}
                                         />
                                     </div>

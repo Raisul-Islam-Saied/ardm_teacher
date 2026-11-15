@@ -71,6 +71,9 @@ app.get('/health', (req, res) => {
 // ZKTeco K40 Native ADMS Routes
 app.get('/iclock/cdata', zkTecoHandshake);
 app.post('/iclock/cdata', zkTecoReceiveLogs);
+app.get('/iclock/getrequest', (req, res) => {
+    res.status(200).type('text/plain').send('OK');
+});
 
 // Enterprise API v1 Routes
 app.use('/api/v1/auth', authRoutes);
