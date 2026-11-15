@@ -10,6 +10,18 @@ const {
     DEGREE_LEVEL_WEIGHTS
 } = require('../constants/system.constants');
 
+const optionalUniqueString = () => ({
+    type: String,
+    unique: true,
+    sparse: true,
+    trim: true,
+    set: (value) => (
+        value == null || (typeof value === 'string' && value.trim() === '')
+            ? undefined
+            : value
+    )
+});
+
 const academicQualificationSchema = new mongoose.Schema({
     degreeLevel: {
         type: String,
@@ -33,12 +45,7 @@ const teacherSchema = new mongoose.Schema({
         trim: true,
         match: [/^\d{10}$/, 'টিচার আইডি অবশ্যই ১০ সংখ্যার ডিজিট হতে হবে']
     },
-    uid: {
-        type: String,
-        unique: true,
-        sparse: true,
-        trim: true
-    },
+    uid: optionalUniqueString(),
     editToken: {
         type: String,
         select: false
@@ -49,13 +56,7 @@ const teacherSchema = new mongoose.Schema({
         unique: true,
         min: [1, 'বায়োমেট্রিক আইডি কমপক্ষে ১ হতে হবে']
     },
-    indexNumber: {
-        type: String,
-        unique: true,
-        sparse: true,
-        trim: true,
-        default: null
-    },
+    indexNumber: optionalUniqueString(),
 
     // ২. ব্যক্তিগত তথ্য (বাংলা ও ইংরেজি উভয় ভাষায়)
     fullNameBng: {
@@ -110,20 +111,8 @@ const teacherSchema = new mongoose.Schema({
     },
 
     // ৩. পরিচয়পত্র (NID অথবা জন্ম নিবন্ধন - যেকোনো একটি বাধ্যতামূলক)
-    nidNumber: {
-        type: String,
-        unique: true,
-        sparse: true,
-        trim: true,
-        default: null
-    },
-    birthRegNumber: {
-        type: String,
-        unique: true,
-        sparse: true,
-        trim: true,
-        default: null
-    },
+    nidNumber: optionalUniqueString(),
+    birthRegNumber: optionalUniqueString(),
 
     // ৪. যোগাযোগ ও জরুরি যোগাযোগ
     phone: {
@@ -133,12 +122,8 @@ const teacherSchema = new mongoose.Schema({
         trim: true
     },
     email: {
-        type: String,
-        unique: true,
-        sparse: true,
-        lowercase: true,
-        trim: true,
-        default: null
+        ...optionalUniqueString(),
+        lowercase: true
     },
     emergencyContact: {
         contactName: { type: String, trim: true, default: '' },
