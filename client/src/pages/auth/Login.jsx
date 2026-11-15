@@ -18,7 +18,6 @@ import {
     ShieldCheck,
     Clock,
     UserPlus,
-    AlertCircle,
     CheckCircle2,
     Sparkles,
     HelpCircle
@@ -367,19 +366,6 @@ export default function Login({ onLoginSuccess, onSwitchToPublicRegistration }) 
                                     <HelpCircle className="w-5 h-5" />
                                 </button>
                             </div>
-
-                            {/* ভুল চেষ্টার সতর্কবার্তা (যদি ১ থেকে ৪ বার ভুল হয়ে থাকে) */}
-                            {failedAttemptsCount > 0 && (
-                                <div className="mb-5 p-3 rounded-xl bg-warning-bg border border-warning-border flex items-center justify-between gap-2 text-xs font-bengali text-warning-deep animate-shake">
-                                    <span className="flex items-center gap-1.5 font-semibold">
-                                        <AlertCircle className="w-4 h-4 shrink-0" />
-                                        সতর্কবার্তা: ভুল পাসওয়ার্ড চেষ্টা ({toBengaliDigits(failedAttemptsCount)}/৫ বার)
-                                    </span>
-                                    <span className="font-mono text-[11px] font-bold">
-                                        {5 - failedAttemptsCount} left
-                                    </span>
-                                </div>
-                            )}
 
                             {/* ইনপুট ১: মোবাইল নম্বর অথবা ১০-ডিজিট টিচার আইডি */}
                             <FormInput
