@@ -32,11 +32,22 @@ export function clearAuthSessionStorage() {
 export function extractApiErrorMessage(error, fallbackMessage = 'সার্ভারের সাথে সংযোগে সমস্যা হয়েছে।') {
     if (!error) return fallbackMessage;
     const data = error?.response?.data;
-    if (data?.message) return data.message;
-    if (Array.isArray(data?.errors) && data.errors.length > 0) {
-        return data.errors.map((e) => e.message || e.msg).join(' | ');
+    if (data?.message || (Array.isArray(data?.errors) && data.errors.length > 0)) {
+        const details = Array.isArray(data.errors)
+            ? data.errors.map((item) => item.message || item.msg).filter(Boolean)
+            : [];
+        return [data.message, ...details.filter((detail) => detail !== data.message)]
+            .filter(Boolean)
+            .join(' ');
     }
-    return error.message || fallbackMessage;
+    if (error.code === 'ECONNABORTED') {
+        return 'সার্ভার থেকে উত্তর পেতে দেরি হচ্ছে। কিছুক্ষণ পরে আবার চেষ্টা করুন।';
+    }
+    if (error.request || error.code === 'ERR_NETWORK') {
+        return 'সার্ভারের সঙ্গে সংযোগ করা যাচ্ছে না। ইন্টারনেট বা সার্ভার চালু আছে কি না যাচাই করুন।';
+    }
+    if (!error.isAxiosError && error.message) return error.message;
+    return fallbackMessage;
 }
 
 const axiosClient = axios.create({

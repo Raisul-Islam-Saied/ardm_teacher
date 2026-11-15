@@ -133,7 +133,7 @@ export default function TeacherDirectory() {
             }
         } catch (error) {
             setRawTeachers([]);
-            toast.error(error.response?.data?.message || error.message || 'শিক্ষক তালিকা লোড করা যায়নি।');
+            toast.error(extractApiErrorMessage(error, 'শিক্ষক তালিকা লোড করা যায়নি।'));
         } finally {
             setIsLoading(false);
         }

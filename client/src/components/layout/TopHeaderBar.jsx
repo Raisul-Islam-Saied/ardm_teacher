@@ -3,7 +3,7 @@
  * Features:
  * - Live Bengali Digital Clock & Date
  * - 9:00 AM Biometric Attendance Rule Live Status Indicator
- * - Quick Role Switcher (Dev Mode) & User Profile Menu
+ * - User Profile Menu
  */
 
 import React, { useState, useEffect } from 'react';
@@ -14,18 +14,16 @@ import {
     ShieldCheck,
     Bell,
     LogOut,
-    User,
-    Sparkles,
-    CheckCircle2
+    User
 } from 'lucide-react';
 import { INSTITUTION_INFO } from '@constants/app.constants';
-import { useAuth, SYSTEM_ROLES } from '@context/AuthContext';
+import { useAuth } from '@context/AuthContext';
 import { Badge } from '@components/ui';
 import { toBengaliDigits } from '@utils/formatters';
 import { ADMIN_NAV_ITEMS, TEACHER_NAV_ITEMS } from './navigation.config';
 
 export default function TopHeaderBar({ onOpenMobileDrawer }) {
-    const { user, isAdmin, simulateRoleSession, logout } = useAuth();
+    const { user, isAdmin, logout } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -133,40 +131,6 @@ export default function TopHeaderBar({ onOpenMobileDrawer }) {
                     <span>{timeStringBng}</span>
                 </div>
 
-                {/* ডেভেলপার কুইক রোল সুইচার পিল (SuperAdmin <-> Teacher) */}
-                <div className="hidden lg:flex items-center rounded-full p-0.5 bg-paper-deep border border-ink-faint text-[11px] font-mono">
-                    <button
-                        type="button"
-                        onClick={() => {
-                            simulateRoleSession(SYSTEM_ROLES.SUPER_ADMIN);
-                            navigate('/admin/dashboard');
-                        }}
-                        className={`px-2.5 py-1 rounded-full font-semibold transition-all ${
-                            isAdmin
-                                ? 'bg-emerald text-white shadow-2xs'
-                                : 'text-ink-soft hover:text-ink'
-                        }`}
-                        title="সুপার অ্যাডমিন মোডে সুইচ করুন"
-                    >
-                        Admin
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => {
-                            simulateRoleSession(SYSTEM_ROLES.TEACHER);
-                            navigate('/teacher/portal');
-                        }}
-                        className={`px-2.5 py-1 rounded-full font-semibold transition-all ${
-                            !isAdmin
-                                ? 'bg-gold text-emerald-deep font-bold shadow-2xs'
-                                : 'text-ink-soft hover:text-ink'
-                        }`}
-                        title="সাধারণ শিক্ষক মোডে সুইচ করুন"
-                    >
-                        Teacher
-                    </button>
-                </div>
-
                 {/* ইউজার প্রোফাইল ব্যাজ */}
                 {user && (
                     <div
@@ -182,7 +146,7 @@ export default function TopHeaderBar({ onOpenMobileDrawer }) {
                                 {user.fullNameBng}
                             </p>
                             <p className="font-mono text-[10px] text-ink-muted">
-                                #{user.rankingMetrics?.overallMadrasahRank || 1} · {user.teacherCode}
+                                #{user.rankingMetrics?.overallMadrasahRank || '—'} · {user.teacherCode || '—'}
                             </p>
                         </div>
                     </div>

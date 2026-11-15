@@ -37,4 +37,16 @@ const auditLogSchema = new mongoose.Schema({
     versionKey: false
 });
 
+auditLogSchema.statics.recordLog = function ({ req, action, module, targetId, description, metadata = {} }) {
+    return this.create({
+        action,
+        module,
+        description,
+        performedBy: req?.user?._id || null,
+        targetTeacherId: targetId || null,
+        ipAddress: req?.ip || null,
+        metadata
+    });
+};
+
 module.exports = mongoose.model('AuditLog', auditLogSchema);

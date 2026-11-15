@@ -44,8 +44,21 @@ const login = asyncHandler(async (req, res) => {
     }
 
     if (user.lockUntil && user.lockUntil > Date.now()) {
-        const remainingMinutes = Math.ceil((user.lockUntil - Date.now()) / (60 * 1000));
-        throw new ApiError(423, `একাউন্ট লক করা হয়েছে। অনুগ্রহ করে ${remainingMinutes} মিনিট পর চেষ্টা করুন।`);
+        const retryAfterSeconds = Math.max(1, Math.ceil((user.lockUntil - Date.now()) / 1000));
+        const remainingMinutes = Math.floor(retryAfterSeconds / 60);
+        const remainingSeconds = retryAfterSeconds % 60;
+        throw new ApiError(
+            423,
+            `অ্যাকাউন্টটি সাময়িকভাবে লক আছে। আবার চেষ্টা করতে ${remainingMinutes} মিনিট ${remainingSeconds} সেকেন্ড অপেক্ষা করুন।`,
+            [],
+            true,
+            '',
+            { retryAfterSeconds }
+        );
+    }
+    if (user.lockUntil) {
+        user.lockUntil = null;
+        user.failedLoginAttempts = 0;
     }
 
     if (!user.isActive) {
@@ -56,9 +69,17 @@ const login = asyncHandler(async (req, res) => {
     if (!isPasswordCorrect) {
         user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
         if (user.failedLoginAttempts >= 5) {
-            user.lockUntil = new Date(Date.now() + 15 * 60 * 1000);
+            const retryAfterSeconds = 15 * 60;
+            user.lockUntil = new Date(Date.now() + retryAfterSeconds * 1000);
             await user.save({ validateBeforeSave: false });
-            throw new ApiError(423, 'পরপর ৫ বার ভুল পাসওয়ার্ড দেওয়ায় আপনার অ্যাকাউন্ট ১৫ মিনিটের জন্য লক করা হলো!');
+            throw new ApiError(
+                423,
+                'পরপর ৫ বার ভুল পাসওয়ার্ড দেওয়ায় অ্যাকাউন্টটি ১৫ মিনিটের জন্য সাময়িকভাবে লক করা হয়েছে।',
+                [],
+                true,
+                '',
+                { retryAfterSeconds }
+            );
         }
         await user.save({ validateBeforeSave: false });
         throw new ApiError(401, `ভুল পাসওয়ার্ড! আর ${5 - user.failedLoginAttempts} বার চেষ্টার সুযোগ রয়েছে।`);

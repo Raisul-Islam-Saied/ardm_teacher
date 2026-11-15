@@ -84,7 +84,7 @@ app.use('/api/v1/upload', uploadRoutes);
 app.use('/api/v1/system', systemRoutes);
 
 app.all('*', (req, res, next) => {
-    next(new ApiError(404, `আপনি যে রাউটটি খুঁজছেন (${req.method} ${req.originalUrl}) তা এই সার্ভারে বিদ্যমান নেই!`));
+    next(new ApiError(404, 'অনুরোধ করা সেবাটি পাওয়া যায়নি। ঠিকানা যাচাই করে আবার চেষ্টা করুন।'));
 });
 
 app.use(errorHandler);

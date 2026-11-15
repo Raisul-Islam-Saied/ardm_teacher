@@ -134,7 +134,7 @@ export default function PublicRegistrationLedger() {
                 toast.success('ডিজিটাল রেজিস্ট্রি কার্ড সফলভাবে লোড হয়েছে!');
             }
         } catch (err) {
-            toast.error(err.message || 'এই UID দিয়ে কোনো নিবন্ধিত কার্ড পাওয়া যায়নি।');
+            toast.error(extractApiErrorMessage(err, 'এই UID দিয়ে কোনো নিবন্ধিত কার্ড পাওয়া যায়নি।'));
         } finally {
             setLookupLoading(false);
             setIsRefreshingCard(false);
@@ -342,7 +342,7 @@ export default function PublicRegistrationLedger() {
             if (err.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
                 setStepErrors(err.fieldErrors);
             }
-            toast.error(err.message || 'নিবন্ধন জমা দিতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।');
+            toast.error(extractApiErrorMessage(err, 'নিবন্ধন জমা দিতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।'));
         }
     };
 

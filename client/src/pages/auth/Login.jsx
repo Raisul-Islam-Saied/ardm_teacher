@@ -30,7 +30,7 @@ import axiosClient, { extractApiErrorMessage } from '@api/axiosClient';
 import { extractPureDigits, toBengaliDigits } from '@utils/formatters';
 import { cn } from '@utils/cn';
 
-const LOCKOUT_STORAGE_KEY = 'ardm_erp_login_lockout_until_v1';
+const LOCKOUT_STORAGE_KEY = 'ardm_erp_login_lockout_until_v2';
 
 /**
  * ইনপুটটি ১১ সংখ্যার মোবাইল নম্বর নাকি ১০ সংখ্যার টিচার আইডি তা স্বয়ংক্রিয়ভাবে শনাক্ত করার ফাংশন
@@ -111,11 +111,9 @@ export default function Login({ onLoginSuccess, onSwitchToPublicRegistration }) 
     // ১. ফর্ম স্টেট
     const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
-    const [rememberMe, setRememberMe] = useState(true);
     const [touched, setTouched] = useState({});
     const [fieldErrors, setFieldErrors] = useState({});
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [failedAttemptsCount, setFailedAttemptsCount] = useState(0);
     const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
 
     // ২. পারসিস্টেন্ট ব্রুট-ফোর্স লকআউট স্টেট (রিলোড করলেও সেশন স্টোরেজ থেকে সময় হিসাব রাখবে)
@@ -143,7 +141,6 @@ export default function Login({ onLoginSuccess, onSwitchToPublicRegistration }) 
 
             if (diffSec <= 0) {
                 setLockUntilTimestamp(0);
-                setFailedAttemptsCount(0);
                 try {
                     sessionStorage.removeItem(LOCKOUT_STORAGE_KEY);
                 } catch (e) {
@@ -158,8 +155,8 @@ export default function Login({ onLoginSuccess, onSwitchToPublicRegistration }) 
     }, [lockUntilTimestamp]);
 
     // ৪. লকআউট অ্যাক্টিভেট করার ফাংশন (ব্যাকএন্ড HTTP 423 দিলে অথবা ৫ বার ভুল করলে)
-    const triggerAccountLockout = (minutes = 15) => {
-        const targetTime = Date.now() + minutes * 60 * 1000;
+    const triggerAccountLockout = (seconds = 15 * 60) => {
+        const targetTime = Date.now() + seconds * 1000;
         setLockUntilTimestamp(targetTime);
         try {
             sessionStorage.setItem(LOCKOUT_STORAGE_KEY, String(targetTime));
@@ -216,21 +213,19 @@ export default function Login({ onLoginSuccess, onSwitchToPublicRegistration }) 
                 throw new Error('সার্ভার থেকে বৈধ লগইন সেশন পাওয়া যায়নি।');
             }
 
-            setFailedAttemptsCount(0);
             toast.success(`আলহামদুলিল্লাহ! স্বাগতম, ${userObj.fullNameBng || userObj.fullNameEng || 'সম্মানিত শিক্ষক'}।`);
 
             if (typeof onLoginSuccess === 'function') {
                 onLoginSuccess(userObj, token);
             }
         } catch (err) {
-            const nextAttempts = err.response?.status === 401
-                ? failedAttemptsCount + 1
-                : failedAttemptsCount;
-            setFailedAttemptsCount(nextAttempts);
-
             if (err.response?.status === 423) {
-                const lockMins = 15;
-                triggerAccountLockout(lockMins);
+                const retryAfterSeconds = Number(err.response?.data?.meta?.retryAfterSeconds);
+                triggerAccountLockout(
+                    Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+                        ? retryAfterSeconds
+                        : 15 * 60
+                );
                 toast.error(extractApiErrorMessage(err, 'নিরাপত্তার কারণে লগইন সাময়িকভাবে লক করা হয়েছে।'));
                 return;
             }
@@ -242,10 +237,7 @@ export default function Login({ onLoginSuccess, onSwitchToPublicRegistration }) 
                 });
             }
 
-            const remainingTries = Math.max(0, 5 - nextAttempts);
-            toast.error(
-                `${extractApiErrorMessage(err, 'মোবাইল নম্বর/আইডি অথবা পাসওয়ার্ড সঠিক নয়।')}${err.response?.status === 401 ? ` (বাকি চেষ্টা: ${toBengaliDigits(remainingTries)} বার)` : ''}`
-            );
+            toast.error(extractApiErrorMessage(err, 'মোবাইল নম্বর/আইডি অথবা পাসওয়ার্ড সঠিক নয়।'));
         } finally {
             setIsSubmitting(false);
         }
@@ -283,13 +275,13 @@ export default function Login({ onLoginSuccess, onSwitchToPublicRegistration }) 
                 </header>
 
                 {/* =============================================================
-                    2. MAIN LOGIN OR 15-MINUTE BRUTEFORCE LOCKOUT CARD
+                    2. LOGIN OR ACCOUNT LOCKOUT NOTICE
                    ============================================================= */}
                 <main className="ledger-surface p-6 sm:p-8 lg:p-9 bg-paper-panel animate-fade-up">
 
                     {isLocked ? (
                         /* -----------------------------------------------------
-                           LOCKOUT SCREEN (5 Failed Attempts -> 15-Min Countdown)
+                           ACCOUNT LOCKOUT NOTICE
                            ----------------------------------------------------- */
                         <div className="text-center py-3 animate-pop-in">
                             <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-danger-bg border-2 border-danger/35 flex items-center justify-center text-danger shadow-sm animate-shake">
@@ -297,7 +289,7 @@ export default function Login({ onLoginSuccess, onSwitchToPublicRegistration }) 
                             </div>
 
                             <Badge variant="danger" size="md" dot className="mb-2">
-                                BRUTE-FORCE SECURITY LOCKOUT (HTTP 423)
+                                নিরাপত্তাজনিত সাময়িক বিরতি
                             </Badge>
 
                             <h2 className="font-bengali text-xl sm:text-2xl font-bold text-danger">
@@ -305,13 +297,13 @@ export default function Login({ onLoginSuccess, onSwitchToPublicRegistration }) 
                             </h2>
 
                             <p className="font-bengali text-xs sm:text-[13px] text-ink-soft mt-2 leading-relaxed">
-                                পরপর ৫ বার ভুল পাসওয়ার্ড প্রদানের কারণে আপনার অ্যাকাউন্টের নিরাপত্তার স্বার্থে সাময়িকভাবে লগইন স্থগিত করা হয়েছে। পুনরায় চেষ্টা করার জন্য নিচের কাউন্টডাউন শেষ হওয়া পর্যন্ত অপেক্ষা করুন:
+                                একাধিকবার ভুল পাসওয়ার্ড দেওয়ায় এই অ্যাকাউন্টে লগইন সাময়িকভাবে বন্ধ করা হয়েছে। নিচের সময় শেষ হলে আবার চেষ্টা করুন।
                             </p>
 
                             {/* লাইভ ডিজিটাল কাউন্টডাউন ঘড়ি */}
                             <div className="my-6 p-5 rounded-2xl bg-gradient-to-r from-danger-deep via-danger to-danger-deep text-white border border-gold/40 shadow-ledger">
                                 <span className="font-mono text-[10px] uppercase tracking-widest text-gold-soft block mb-1">
-                                    Time Remaining Until Auto-Unlock
+                                    আবার চেষ্টা করতে বাকি
                                 </span>
 
                                 <div className="flex items-center justify-center gap-2 font-mono text-4xl sm:text-5xl font-bold tracking-widest my-1">
@@ -337,7 +329,7 @@ export default function Login({ onLoginSuccess, onSwitchToPublicRegistration }) 
                             <div className="p-3.5 rounded-xl bg-paper border border-ink-faint text-left text-xs font-bengali text-ink-soft space-y-1">
                                 <p className="font-bold text-emerald-deep">কেন এটি ঘটেছে?</p>
                                 <p>
-                                    হ্যাকার বা অননুমোদিত ব্যক্তি যাতে অনুমান করে আপনার পাসওয়ার্ড ভাঙতে না পারে, সেজন্য মাদ্রাসার মিলিটারি সিকিউরিটি ইঞ্জিন স্বয়ংক্রিয়ভাবে ১৫ মিনিটের এই সুরক্ষা দেয়াল চালু করেছে।
+                                    নিরাপত্তার জন্য কিছুক্ষণ অপেক্ষা করতে হবে। সমস্যা চলতে থাকলে প্রশাসকের সঙ্গে যোগাযোগ করুন।
                                 </p>
                             </div>
 
@@ -462,32 +454,7 @@ export default function Login({ onLoginSuccess, onSwitchToPublicRegistration }) 
                                         ? 'পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।'
                                         : '')
                                 }
-                                hint="পাসওয়ার্ড পরিবর্তন না করে থাকলে আপনার ১০-ডিজিট টিচার আইডিটিই ডিফল্ট পাসওয়ার্ড।"
                             />
-
-                            {/* রিমেম্বার মি এবং লকআউট সিমুলেটর বাটন */}
-                            <div className="flex flex-wrap items-center justify-between gap-2 mb-6 text-xs font-bengali">
-                                <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-                                    <input
-                                        type="checkbox"
-                                        checked={rememberMe}
-                                        onChange={(e) => setRememberMe(e.target.checked)}
-                                        className="w-4 h-4 accent-emerald rounded cursor-pointer"
-                                    />
-                                    <span className="text-ink-soft font-medium">
-                                        এই ডিভাইসে লগইন মনে রাখুন
-                                    </span>
-                                </label>
-
-                                <button
-                                    type="button"
-                                    onClick={() => triggerAccountLockout(15)}
-                                    className="font-mono text-[11px] font-semibold text-danger hover:underline"
-                                    title="৫ বার ভুল পাসওয়ার্ড দিলে ১৫ মিনিটের লকআউট স্ক্রিন কেমন দেখাবে তা পরীক্ষা করুন"
-                                >
-                                    ⚡ Test 15m Lockout Screen
-                                </button>
-                            </div>
 
                             {/* লগইন সাবমিট বাটন */}
                             <Button
@@ -554,16 +521,16 @@ export default function Login({ onLoginSuccess, onSwitchToPublicRegistration }) 
 
                         <div className="p-3 rounded-xl bg-paper border border-ink-faint">
                             <p className="font-bold text-emerald-deep mb-1">
-                                ২. ডিফল্ট পাসওয়ার্ড কী?
+                                ২. পাসওয়ার্ড ভুলে গেলে কী করবেন?
                             </p>
                             <p>
-                                নিবন্ধনের সময় আপনি যদি আলাদা পাসওয়ার্ড না দিয়ে থাকেন, তবে আপনার <b>১০ সংখ্যার টিচার আইডিটিই</b> আপনার প্রাথমিক পাসওয়ার্ড।
+                                নিবন্ধনের সময় নির্ধারিত পাসওয়ার্ড ব্যবহার করুন। ভুলে গেলে প্রশাসকের সঙ্গে যোগাযোগ করে পাসওয়ার্ড রিসেট করুন।
                             </p>
                         </div>
 
                         <div className="p-3 rounded-xl bg-emerald-subtle border border-emerald-border">
                             <p className="font-bold text-emerald-deep mb-1">
-                                ৩. পাবলিক নিবন্ধন অনুমোদন (Pending Approval):
+                                ৩. পাবলিক নিবন্ধন অনুমোদন:
                             </p>
                             <p>
                                 শিক্ষক নিজে অনলাইন ফর্ম পূরণ করলে সুপার বা অ্যাডমিন ড্যাশবোর্ড থেকে সেটি <b>Approve</b> করার পর পোর্টালে লগইন সচল হবে।

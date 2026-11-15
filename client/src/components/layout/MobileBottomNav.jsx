@@ -14,12 +14,12 @@ import {
     ShieldCheck
 } from 'lucide-react';
 import { INSTITUTION_INFO } from '@constants/app.constants';
-import { useAuth, SYSTEM_ROLES } from '@context/AuthContext';
+import { useAuth } from '@context/AuthContext';
 import { cn } from '@utils/cn';
 import { ADMIN_NAV_ITEMS, TEACHER_NAV_ITEMS } from './navigation.config';
 
 export default function MobileBottomNav({ isDrawerOpen, onOpenDrawer, onCloseDrawer }) {
-    const { user, isAdmin, simulateRoleSession, logout } = useAuth();
+    const { user, isAdmin, logout } = useAuth();
     const location = useLocation();
     const navigate = useNavigate();
 
@@ -133,7 +133,7 @@ export default function MobileBottomNav({ isDrawerOpen, onOpenDrawer, onCloseDra
                                             <ShieldCheck className="w-3.5 h-3.5 text-gold" />
                                             Role: {user.role}
                                         </span>
-                                        <span>Rank #{user.rankingMetrics?.overallMadrasahRank || 1}</span>
+                                        <span>Rank #{user.rankingMetrics?.overallMadrasahRank || '—'}</span>
                                     </div>
                                     <p className="font-bengali text-sm font-bold text-white">
                                         {user.fullNameBng}
@@ -142,30 +142,6 @@ export default function MobileBottomNav({ isDrawerOpen, onOpenDrawer, onCloseDra
                                         {user.designationBng || user.designation}
                                     </p>
 
-                                    <div className="grid grid-cols-2 gap-1.5 mt-3 pt-2.5 border-t border-white/10">
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                simulateRoleSession(SYSTEM_ROLES.SUPER_ADMIN);
-                                                navigate('/admin/dashboard');
-                                                onCloseDrawer();
-                                            }}
-                                            className="py-1 rounded-lg bg-gold/20 border border-gold/40 text-[10.5px] font-mono font-bold text-gold-soft"
-                                        >
-                                            ⚡ Sim Admin
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                simulateRoleSession(SYSTEM_ROLES.TEACHER);
-                                                navigate('/teacher/portal');
-                                                onCloseDrawer();
-                                            }}
-                                            className="py-1 rounded-lg bg-white/10 border border-white/20 text-[10.5px] font-mono font-bold text-white"
-                                        >
-                                            ⚡ Sim Teacher
-                                        </button>
-                                    </div>
                                 </div>
                             )}
 

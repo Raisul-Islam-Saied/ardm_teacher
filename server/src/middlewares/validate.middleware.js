@@ -6,8 +6,7 @@ const validateRequest = (req, res, next) => {
     if (!errors.isEmpty()) {
         const extractedErrors = errors.array().map((err) => ({
             field: err.path,
-            message: err.msg,
-            rejectedValue: err.value
+            message: err.msg
         }));
 
         throw new ApiError(
