@@ -18,7 +18,7 @@ const systemRoutes = require('./routes/system.routes');
 const { zkTecoHandshake, zkTecoReceiveLogs } = require('./controllers/attendance.controller');
 
 const app = express();
-
+app.set('trust proxy', 1);
 app.use(helmet());
 app.use(cors({
     origin: process.env.CLIENT_URL || '*',
