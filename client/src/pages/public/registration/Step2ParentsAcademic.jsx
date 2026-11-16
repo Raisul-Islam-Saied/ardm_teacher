@@ -13,13 +13,12 @@ import {
     Plus,
     Trash2,
     Award,
-    Sparkles,
-    CheckCircle2,
     AlertCircle,
     BookOpen
 } from 'lucide-react';
 import { DEGREE_LEVELS } from '@constants/app.constants';
 import { FormInput, FormSelect, Button, Badge } from '@components/ui';
+import academicQualificationOptions from '@/data/academicQualificationOptions.json';
 import {
     validateEnglishName,
     validateBengaliName,
@@ -31,6 +30,91 @@ import {
     calculateLiveRankMetrics
 } from '@utils/formatters';
 import { cn } from '@utils/cn';
+
+const ACADEMIC_QUALIFICATION_GROUPS = [
+    { id: 'secondary', titleEng: 'SSC / Equivalent Level', titleBng: 'এসএসসি / দাখিল ও সমমান', levels: ['JDC', 'Dakhil', 'SSC'], defaultLevel: 'Dakhil', optionKey: 'secondary' },
+    { id: 'higher-secondary', titleEng: 'HSC / Equivalent Level', titleBng: 'এইচএসসি / আলিম ও সমমান', levels: ['Alim', 'HSC'], defaultLevel: 'Alim', optionKey: 'higherSecondary' },
+    { id: 'graduation', titleEng: 'Graduation / Equivalent Level', titleBng: 'স্নাতক / ফাজিল ও সমমান', levels: ['Fazil', 'Honours'], defaultLevel: 'Honours', optionKey: 'graduation' },
+    { id: 'post-graduation', titleEng: 'Masters / Equivalent Level', titleBng: 'স্নাতকোত্তর / কামিল ও সমমান', levels: ['Kamil', 'Masters'], defaultLevel: 'Masters', optionKey: 'masters' }
+];
+
+const ALL_EXAMINATIONS = [
+    ...academicQualificationOptions.secondary.examinations,
+    ...academicQualificationOptions.higherSecondary.examinations,
+    ...academicQualificationOptions.graduation.examinations,
+    ...academicQualificationOptions.masters.examinations
+].filter((option, index, list) => list.findIndex((item) => item.value === option.value) === index);
+
+const ALL_INSTITUTIONS = [
+    ...academicQualificationOptions.secondary.boards,
+    ...academicQualificationOptions.higherSecondary.boards,
+    ...academicQualificationOptions.universities
+].filter((option, index, list) => list.findIndex((item) => item.value === option.value) === index);
+
+const ALL_SUBJECTS = [
+    ...academicQualificationOptions.secondary.subjects,
+    ...academicQualificationOptions.higherSecondary.subjects,
+    ...academicQualificationOptions.higherStudySubjects
+].filter((option, index, list) => list.findIndex((item) => item.value === option.value) === index);
+
+const ALL_RESULTS = [
+    ...academicQualificationOptions.secondary.results,
+    ...academicQualificationOptions.higherSecondary.results,
+    ...academicQualificationOptions.graduation.results,
+    ...academicQualificationOptions.masters.results
+].filter((option, index, list) => list.findIndex((item) => item.value === option.value) === index);
+
+const ALL_COURSE_DURATIONS = [
+    ...academicQualificationOptions.graduation.courseDurations,
+    ...academicQualificationOptions.masters.courseDurations
+].filter((option, index, list) => list.findIndex((item) => item.value === option.value) === index);
+
+const PASSING_YEAR_END = Math.max(academicQualificationOptions.passingYearEnd, new Date().getFullYear());
+const PASSING_YEAR_OPTIONS = Array.from(
+    { length: PASSING_YEAR_END - academicQualificationOptions.passingYearStart + 1 },
+    (_, index) => {
+        const year = String(academicQualificationOptions.passingYearStart + index);
+        return { value: year, label: year };
+    }
+);
+
+const HSC_SUBJECT_CATEGORIES_BY_EXAM = {
+    '1': ['G', 'Z'],
+    '2': ['G', 'Z'],
+    '3': ['T', 'Z'],
+    '4': ['T', 'Z'],
+    '5': ['G', 'Z'],
+    '6': ['G', 'Z'],
+    '7': ['T', 'Z'],
+    '8': ['V', 'Z'],
+    '9': ['T', 'Z'],
+    '10': ['T', 'Z']
+};
+
+function getGroupDropdownOptions(group) {
+    if (group.id === 'unassigned') {
+        return {
+            examinations: ALL_EXAMINATIONS,
+            institutions: ALL_INSTITUTIONS,
+            subjects: ALL_SUBJECTS,
+            results: ALL_RESULTS,
+            courseDurations: ALL_COURSE_DURATIONS
+        };
+    }
+
+    const data = academicQualificationOptions[group.optionKey];
+    return {
+        examinations: data.examinations,
+        institutions: group.id === 'secondary' || group.id === 'higher-secondary'
+            ? data.boards
+            : academicQualificationOptions.universities,
+        subjects: group.id === 'secondary' || group.id === 'higher-secondary'
+            ? data.subjects
+            : academicQualificationOptions.higherStudySubjects,
+        results: data.results,
+        courseDurations: data.courseDurations || []
+    };
+}
 
 /**
  * পুরো Step 2-এর সকল ফিল্ড একসাথে ভ্যালিডেট করার এক্সপোর্টেড ফাংশন
@@ -104,10 +188,20 @@ export default function Step2ParentsAcademic({
 
     const liveRank = calculateLiveRankMetrics(formData.designation, qualifications);
 
-    const degreeOptions = DEGREE_LEVELS.map((d) => ({
-        value: d.key,
-        label: `[Weight ${d.weight}] ${d.labelBng}`
-    }));
+    const qualificationGroups = qualifications.some(
+        (item) => !ACADEMIC_QUALIFICATION_GROUPS.some((group) => group.levels.includes(item.degreeLevel))
+    )
+        ? [
+            ...ACADEMIC_QUALIFICATION_GROUPS,
+            {
+                id: 'unassigned',
+                titleEng: 'Unassigned Qualification',
+                titleBng: 'স্তর নির্বাচন করা হয়নি',
+                levels: [],
+                defaultLevel: 'Other'
+            }
+        ]
+        : ACADEMIC_QUALIFICATION_GROUPS;
 
     const getFieldError = (fieldName, liveResult, currentVal) => {
         if (stepErrors[fieldName]) return stepErrors[fieldName];
@@ -118,18 +212,22 @@ export default function Step2ParentsAcademic({
     };
 
     // নতুন শিক্ষাগত যোগ্যতার রো (Row) যোগ করা
-    const handleAddQualification = () => {
+    const handleAddQualification = (degreeLevel) => {
         if (qualifications.length >= 6) return;
         const newId = `acad_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
         const nextList = [
             ...qualifications,
             {
                 id: newId,
-                degreeLevel: '',
+                degreeLevel,
                 examTitle: '',
                 majorOrGroup: '',
                 boardOrUniversity: '',
+                rollNumber: '',
                 passingYear: '',
+                courseDuration: '',
+                resultType: '',
+                resultGrade: '',
                 gpaOrCgpa: '',
                 scale: ''
             }
@@ -154,6 +252,46 @@ export default function Step2ParentsAcademic({
             };
         });
 
+        onUpdateField('academicQualifications', nextList);
+    };
+
+    const handleUpdateExamination = (targetId, group, examLabel) => {
+        const examination = getGroupDropdownOptions(group).examinations
+            .find((option) => option.label === examLabel);
+        if (!examination) return;
+
+        const degree = DEGREE_LEVELS.find((item) => item.key === examination.degreeLevel);
+        const nextList = qualifications.map((item) => (
+            item.id !== targetId
+                ? item
+                : {
+                    ...item,
+                    examTitle: examination.label,
+                    degreeLevel: examination.degreeLevel,
+                    majorOrGroup: '',
+                    courseDuration: degree && degree.weight >= 4 ? item.courseDuration : ''
+                }
+        ));
+        onUpdateField('academicQualifications', nextList);
+    };
+
+    const handleUpdateResult = (targetId, group, resultValue) => {
+        const result = getGroupDropdownOptions(group).results
+            .find((option) => option.value === resultValue);
+        if (!result) return;
+
+        const numericResult = result.resultType === 'GPA' || result.resultType === 'CGPA';
+        const nextList = qualifications.map((item) => (
+            item.id !== targetId
+                ? item
+                : {
+                    ...item,
+                    resultType: result.resultType,
+                    resultGrade: result.resultGrade || '',
+                    scale: result.scale || '',
+                    gpaOrCgpa: numericResult ? item.gpaOrCgpa : ''
+                }
+        ));
         onUpdateField('academicQualifications', nextList);
     };
 
@@ -245,223 +383,309 @@ export default function Step2ParentsAcademic({
                 </div>
             </section>
 
-            {/* =================================================================
-                SECTION 2: ACADEMIC QUALIFICATIONS & AUTO-SENIORITY GPA ENGINE
-               ================================================================= */}
-            <section>
-                <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-2 border-b border-ink-faint">
-                    <div className="flex items-center gap-2">
-                        <GraduationCap className="w-4.5 h-4.5 text-gold-deep" />
-                        <div>
-                            <h3 className="font-bengali text-sm font-bold text-emerald-deep">
-                                ২. শিক্ষাগত যোগ্যতা ও সিজিপিএ/জিপিএ (অটো-র‍্যাংকিং নির্ধারক)
-                            </h3>
+            <section className="space-y-4">
+                <div className="flex flex-wrap items-end justify-between gap-3 border-b border-ink-faint pb-3">
+                    <div>
+                        <div className="mb-1 flex items-center gap-2 text-emerald-deep">
+                            <GraduationCap className="h-5 w-5" />
+                            <span className="font-mono text-[10px] font-semibold uppercase tracking-widest">
+                                Educational Qualifications
+                            </span>
                         </div>
+                        <h3 className="font-bengali text-base font-bold text-ink">
+                            ২. শিক্ষাগত যোগ্যতার তথ্য
+                        </h3>
                     </div>
 
-                    <Button
-                        variant="gold"
-                        size="xs"
-                        leftIcon={Plus}
-                        onClick={handleAddQualification}
-                        disabled={qualifications.length >= 6}
-                    >
-                        <span className="font-bengali">আরও ডিগ্রি যোগ করুন ({toBengaliDigits(qualifications.length)}/৬)</span>
-                    </Button>
+                    <Badge variant="gold" size="sm">
+                        {toBengaliDigits(qualifications.length)} / ৬টি সনদ
+                    </Badge>
                 </div>
 
-                {/* লাইভ সিনিয়রিটি ও র‍্যাংকিং ক্যালকুলেশন ব্যানার */}
-                <div className="mb-5 p-4 rounded-2xl bg-gradient-to-r from-emerald-deep via-emerald to-emerald-deep text-white border border-gold/30 shadow-card">
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-white/10 border border-gold/30 flex items-center justify-center text-gold-soft shrink-0">
-                                <Award className="w-5 h-5" />
-                            </div>
-                            <div>
-                                <span className="font-mono text-[10px] uppercase tracking-wider text-gold-soft block">
-                                    Auto-Seniority &amp; Merit Engine
-                                </span>
-                                <h4 className="font-bengali text-sm sm:text-base font-bold text-white">
-                                    সর্বোচ্চ ডিগ্রি: <span className="text-gold-soft">{liveRank.highestDegreeLabel}</span> (Weight: {liveRank.highestDegreeWeight})
-                                </h4>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-3 font-mono text-xs">
-                            <div className="px-3 py-1.5 rounded-xl bg-black/25 border border-white/10 text-center">
-                                <span className="block text-[9px] text-gold-soft uppercase">Best GPA (5.00 Scale)</span>
-                                <b className="text-sm text-white">{liveRank.highestNormalizedGpa.toFixed(2)}</b>
-                            </div>
-                            <div className="px-3 py-1.5 rounded-xl bg-gold/20 border border-gold/40 text-center">
-                                <span className="block text-[9px] text-gold-soft uppercase">Composite Score</span>
-                                <b className="text-sm text-gold-soft">{liveRank.compositeScore}</b>
-                            </div>
-                        </div>
-                    </div>
-                    <p className="font-bengali text-[11px] text-[#EFE9D4]/85 mt-2.5 pt-2 border-t border-white/10 flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-gold shrink-0" />
-                        <span>
-                            একই পদবীর শিক্ষকদের মধ্যে সিনিয়রিটি নির্ধারিত হবে সর্বোচ্চ ডিগ্রির মান (কামিল/মাস্টার্স = ৫, ফাজিল/অনার্স = ৪) এবং GPA/CGPA অনুযায়ী।
-                        </span>
+                <div className="flex items-start gap-2.5 rounded-lg border border-emerald/15 bg-emerald-subtle/40 px-3.5 py-3">
+                    <BookOpen className="mt-0.5 h-4 w-4 shrink-0 text-emerald-deep" />
+                    <p className="font-bengali text-xs leading-6 text-ink-soft">
+                        SSC/দাখিল থেকে উচ্চতর পর্যায় পর্যন্ত প্রযোজ্য প্রতিটি সনদের তথ্য যোগ করুন। GPA/CGPA ফলাফল মেধাক্রমে ব্যবহৃত হবে; বিভাগ, শ্রেণি বা “উত্তীর্ণ” ফলাফল সংরক্ষিত হবে, তবে GPA-ভিত্তিক মেধাক্রমে গণনা হবে না।
                     </p>
                 </div>
 
-                {/* ডায়নামিক শিক্ষাগত যোগ্যতা কার্ডসমূহ */}
-                <div className="space-y-4">
-                    {qualifications.map((item, idx) => {
-                        const rowErr = rowErrorsMap[item.id || idx] || {};
-                        const scaleNum = Number(item.scale) === 4 ? 4 : 5;
-                        const rawGpa = Number(toEnglishDigits(item.gpaOrCgpa));
-                        const normalizedPreview =
-                            !isNaN(rawGpa) && rawGpa > 0
-                                ? scaleNum === 4
-                                    ? ((rawGpa / 4) * 5).toFixed(2)
-                                    : rawGpa.toFixed(2)
-                                : '0.00';
+                {stepErrors.academicGeneral && (
+                    <p role="alert" className="flex items-start gap-1.5 rounded-lg border border-danger/20 bg-danger-bg px-3 py-2 text-xs font-bengali text-danger">
+                        <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        {stepErrors.academicGeneral}
+                    </p>
+                )}
+
+                <div className="space-y-3">
+                    {qualificationGroups.map((group) => {
+                        const groupItems = qualifications
+                            .map((item, index) => ({ item, index }))
+                            .filter(({ item }) => (
+                                group.id === 'unassigned'
+                                    ? !ACADEMIC_QUALIFICATION_GROUPS.some((knownGroup) => knownGroup.levels.includes(item.degreeLevel))
+                                    : group.levels.includes(item.degreeLevel)
+                            ));
 
                         return (
-                            <div
-                                key={item.id || idx}
-                                className="p-4 sm:p-5 rounded-2xl bg-paper border border-ink-faint hover:border-gold/50 transition-all relative"
+                            <section
+                                key={group.id}
+                                className="overflow-hidden rounded-lg border border-ink-faint bg-paper-panel"
                             >
-                                {/* কার্ড টপ বার */}
-                                <div className="flex items-center justify-between gap-2 mb-4 pb-2.5 border-b border-ink-faint">
-                                    <div className="flex items-center gap-2">
-                                        <span className="w-6 h-6 rounded-full bg-emerald text-white font-mono text-xs font-bold flex items-center justify-center">
-                                            {idx + 1}
-                                        </span>
-                                        <span className="font-bengali text-xs sm:text-sm font-bold text-emerald-deep">
-                                            সনদপত্র / ডিগ্রি #{toBengaliDigits(idx + 1)}
-                                        </span>
-                                        <Badge variant="gold" size="sm" mono>
-                                            5.00 Eqv: {normalizedPreview}
-                                        </Badge>
+                                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-faint bg-paper-deep/40 px-4 py-3">
+                                    <div>
+                                        <h4 className="font-mono text-xs font-bold uppercase tracking-wide text-emerald-deep">
+                                            {group.titleEng}
+                                        </h4>
+                                        <p className="font-bengali text-xs text-ink-soft">{group.titleBng}</p>
                                     </div>
-
-                                    <button
-                                        type="button"
-                                        onClick={() => handleRemoveQualification(item.id)}
-                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bengali text-danger hover:bg-danger-bg transition-colors"
+                                    <Button
+                                        variant="gold"
+                                        size="xs"
+                                        leftIcon={Plus}
+                                        onClick={() => handleAddQualification(group.defaultLevel)}
+                                        disabled={qualifications.length >= 6}
                                     >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                        মুছে ফেলুন
-                                    </button>
+                                        <span className="font-bengali">
+                                            {group.id === 'post-graduation' ? 'প্রযোজ্য হলে যোগ করুন' : 'এই স্তরের তথ্য যোগ করুন'}
+                                        </span>
+                                    </Button>
                                 </div>
 
-                                {/* ডিগ্রির ইনপুট গ্রিড */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-5 gap-y-1">
-                                    <FormSelect
-                                        labelEng="Degree Level"
-                                        labelBng="ডিগ্রির স্তর"
-                                        variant="erp"
-                                        value={item.degreeLevel}
-                                        onChange={(e) =>
-                                            handleUpdateQualificationRow(item.id, 'degreeLevel', e.target.value)
-                                        }
-                                        options={degreeOptions}
-                                        placeholder="ডিগ্রির স্তর নির্বাচন করুন"
-                                        required
-                                        error={rowErr.degreeLevel}
-                                    />
+                                <div className="space-y-3 p-3 sm:p-4">
+                                    {groupItems.length === 0 && (
+                                        <p className="px-1 py-2 font-bengali text-xs text-ink-muted">
+                                            এই স্তরের কোনো সনদ যোগ করা হয়নি।
+                                        </p>
+                                    )}
 
-                                    <FormInput
-                                        labelEng="Exam / Degree Title"
-                                        labelBng="পরীক্ষা বা সনদের নাম"
-                                        variant="erp"
-                                        value={item.examTitle}
-                                        onChange={(e) =>
-                                            handleUpdateQualificationRow(item.id, 'examTitle', e.target.value)
-                                        }
-                                        placeholder="যেমনঃ কামিল / ফাজিল / বি.এসসি"
-                                        required
-                                        isBengaliText
-                                        error={rowErr.examTitle}
-                                    />
+                                    {groupItems.map(({ item, index }, groupIndex) => {
+                                        const rowErr = rowErrorsMap[item.id || index] || {};
+                                        const groupOptions = getGroupDropdownOptions(group);
+                                        const isSchoolLevel = group.id === 'secondary' || group.id === 'higher-secondary';
+                                        const isHigherStudy = group.id === 'graduation' || group.id === 'post-graduation';
+                                        const scaleNum = Number(item.scale) === 4 ? 4 : 5;
+                                        const resultType = item.resultType || (item.gpaOrCgpa ? 'GPA' : '');
+                                        const isNumericResult = resultType === 'GPA' || resultType === 'CGPA';
+                                        const rawGpa = Number(toEnglishDigits(item.gpaOrCgpa));
+                                        const normalizedPreview =
+                                            isNumericResult && !isNaN(rawGpa) && rawGpa > 0 && rawGpa <= scaleNum
+                                                ? (scaleNum === 4 ? (rawGpa / 4) * 5 : rawGpa).toFixed(2)
+                                                : '';
+                                        const selectedDegree = DEGREE_LEVELS.find((degree) => degree.key === item.degreeLevel);
+                                        const selectedResultValue = isNumericResult
+                                            ? `${resultType}_${scaleNum}`
+                                            : ['Division', 'Class'].includes(resultType)
+                                                ? `${resultType}_${item.resultGrade}`
+                                                : resultType;
+                                        const selectedExamination = groupOptions.examinations.find((option) => option.label === item.examTitle);
+                                        const subjectOptions = group.id === 'secondary'
+                                            ? groupOptions.subjects.filter((option) => (
+                                                /vocational/i.test(item.examTitle || '')
+                                                    ? ['V', 'Z'].includes(option.category)
+                                                    : ['G', 'Z'].includes(option.category)
+                                            ))
+                                            : group.id === 'higher-secondary'
+                                                ? groupOptions.subjects.filter((option) => (
+                                                    (HSC_SUBJECT_CATEGORIES_BY_EXAM[selectedExamination?.sourceValue] || ['G', 'Z'])
+                                                        .includes(option.category)
+                                                ))
+                                                : groupOptions.subjects;
 
-                                    <FormInput
-                                        labelEng="Major / Group"
-                                        labelBng="বিভাগ বা মূল বিষয়"
-                                        variant="erp"
-                                        value={item.majorOrGroup}
-                                        onChange={(e) =>
-                                            handleUpdateQualificationRow(item.id, 'majorOrGroup', e.target.value)
-                                        }
-                                        placeholder="যেমনঃ হাদিস / বিজ্ঞান / ইংরেজি"
-                                        isBengaliText
-                                    />
+                                        const examinationField = (
+                                            <FormSelect
+                                                key="examination"
+                                                labelEng="Examination"
+                                                labelBng="পরীক্ষা"
+                                                variant="erp"
+                                                value={item.examTitle}
+                                                onChange={(e) => handleUpdateExamination(item.id, group, e.target.value)}
+                                                options={groupOptions.examinations}
+                                                placeholder="Select"
+                                                required
+                                                error={rowErr.examTitle}
+                                                isBengaliText={false}
+                                            />
+                                        );
+                                        const rollField = (
+                                            <FormInput
+                                                key="roll"
+                                                labelEng="Roll No."
+                                                labelBng="রোল নম্বর"
+                                                variant="erp"
+                                                inputMode="numeric"
+                                                value={item.rollNumber}
+                                                onChange={(e) => handleUpdateQualificationRow(item.id, 'rollNumber', toEnglishDigits(e.target.value).slice(0, 50))}
+                                                placeholder="Roll No."
+                                            />
+                                        );
+                                        const institutionField = (
+                                            <FormSelect
+                                                key="institution"
+                                                labelEng={isSchoolLevel ? 'Board' : 'University / Institute'}
+                                                labelBng={isSchoolLevel ? 'বোর্ড' : 'বিশ্ববিদ্যালয় / প্রতিষ্ঠান'}
+                                                variant="erp"
+                                                value={item.boardOrUniversity}
+                                                onChange={(e) => handleUpdateQualificationRow(item.id, 'boardOrUniversity', e.target.value)}
+                                                options={groupOptions.institutions}
+                                                placeholder="Select"
+                                                required
+                                                error={rowErr.boardOrUniversity}
+                                                isBengaliText={false}
+                                            />
+                                        );
+                                        const subjectField = (
+                                            <FormSelect
+                                                key="subject"
+                                                labelEng={isSchoolLevel ? 'Group / Subject' : 'Subject / Degree'}
+                                                labelBng={isSchoolLevel ? 'বিভাগ / বিষয়' : 'বিষয় / ডিগ্রি'}
+                                                variant="erp"
+                                                value={item.majorOrGroup}
+                                                onChange={(e) => handleUpdateQualificationRow(item.id, 'majorOrGroup', e.target.value)}
+                                                options={subjectOptions}
+                                                placeholder="Select"
+                                                required
+                                                error={rowErr.majorOrGroup}
+                                                isBengaliText={false}
+                                            />
+                                        );
+                                        const yearField = (
+                                            <FormSelect
+                                                key="passing-year"
+                                                labelEng="Passing Year"
+                                                labelBng="পাসের সন"
+                                                variant="erp"
+                                                value={String(item.passingYear || '')}
+                                                onChange={(e) => handleUpdateQualificationRow(item.id, 'passingYear', e.target.value)}
+                                                options={PASSING_YEAR_OPTIONS}
+                                                placeholder="Select"
+                                                required
+                                                error={rowErr.passingYear}
+                                                isBengaliText={false}
+                                            />
+                                        );
+                                        const resultField = (
+                                            <FormSelect
+                                                key="result"
+                                                labelEng="Result"
+                                                labelBng="ফলাফল"
+                                                variant="erp"
+                                                value={selectedResultValue}
+                                                onChange={(e) => handleUpdateResult(item.id, group, e.target.value)}
+                                                options={groupOptions.results}
+                                                placeholder="Select"
+                                                required
+                                                error={rowErr.resultType || rowErr.resultGrade}
+                                                isBengaliText={false}
+                                            />
+                                        );
+                                        const scoreField = isNumericResult ? (
+                                            <FormInput
+                                                key="score"
+                                                labelEng={resultType}
+                                                labelBng="প্রাপ্ত ফলাফল"
+                                                variant="erp"
+                                                inputMode="decimal"
+                                                value={item.gpaOrCgpa}
+                                                onChange={(e) => {
+                                                    const result = toEnglishDigits(e.target.value).replace(/[^0-9.]/g, '');
+                                                    handleUpdateQualificationRow(item.id, 'gpaOrCgpa', result);
+                                                }}
+                                                placeholder={scaleNum === 4 ? '3.75' : '5.00'}
+                                                required
+                                                isMonoText
+                                                error={rowErr.gpaOrCgpa}
+                                                hint={normalizedPreview ? `৫.০০ স্কেলে সমমান: ${normalizedPreview} (মেধাক্রমে ব্যবহৃত হবে)` : ''}
+                                                rightElement={<span className="font-mono text-[11px] text-ink-muted">/ {scaleNum}.00</span>}
+                                            />
+                                        ) : null;
+                                        const durationField = isHigherStudy ? (
+                                            <FormSelect
+                                                key="course-duration"
+                                                labelEng="Course Duration"
+                                                labelBng="কোর্সের মেয়াদ"
+                                                variant="erp"
+                                                value={item.courseDuration || ''}
+                                                onChange={(e) => handleUpdateQualificationRow(item.id, 'courseDuration', e.target.value)}
+                                                options={groupOptions.courseDurations}
+                                                placeholder="Select"
+                                                required
+                                                error={rowErr.courseDuration}
+                                                isBengaliText={false}
+                                            />
+                                        ) : null;
 
-                                    <FormInput
-                                        labelEng="Board / University"
-                                        labelBng="বোর্ড বা বিশ্ববিদ্যালয়"
-                                        variant="erp"
-                                        value={item.boardOrUniversity}
-                                        onChange={(e) =>
-                                            handleUpdateQualificationRow(
-                                                item.id,
-                                                'boardOrUniversity',
-                                                e.target.value
-                                            )
-                                        }
-                                        placeholder="যেমনঃ মাদ্রাসা শিক্ষা বোর্ড / ইআবি"
-                                        required
-                                        isBengaliText
-                                        error={rowErr.boardOrUniversity}
-                                    />
+                                        return (
+                                            <article
+                                                key={item.id || index}
+                                                className="overflow-hidden rounded-lg border border-ink-faint bg-paper"
+                                            >
+                                                <div className="flex items-center justify-between gap-3 border-b border-ink-faint bg-paper-deep/40 px-4 py-3">
+                                                    <div className="flex min-w-0 items-center gap-2.5">
+                                                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-deep font-mono text-xs font-bold text-white">
+                                                            {toBengaliDigits(groupIndex + 1)}
+                                                        </span>
+                                                        <div className="min-w-0">
+                                                            <h4 className="font-bengali text-sm font-bold text-ink">
+                                                                সনদ / ডিগ্রি {toBengaliDigits(groupIndex + 1)}
+                                                            </h4>
+                                                            {selectedDegree && (
+                                                                <p className="truncate font-bengali text-[11px] text-ink-soft">
+                                                                    {selectedDegree.labelBng}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    </div>
 
-                                    <FormInput
-                                        labelEng="Passing Year"
-                                        labelBng="পাসের সন (YYYY)"
-                                        variant="erp"
-                                        inputMode="numeric"
-                                        value={item.passingYear}
-                                        onChange={(e) => {
-                                            const yr = toEnglishDigits(e.target.value).replace(/\D/g, '').slice(0, 4);
-                                            handleUpdateQualificationRow(item.id, 'passingYear', yr);
-                                        }}
-                                        placeholder="যেমনঃ 2022"
-                                        required
-                                        isMonoText
-                                        error={rowErr.passingYear}
-                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveQualification(item.id)}
+                                                        aria-label={`${group.titleBng} ${groupIndex + 1} মুছুন`}
+                                                        className="inline-flex shrink-0 items-center gap-1 rounded px-2 py-1 font-bengali text-xs text-danger transition-colors hover:bg-danger-bg"
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                        মুছুন
+                                                    </button>
+                                                </div>
 
-                                    {/* GPA/CGPA ও Scale (4.00 / 5.00) */}
-                                    <div className="grid grid-cols-[1fr_110px] gap-2">
-                                        <FormInput
-                                            labelEng="GPA / CGPA"
-                                            labelBng="প্রাপ্ত পয়েন্ট"
-                                            variant="erp"
-                                            inputMode="decimal"
-                                            value={item.gpaOrCgpa}
-                                            onChange={(e) => {
-                                                const val = toEnglishDigits(e.target.value).replace(/[^0-9.]/g, '');
-                                                handleUpdateQualificationRow(item.id, 'gpaOrCgpa', val);
-                                            }}
-                                            placeholder={scaleNum === 4 ? '3.75' : '5.00'}
-                                            required
-                                            isMonoText
-                                            error={rowErr.gpaOrCgpa}
-                                        />
-
-                                        <FormSelect
-                                            labelEng="Scale"
-                                            labelBng="স্কেল"
-                                            variant="erp"
-                                            value={item.scale}
-                                            onChange={(e) =>
-                                                handleUpdateQualificationRow(item.id, 'scale', Number(e.target.value))
-                                            }
-                                            options={[
-                                                { value: 5, label: 'out of 5.00' },
-                                                { value: 4, label: 'out of 4.00' }
-                                            ]}
-                                            placeholder="স্কেল নির্বাচন করুন"
-                                            isBengaliText={false}
-                                        />
-                                    </div>
+                                                <div className="grid grid-cols-1 gap-x-5 px-4 pt-4 sm:grid-cols-2">
+                                                    {examinationField}
+                                                    {isSchoolLevel ? rollField : institutionField}
+                                                    {isSchoolLevel ? subjectField : yearField}
+                                                    {isSchoolLevel ? institutionField : subjectField}
+                                                    {resultField}
+                                                    {scoreField}
+                                                    {isSchoolLevel ? yearField : durationField}
+                                                </div>
+                                            </article>
+                                        );
+                                    })}
                                 </div>
-                            </div>
+                            </section>
                         );
                     })}
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald/15 bg-white px-4 py-3">
+                    <div className="flex items-center gap-2">
+                        <Award className="h-4 w-4 shrink-0 text-emerald-deep" />
+                        <div>
+                            <p className="font-bengali text-xs font-semibold text-ink">স্বয়ংক্রিয় মেধাক্রম</p>
+                            <p className="font-bengali text-[11px] text-ink-soft">
+                                যোগ্যতা ও GPA/CGPA-এর ভিত্তিতে হিসাব করা হবে
+                            </p>
+                        </div>
+                    </div>
+                    <div className="text-right font-bengali text-xs text-ink-soft">
+                        {liveRank.highestNormalizedGpa > 0 ? (
+                            <>
+                                <span>{liveRank.highestDegreeLabel}</span>
+                                <span className="mx-1.5 text-ink-muted">·</span>
+                                <span>সমমান GPA {liveRank.highestNormalizedGpa.toFixed(2)} / ৫.০০</span>
+                            </>
+                        ) : (
+                            <span>GPA/CGPA দিলে এখানে দেখাবে</span>
+                        )}
+                    </div>
                 </div>
             </section>
         </div>

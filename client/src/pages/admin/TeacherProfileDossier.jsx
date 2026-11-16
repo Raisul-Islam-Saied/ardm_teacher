@@ -46,8 +46,10 @@ import {
     formatBDT,
     formatPhoneDisplay,
     formatDisplayDate,
+    formatTeacherAddress,
     calculateLiveRankMetrics,
-    extractPureDigits
+    extractPureDigits,
+    formatAcademicResult
 } from '@utils/formatters';
 import DigitalRegistryIdCard from '@pages/public/registration/DigitalRegistryIdCard';
 import { cn } from '@utils/cn';
@@ -426,9 +428,7 @@ export default function TeacherProfileDossier() {
                                 <div className="flex justify-between gap-4 border-b border-ink-faint/60 pb-2">
                                     <dt className="font-bengali text-ink-muted shrink-0">বর্তমান ঠিকানা:</dt>
                                     <dd className="font-bengali text-ink text-right">
-                                        {teacher.presentAddress?.houseOrRoad}, {teacher.presentAddress?.village},{' '}
-                                        {teacher.presentAddress?.postOffice} ({teacher.presentAddress?.postCode}),{' '}
-                                        {teacher.presentAddress?.upazila}, {teacher.presentAddress?.district}
+                                        {formatTeacherAddress(teacher.presentAddress)}
                                     </dd>
                                 </div>
                                 <div className="flex justify-between gap-4">
@@ -456,7 +456,7 @@ export default function TeacherProfileDossier() {
                                         <th className="py-2.5 px-3">পরীক্ষার নাম ও বিষয়</th>
                                         <th className="py-2.5 px-3">বোর্ড / বিশ্ববিদ্যালয়</th>
                                         <th className="py-2.5 px-3 text-center">পাসের সন</th>
-                                        <th className="py-2.5 px-3 text-right">প্রাপ্ত GPA / CGPA</th>
+                                        <th className="py-2.5 px-3 text-right">ফলাফল</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-ink-faint font-bengali">
@@ -469,11 +469,20 @@ export default function TeacherProfileDossier() {
                                                 </td>
                                                 <td className="py-2.5 px-3">
                                                     {q.examTitle} {q.majorOrGroup ? `(${q.majorOrGroup})` : ''}
+                                                    {(q.rollNumber || q.registrationNumber || q.courseDuration) && (
+                                                        <span className="mt-0.5 block text-[10px] text-ink-muted">
+                                                            {[
+                                                                q.rollNumber && `রোল: ${q.rollNumber}`,
+                                                                q.registrationNumber && `রেজি: ${q.registrationNumber}`,
+                                                                q.courseDuration && `মেয়াদ: ${q.courseDuration} বছর`
+                                                            ].filter(Boolean).join(' · ')}
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td className="py-2.5 px-3 text-ink-soft">{q.boardOrUniversity}</td>
                                                 <td className="py-2.5 px-3 text-center font-mono">{q.passingYear}</td>
                                                 <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald">
-                                                    {q.gpaOrCgpa} / {q.scale}.00
+                                                    {formatAcademicResult(q)}
                                                 </td>
                                             </tr>
                                         );

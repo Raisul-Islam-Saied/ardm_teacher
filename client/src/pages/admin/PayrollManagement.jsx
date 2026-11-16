@@ -118,6 +118,17 @@ export default function PayrollManagement() {
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'Paid' | 'Pending'
     const [isGenerating, setIsGenerating] = useState(false);
+    const [activeView, setActiveView] = useState('PAYROLL');
+    const [leaveApplications, setLeaveApplications] = useState([]);
+    const [leaveApplicationSummary, setLeaveApplicationSummary] = useState(null);
+    const [leaveApplicationFilter, setLeaveApplicationFilter] = useState('Pending');
+    const [isLoadingLeaveApplications, setIsLoadingLeaveApplications] = useState(false);
+    const [leaveApplicationsError, setLeaveApplicationsError] = useState('');
+    const [selectedLeaveApplication, setSelectedLeaveApplication] = useState(null);
+    const [leaveReviewStatus, setLeaveReviewStatus] = useState('Approved');
+    const [countAsQuotaLeave, setCountAsQuotaLeave] = useState(true);
+    const [leaveReviewRemarks, setLeaveReviewRemarks] = useState('');
+    const [isReviewingLeaveApplication, setIsReviewingLeaveApplication] = useState(false);
 
     // শিক্ষকদের তালিকা ও পে-রোল সারি স্টেট
     const [payrollRows, setPayrollRows] = useState([]);
@@ -171,6 +182,64 @@ export default function PayrollManagement() {
     useEffect(() => {
         handleGenerateOrSyncPayroll(false);
     }, [selectedYear, selectedMonth, handleGenerateOrSyncPayroll]);
+
+    const loadLeaveApplications = useCallback(async () => {
+        setIsLoadingLeaveApplications(true);
+        try {
+            const res = await axiosClient.get('/payroll/applications/monthly-desk', {
+                params: { month: Number(selectedMonth), year: Number(selectedYear) }
+            });
+            const data = res.data?.data;
+            if (!Array.isArray(data?.applications)) {
+                throw new Error('সার্ভার থেকে ছুটির আবেদনের তালিকা পাওয়া যায়নি।');
+            }
+            setLeaveApplications(data.applications);
+            setLeaveApplicationSummary(data.applicationSummary || null);
+            setLeaveApplicationsError('');
+        } catch (error) {
+            setLeaveApplications([]);
+            setLeaveApplicationSummary(null);
+            setLeaveApplicationsError(extractApiErrorMessage(error, 'ছুটির আবেদনের তালিকা লোড করা যায়নি।'));
+        } finally {
+            setIsLoadingLeaveApplications(false);
+        }
+    }, [selectedMonth, selectedYear]);
+
+    useEffect(() => {
+        if (activeView === 'APPLICATIONS') {
+            loadLeaveApplications();
+        }
+    }, [activeView, loadLeaveApplications]);
+
+    const openLeaveReview = (application, status) => {
+        setSelectedLeaveApplication(application);
+        setLeaveReviewStatus(status);
+        setCountAsQuotaLeave(true);
+        setLeaveReviewRemarks('');
+    };
+
+    const submitLeaveReview = async () => {
+        if (!selectedLeaveApplication || isReviewingLeaveApplication) return;
+        setIsReviewingLeaveApplication(true);
+        try {
+            await axiosClient.patch(`/payroll/leaves/${selectedLeaveApplication._id}/review`, {
+                status: leaveReviewStatus,
+                countAsQuotaLeave,
+                adminRemarks: leaveReviewRemarks.trim() || undefined
+            });
+            toast.success(
+                leaveReviewStatus === 'Approved'
+                    ? 'ছুটির আবেদন অনুমোদিত হয়েছে এবং হাজিরার রেকর্ড আপডেট হয়েছে।'
+                    : 'ছুটির আবেদন প্রত্যাখ্যান করা হয়েছে।'
+            );
+            setSelectedLeaveApplication(null);
+            await loadLeaveApplications();
+        } catch (error) {
+            toast.error(extractApiErrorMessage(error, 'আবেদনের সিদ্ধান্ত সংরক্ষণ করা যায়নি।'));
+        } finally {
+            setIsReviewingLeaveApplication(false);
+        }
+    };
 
     // ৩. অ্যাডজাস্টমেন্ট মডাল ওপেন করা
     const openAdjustmentModal = (row) => {
@@ -271,6 +340,12 @@ export default function PayrollManagement() {
             );
         });
     }, [payrollRows, searchQuery, statusFilter]);
+    const filteredLeaveApplications = useMemo(
+        () => leaveApplicationFilter === 'ALL'
+            ? leaveApplications
+            : leaveApplications.filter((application) => application.status === leaveApplicationFilter),
+        [leaveApplications, leaveApplicationFilter]
+    );
 
     return (
         <div className="space-y-6 animate-fade-up">
@@ -324,27 +399,217 @@ export default function PayrollManagement() {
                         <option value="2025">2025</option>
                     </select>
 
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        leftIcon={Calculator}
-                        isLoading={isGenerating}
-                        onClick={() => handleGenerateOrSyncPayroll(true)}
-                    >
-                        <span className="font-bengali">পে-রোল রি-ক্যালকুলেট</span>
-                    </Button>
+                    {activeView === 'PAYROLL' && (
+                        <>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                leftIcon={Calculator}
+                                isLoading={isGenerating}
+                                onClick={() => handleGenerateOrSyncPayroll(true)}
+                            >
+                                <span className="font-bengali">পে-রোল রি-ক্যালকুলেট</span>
+                            </Button>
 
-                    <Button
-                        variant="gold"
-                        size="sm"
-                        leftIcon={Printer}
-                        onClick={() => window.print()}
-                    >
-                        <span className="font-bengali">মাস্টার বেতন শিট প্রিন্ট (A4)</span>
-                    </Button>
+                            <Button
+                                variant="gold"
+                                size="sm"
+                                leftIcon={Printer}
+                                onClick={() => window.print()}
+                            >
+                                <span className="font-bengali">মাস্টার বেতন শিট প্রিন্ট (A4)</span>
+                            </Button>
+                        </>
+                    )}
                 </div>
             </section>
 
+            <section className="ledger-surface p-2 bg-paper-panel flex flex-wrap gap-2 no-print" role="tablist" aria-label="বেতন ও আবেদন ব্যবস্থাপনা">
+                <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeView === 'PAYROLL'}
+                    onClick={() => setActiveView('PAYROLL')}
+                    className={cn(
+                        'px-4 py-2 rounded-xl font-bengali text-sm font-semibold transition-colors',
+                        activeView === 'PAYROLL' ? 'bg-emerald text-white' : 'text-ink-soft hover:bg-emerald-subtle'
+                    )}
+                >
+                    বেতন শিট
+                </button>
+                <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeView === 'APPLICATIONS'}
+                    onClick={() => setActiveView('APPLICATIONS')}
+                    className={cn(
+                        'px-4 py-2 rounded-xl font-bengali text-sm font-semibold transition-colors',
+                        activeView === 'APPLICATIONS' ? 'bg-emerald text-white' : 'text-ink-soft hover:bg-emerald-subtle'
+                    )}
+                >
+                    ছুটির আবেদন
+                    {Number(leaveApplicationSummary?.pendingCount) > 0 && (
+                        <span className="ml-2 inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-gold text-emerald-deep text-xs">
+                            {toBengaliDigits(leaveApplicationSummary.pendingCount)}
+                        </span>
+                    )}
+                </button>
+            </section>
+
+            {activeView === 'APPLICATIONS' ? (
+                <section className="space-y-4">
+                    <div className="ledger-surface p-5 bg-paper-panel flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <Badge variant="gold" size="sm" mono className="mb-1">
+                                MONTHLY APPLICATION REVIEW
+                            </Badge>
+                            <h2 className="font-bengali text-xl font-bold text-emerald-deep">
+                                ছুটি, লেট মওকুফ ও অফিসিয়াল ডিউটির আবেদন
+                            </h2>
+                            <p className="font-bengali text-xs text-ink-soft mt-1">
+                                অনুমোদন করলে সংশ্লিষ্ট তারিখের হাজিরা রেকর্ডও আপডেট হবে।
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <select
+                                aria-label="আবেদনের অবস্থা দিয়ে ফিল্টার"
+                                value={leaveApplicationFilter}
+                                onChange={(e) => setLeaveApplicationFilter(e.target.value)}
+                                className="erp-input custom-select-arrow font-bengali text-xs py-2 w-auto min-w-[135px]"
+                            >
+                                <option value="Pending">অনুমোদনের অপেক্ষায়</option>
+                                <option value="Approved">অনুমোদিত</option>
+                                <option value="Rejected">প্রত্যাখ্যাত</option>
+                                <option value="ALL">সকল আবেদন</option>
+                            </select>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                leftIcon={RefreshCw}
+                                isLoading={isLoadingLeaveApplications}
+                                onClick={loadLeaveApplications}
+                            >
+                                <span className="font-bengali">রিফ্রেশ</span>
+                            </Button>
+                        </div>
+                    </div>
+
+                    {leaveApplicationSummary && (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            {[
+                                ['মোট আবেদন', leaveApplicationSummary.totalApplications],
+                                ['অপেক্ষমাণ', leaveApplicationSummary.pendingCount],
+                                ['অনুমোদিত', leaveApplicationSummary.approvedCount],
+                                ['প্রত্যাখ্যাত', leaveApplicationSummary.rejectedCount]
+                            ].map(([label, count]) => (
+                                <div key={label} className="ledger-surface p-4 bg-paper-panel">
+                                    <span className="font-bengali text-xs text-ink-soft">{label}</span>
+                                    <strong className="block font-mono text-xl text-emerald-deep mt-1">
+                                        {toBengaliDigits(Number(count) || 0)}
+                                    </strong>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {leaveApplicationsError && (
+                        <div role="alert" className="ledger-surface border-danger/30 bg-danger-bg p-4 font-bengali text-sm text-danger">
+                            {leaveApplicationsError}
+                        </div>
+                    )}
+
+                    {isLoadingLeaveApplications ? (
+                        <div className="ledger-surface p-10 bg-paper-panel text-center font-bengali text-ink-soft">
+                            আবেদন তালিকা লোড হচ্ছে…
+                        </div>
+                    ) : filteredLeaveApplications.length === 0 ? (
+                        <div className="ledger-surface p-10 bg-paper-panel text-center font-bengali text-ink-soft">
+                            {leaveApplicationsError ? 'আবেদন তালিকা পাওয়া যায়নি।' : 'এই মাসে এই অবস্থার কোনো আবেদন নেই।'}
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                            {filteredLeaveApplications.map((application) => {
+                                const applicant = application.teacherId || {};
+                                const applicationTypeLabels = {
+                                    'Casual Leave': 'নৈমিত্তিক ছুটি',
+                                    'Sick Leave': 'অসুস্থতাজনিত ছুটি',
+                                    'Late Excuse': 'লেট মওকুফ',
+                                    'Official Duty': 'অফিসিয়াল ডিউটি'
+                                };
+                                const statusLabels = {
+                                    Pending: 'অপেক্ষমাণ',
+                                    Approved: 'অনুমোদিত',
+                                    Rejected: 'প্রত্যাখ্যাত'
+                                };
+
+                                return (
+                                    <article key={application._id} className="ledger-surface p-5 bg-paper-panel">
+                                        <div className="flex flex-wrap items-start justify-between gap-3">
+                                            <div>
+                                                <h3 className="font-bengali text-base font-bold text-emerald-deep">
+                                                    {applicant.fullNameBng || 'শিক্ষকের তথ্য নেই'}
+                                                </h3>
+                                                <p className="font-bengali text-xs text-ink-soft mt-0.5">
+                                                    {applicant.designation || '—'} · আইডি: {applicant.teacherCode || '—'}
+                                                </p>
+                                            </div>
+                                            <Badge
+                                                variant={application.status === 'Pending' ? 'gold' : application.status === 'Approved' ? 'success' : 'danger'}
+                                                size="sm"
+                                                dot
+                                            >
+                                                {statusLabels[application.status] || application.status}
+                                            </Badge>
+                                        </div>
+                                        <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                                            <div className="rounded-lg bg-paper p-3">
+                                                <span className="font-bengali text-ink-muted block">আবেদনের ধরন</span>
+                                                <b className="font-bengali text-emerald-deep">
+                                                    {applicationTypeLabels[application.applicationType] || application.applicationType}
+                                                </b>
+                                            </div>
+                                            <div className="rounded-lg bg-paper p-3">
+                                                <span className="font-bengali text-ink-muted block">তারিখ</span>
+                                                <b className="font-mono text-emerald-deep">
+                                                    {application.startDate}
+                                                    {application.endDate !== application.startDate ? ` – ${application.endDate}` : ''}
+                                                </b>
+                                            </div>
+                                        </div>
+                                        <p className="mt-3 rounded-lg border border-ink-faint bg-paper p-3 font-bengali text-sm text-ink">
+                                            {application.reason}
+                                        </p>
+                                        {application.adminRemarks && (
+                                            <p className="mt-2 font-bengali text-xs text-ink-soft">
+                                                অ্যাডমিন মন্তব্য: {application.adminRemarks}
+                                            </p>
+                                        )}
+                                        {application.status === 'Pending' && (
+                                            <div className="mt-4 flex justify-end gap-2">
+                                                <Button
+                                                    variant="danger"
+                                                    size="sm"
+                                                    onClick={() => openLeaveReview(application, 'Rejected')}
+                                                >
+                                                    <span className="font-bengali">প্রত্যাখ্যান</span>
+                                                </Button>
+                                                <Button
+                                                    variant="emerald"
+                                                    size="sm"
+                                                    onClick={() => openLeaveReview(application, 'Approved')}
+                                                >
+                                                    <span className="font-bengali">অনুমোদন</span>
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </article>
+                                );
+                            })}
+                        </div>
+                    )}
+                </section>
+            ) : (
+                <>
             {/* =================================================================
                 2. 4 FINANCIAL KPI SUMMARY CARDS
                ================================================================= */}
@@ -593,6 +858,77 @@ export default function PayrollManagement() {
                     </table>
                 </div>
             </section>
+                </>
+            )}
+
+            <Modal
+                isOpen={Boolean(selectedLeaveApplication)}
+                onClose={() => {
+                    if (!isReviewingLeaveApplication) setSelectedLeaveApplication(null);
+                }}
+                size="sm"
+                titleEng="Review Leave Application"
+                titleBng={leaveReviewStatus === 'Approved' ? 'আবেদন অনুমোদন নিশ্চিত করুন' : 'আবেদন প্রত্যাখ্যান নিশ্চিত করুন'}
+                subtitleBng={
+                    selectedLeaveApplication
+                        ? `${selectedLeaveApplication.teacherId?.fullNameBng || ''} · ${selectedLeaveApplication.startDate}`
+                        : ''
+                }
+                footer={
+                    <>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={isReviewingLeaveApplication}
+                            onClick={() => setSelectedLeaveApplication(null)}
+                        >
+                            <span className="font-bengali">ফিরে যান</span>
+                        </Button>
+                        <Button
+                            variant={leaveReviewStatus === 'Approved' ? 'emerald' : 'danger'}
+                            size="sm"
+                            isLoading={isReviewingLeaveApplication}
+                            onClick={submitLeaveReview}
+                        >
+                            <span className="font-bengali">
+                                {leaveReviewStatus === 'Approved' ? 'অনুমোদন নিশ্চিত করুন' : 'প্রত্যাখ্যান নিশ্চিত করুন'}
+                            </span>
+                        </Button>
+                    </>
+                }
+            >
+                {selectedLeaveApplication && (
+                    <div className="space-y-3">
+                        <p className="font-bengali text-sm text-ink-soft">
+                            {selectedLeaveApplication.reason}
+                        </p>
+                        {leaveReviewStatus === 'Approved' &&
+                            ['Casual Leave', 'Sick Leave'].includes(selectedLeaveApplication.applicationType) && (
+                                <FormSelect
+                                    labelEng="Leave Quota"
+                                    labelBng="মাসিক ছুটির কোটায় গণনা হবে?"
+                                    variant="erp"
+                                    value={String(countAsQuotaLeave)}
+                                    onChange={(e) => setCountAsQuotaLeave(e.target.value === 'true')}
+                                    options={[
+                                        { value: 'true', label: 'হ্যাঁ — কোটা থেকে গণনা হবে' },
+                                        { value: 'false', label: 'না — কোটা থেকে কাটা হবে না' }
+                                    ]}
+                                    placeholder={false}
+                                />
+                            )}
+                        <FormInput
+                            labelEng="Admin Remarks"
+                            labelBng="অ্যাডমিন মন্তব্য (ঐচ্ছিক)"
+                            variant="erp"
+                            isBengaliText
+                            value={leaveReviewRemarks}
+                            onChange={(e) => setLeaveReviewRemarks(e.target.value)}
+                            placeholder="সিদ্ধান্তের সংক্ষিপ্ত কারণ"
+                        />
+                    </div>
+                )}
+            </Modal>
 
             {/* =================================================================
                 6. SALARY & QUOTA ADJUSTMENT MODAL

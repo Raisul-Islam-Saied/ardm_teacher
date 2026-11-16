@@ -31,7 +31,9 @@ import { processImageToSquare500 } from '@api/cloudinaryClient';
 import {
     toBengaliDigits,
     formatDisplayDate,
-    formatPhoneDisplay
+    formatPhoneDisplay,
+    formatTeacherAddress,
+    formatAcademicResult
 } from '@utils/formatters';
 import { cn } from '@utils/cn';
 
@@ -443,11 +445,17 @@ export default function Step4PhotoReview({
                             <div className="flex justify-between gap-2">
                                 <dt className="font-bengali text-ink-muted">বর্তমান ঠিকানা:</dt>
                                 <dd className="font-bengali text-ink text-right">
-                                    {formData.presentAddress?.houseOrRoad}, {formData.presentAddress?.village},{' '}
-                                    {formData.presentAddress?.postOffice} ({formData.presentAddress?.postCode}),{' '}
-                                    {formData.presentAddress?.upazila}, {formData.presentAddress?.district}
+                                {formatTeacherAddress(formData.presentAddress)}
                                 </dd>
                             </div>
+                            {!formData.sameAsPresentAddress && (
+                                <div className="flex justify-between gap-2">
+                                <dt className="font-bengali text-ink-muted">স্থায়ী ঠিকানা:</dt>
+                                <dd className="font-bengali text-ink text-right">
+                                    {formatTeacherAddress(formData.permanentAddress)}
+                                </dd>
+                                </div>
+                            )}
                         </dl>
                     </div>
                 </div>
@@ -476,7 +484,7 @@ export default function Step4PhotoReview({
                                     <th className="py-1.5 px-3">পরীক্ষার নাম ও বিষয়</th>
                                     <th className="py-1.5 px-3">বোর্ড / বিশ্ববিদ্যালয়</th>
                                     <th className="py-1.5 px-3 text-center">পাসের সন</th>
-                                    <th className="py-1.5 pl-3 text-right">প্রাপ্ত GPA / CGPA</th>
+                                    <th className="py-1.5 pl-3 text-right">ফলাফল</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-ink-faint/60">
@@ -489,11 +497,20 @@ export default function Step4PhotoReview({
                                             </td>
                                             <td className="py-2 px-3">
                                                 {q.examTitle} {q.majorOrGroup ? `(${q.majorOrGroup})` : ''}
+                                                {(q.rollNumber || q.registrationNumber || q.courseDuration) && (
+                                                    <span className="mt-0.5 block text-[10px] text-ink-muted">
+                                                        {[
+                                                            q.rollNumber && `রোল: ${q.rollNumber}`,
+                                                            q.registrationNumber && `রেজি: ${q.registrationNumber}`,
+                                                            q.courseDuration && `মেয়াদ: ${q.courseDuration} বছর`
+                                                        ].filter(Boolean).join(' · ')}
+                                                    </span>
+                                                )}
                                             </td>
                                             <td className="py-2 px-3 text-ink-soft">{q.boardOrUniversity}</td>
                                             <td className="py-2 px-3 text-center font-mono">{q.passingYear}</td>
                                             <td className="py-2 pl-3 text-right font-mono font-bold text-emerald">
-                                                {q.gpaOrCgpa} <span className="text-[10px] text-ink-muted font-normal">/ {q.scale}.00</span>
+                                                {formatAcademicResult(q)}
                                             </td>
                                         </tr>
                                     );

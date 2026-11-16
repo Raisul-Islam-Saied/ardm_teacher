@@ -13,9 +13,10 @@ process.on('uncaughtException', (err) => {
 moment.tz.setDefault(process.env.TIMEZONE || 'Asia/Dhaka');
 
 const PORT = process.env.PORT || 5000;
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/ardm_enterprise_db';
 let server;
 
-connectDB().then(() => {
+connectDB(MONGO_URI).then(() => {
     initAttendanceCronJobs();
 
     server = app.listen(PORT, () => {

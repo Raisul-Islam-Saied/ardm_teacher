@@ -43,6 +43,7 @@ import {
     Modal
 } from '@components/ui';
 import { useToast } from '@context/ToastContext';
+import { useAuth } from '@context/AuthContext';
 import axiosClient, { extractApiErrorMessage } from '@api/axiosClient';
 import {
     toBengaliDigits,
@@ -102,6 +103,7 @@ export function computeAutoSeniorityRanking(teachersArray = []) {
 
 export default function TeacherDirectory() {
     const toast = useToast();
+    const { isSuperAdmin } = useAuth();
     const navigate = useNavigate();
 
     // ১. শিক্ষক তালিকা ও ফিল্টার স্টেট
@@ -182,6 +184,10 @@ export default function TeacherDirectory() {
 
     // ৬. অ্যাডমিন এডিট মডাল ওপেন করা
     const handleOpenEditModal = (teacherObj) => {
+        if (teacherObj.role === 'SuperAdmin' && !isSuperAdmin) {
+            toast.error('সুপার অ্যাডমিন অ্যাকাউন্ট পরিবর্তন করতে সুপার অ্যাডমিনের অনুমতি প্রয়োজন।');
+            return;
+        }
         setEditingTeacher(teacherObj);
         setEditForm({
             fullNameBng: teacherObj.fullNameBng || '',
@@ -800,7 +806,9 @@ export default function TeacherDirectory() {
                                 options={[
                                     { value: 'Teacher', label: 'সাধারণ শিক্ষক (Teacher Portal)' },
                                     { value: 'Admin', label: 'অ্যাডমিন (Admin Command Access)' },
-                                    { value: 'SuperAdmin', label: 'সুপার অ্যাডমিন (Full Authority)' }
+                                    ...(isSuperAdmin
+                                        ? [{ value: 'SuperAdmin', label: 'সুপার অ্যাডমিন (Full Authority)' }]
+                                        : [])
                                 ]}
                                 placeholder={false}
                             />

@@ -28,6 +28,7 @@ import {
     Button,
     Badge,
     Modal,
+    ConfirmDialog,
     FormInput,
     FormSelect
 } from '@components/ui';
@@ -92,6 +93,7 @@ export default function AttendanceManagement() {
     const [statusFilter, setStatusFilter] = useState('ALL');
     const [isSyncing, setIsSyncing] = useState(false);
     const [isSavingSheet, setIsSavingSheet] = useState(false);
+    const [isHolidayConfirmOpen, setIsHolidayConfirmOpen] = useState(false);
 
     // ম্যানুয়াল ওভাররাইড মডাল স্টেট
     const [overrideRow, setOverrideRow] = useState(null);
@@ -148,10 +150,27 @@ export default function AttendanceManagement() {
         loadAttendanceForDate(selectedDate, false);
     }, [selectedDate, loadAttendanceForDate]);
 
+    const openAttendanceEditor = (row, isManualPunch = false) => {
+        const status = ['Holiday', 'Unrecorded'].includes(row.status) ||
+            (isManualPunch && row.status === 'Absent')
+            ? 'Present'
+            : row.status;
+        setOverrideRow(row);
+        setOverrideForm({
+            status: STATUS_META[status] ? status : 'Present',
+            inTime24: row.inTime24 || '08:55',
+            remarks: row.remarks || (isManualPunch ? 'ফিঙ্গারপ্রিন্টে হাজিরা না হওয়ায় ম্যানুয়াল ইন-টাইম এন্ট্রি' : '')
+        });
+    };
+
     // অ্যাডমিন ম্যানুয়াল ওভাররাইড সংরক্ষণ
     const handleSaveManualOverride = async () => {
         if (!overrideRow) return;
         const newStatus = overrideForm.status;
+        if ((newStatus === 'Present' || newStatus === 'Late') && !overrideForm.inTime24) {
+            toast.error('উপস্থিতি দিতে প্রবেশের সময় উল্লেখ করুন।');
+            return;
+        }
         setIsSyncing(true);
         try {
             const payload = {
@@ -184,6 +203,7 @@ export default function AttendanceManagement() {
             });
             await loadAttendanceForDate(selectedDate, false);
             toast.success(`${formatDisplayDate(selectedDate, 'bn')}-এর ছুটি সংরক্ষণ করা হয়েছে।`);
+            setIsHolidayConfirmOpen(false);
         } catch (error) {
             toast.error(extractApiErrorMessage(error, 'ছুটির দিন সংরক্ষণ করা যায়নি।'));
         } finally {
@@ -294,7 +314,7 @@ export default function AttendanceManagement() {
                                 size="xs"
                                 leftIcon={Sun}
                                 isLoading={isSavingSheet}
-                                onClick={handleDeclareSpecialHoliday}
+                                onClick={() => setIsHolidayConfirmOpen(true)}
                                 className="border border-ink-faint"
                             >
                                 <span className="font-bengali">এই দিনটিকে ছুটি (Holiday) ঘোষণা করুন</span>
@@ -413,7 +433,16 @@ export default function AttendanceManagement() {
                                         </td>
 
                                         <td className="py-3.5 px-3 text-center font-mono font-bold text-emerald-deep">
-                                            {row.inTimeDisplay}
+                                            {!row.inTime24 && ['Unrecorded', 'Absent', 'Late'].includes(row.status) ? (
+                                                <Button
+                                                    variant="outline"
+                                                    size="xs"
+                                                    onClick={() => openAttendanceEditor(row, true)}
+                                                    title="ফিঙ্গারপ্রিন্ট কাজ না করলে ম্যানুয়ালি ইন-টাইম দিন"
+                                                >
+                                                    <span className="font-bengali">ম্যানুয়াল পাঞ্চ</span>
+                                                </Button>
+                                            ) : row.inTimeDisplay}
                                         </td>
 
                                         <td className="py-3.5 px-3 text-center font-mono text-ink-soft">
@@ -459,14 +488,7 @@ export default function AttendanceManagement() {
                                                 variant="outline"
                                                 size="xs"
                                                 leftIcon={SlidersHorizontal}
-                                                onClick={() => {
-                                                    setOverrideRow(row);
-                                                    setOverrideForm({
-                                                        status: row.status === 'Holiday' ? 'Present' : row.status,
-                                                        inTime24: row.inTime24 || '08:55',
-                                                        remarks: row.remarks || ''
-                                                    });
-                                                }}
+                                                onClick={() => openAttendanceEditor(row)}
                                             >
                                                 <span className="font-bengali">সংশোধন</span>
                                             </Button>
@@ -478,6 +500,19 @@ export default function AttendanceManagement() {
                     </table>
                 </div>
             </section>
+
+            <ConfirmDialog
+                isOpen={isHolidayConfirmOpen}
+                onClose={() => {
+                    if (!isSavingSheet) setIsHolidayConfirmOpen(false);
+                }}
+                onConfirm={handleDeclareSpecialHoliday}
+                titleBng="এই তারিখে ছুটি ঘোষণা করবেন?"
+                messageBng={`${formatDisplayDate(selectedDate, 'bn')} তারিখকে প্রতিষ্ঠানের ছুটি হিসেবে ঘোষণা করা হবে। এতে ওই দিনের হাজিরা ও বেতন গণনায় প্রভাব পড়বে।`}
+                confirmText="হ্যাঁ, ছুটি ঘোষণা করুন"
+                variant="gold"
+                isLoading={isSavingSheet}
+            />
 
             {/* =================================================================
                 5. ADMIN MANUAL ATTENDANCE OVERRIDE MODAL
@@ -525,6 +560,9 @@ export default function AttendanceManagement() {
                             type="time"
                             variant="erp"
                             isMonoText
+                            hint={overrideRow && !overrideRow.inTime24
+                                ? 'ডিফল্ট সময় ০৮:৫৫; প্রয়োজন হলে সময় পরিবর্তন করুন।'
+                                : ''}
                             value={overrideForm.inTime24}
                             onChange={(e) =>
                                 setOverrideForm((prev) => ({ ...prev, inTime24: e.target.value }))

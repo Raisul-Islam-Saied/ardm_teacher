@@ -4,6 +4,7 @@
  */
 
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { cn } from '@utils/cn';
 import Button from './Button';
@@ -47,7 +48,7 @@ export function Modal({
 
     if (!isOpen) return null;
 
-    return (
+    return createPortal(
         <div
             role="dialog"
             aria-modal="true"
@@ -104,7 +105,8 @@ export function Modal({
                     </div>
                 )}
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }
 

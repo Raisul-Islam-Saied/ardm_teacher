@@ -20,7 +20,7 @@ const BENGALI_NAME_REGEX = /^[\u0980-\u09FF][\u0980-\u09FF\s.'-]{1,59}$/;
 const BD_MOBILE_REGEX = /^01[3-9]\d{8}$/;
 
 // ঠিকানা (বাড়ি/গ্রাম): বাংলা, ইংরেজি, সংখ্যা, কমা, স্ল্যাশ ও হাইফেন (২ থেকে ৮০ অক্ষর)
-const ADDRESS_LINE_REGEX = /^[A-Za-z0-9\u0980-\u09FF\s,./#()-]{2,80}$/;
+const ADDRESS_LINE_REGEX = /^[A-Za-z0-9\u0980-\u09FF\s,./#()'&-]{2,80}$/;
 
 // ভুয়া রিপিটেড ডিজিট চেক (যেমন: 1111111111 বা 99999999999999999)
 const REPEATED_DIGITS_REGEX = /^(\d)\1+$/;
@@ -412,16 +412,36 @@ export function validateAcademicEntry(entry) {
         errors.boardOrUniversity = 'বোর্ড বা বিশ্ববিদ্যালয়ের নাম লিখুন।';
     }
 
+    const cleanSubject = sanitizeText(entry.majorOrGroup);
+    if (!cleanSubject || cleanSubject.length < 2) {
+        errors.majorOrGroup = 'বিভাগ বা বিষয় নির্বাচন করুন।';
+    }
+
+    if (['Fazil', 'Honours', 'Kamil', 'Masters'].includes(entry.degreeLevel) && !entry.courseDuration) {
+        errors.courseDuration = 'কোর্সের মেয়াদ নির্বাচন করুন।';
+    }
+
     const year = Number(toEnglishDigits(entry.passingYear));
     const currentYear = new Date().getFullYear();
     if (!year || year < 1965 || year > currentYear) {
         errors.passingYear = `পাসের সন ১৯৬৫ থেকে ${currentYear}-এর মধ্যে হতে হবে।`;
     }
 
-    const scale = Number(entry.scale) === 4 ? 4 : 5;
-    const gpa = Number(toEnglishDigits(entry.gpaOrCgpa));
-    if (isNaN(gpa) || gpa < 1.0 || gpa > scale) {
-        errors.gpaOrCgpa = `GPA/CGPA অবশ্যই ১.০০ থেকে ${scale}.০০ এর মধ্যে হতে হবে।`;
+    const hasLegacyGpa = !entry.resultType && entry.gpaOrCgpa !== '' && entry.gpaOrCgpa != null;
+    const resultType = entry.resultType || (hasLegacyGpa ? 'GPA' : '');
+    const resultTypes = ['GPA', 'CGPA', 'Division', 'Class', 'Passed'];
+    if (!resultTypes.includes(resultType)) {
+        errors.resultType = 'ফলাফলের ধরন নির্বাচন করুন।';
+    } else if (resultType === 'GPA' || resultType === 'CGPA') {
+        const scale = Number(entry.scale) === 4 ? 4 : 5;
+        const gpa = Number(toEnglishDigits(entry.gpaOrCgpa));
+        if (isNaN(gpa) || gpa < 1.0 || gpa > scale) {
+            errors.gpaOrCgpa = `${resultType} অবশ্যই ১.০০ থেকে ${scale}.০০ এর মধ্যে হতে হবে।`;
+        }
+    } else if (resultType === 'Division' || resultType === 'Class') {
+        if (!['First', 'Second', 'Third'].includes(entry.resultGrade)) {
+            errors.resultGrade = 'বিভাগ বা শ্রেণির ফলাফল নির্বাচন করুন।';
+        }
     }
 
     return {

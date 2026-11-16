@@ -18,10 +18,22 @@ const systemRoutes = require('./routes/system.routes');
 const { zkTecoHandshake, zkTecoReceiveLogs } = require('./controllers/attendance.controller');
 
 const app = express();
+const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173,http://127.0.0.1:5173')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
 app.set('trust proxy', 1);
 app.use(helmet());
 app.use(cors({
-    origin: process.env.CLIENT_URL || '*',
+    origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+            return;
+        }
+
+        callback(new Error('CORS policy denied this origin.'));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
 }));

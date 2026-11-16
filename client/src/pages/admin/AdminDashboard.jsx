@@ -59,11 +59,6 @@ import {
 } from '@utils/formatters';
 import { cn } from '@utils/cn';
 
-const INITIAL_WEEKLY_ATTENDANCE = [];
-const INITIAL_PAYROLL_TREND = [];
-const INITIAL_TOP_RANKED_TEACHERS = [];
-const INITIAL_PENDING_APPROVALS = [];
-
 export default function AdminDashboard() {
     const toast = useToast();
     const navigate = useNavigate();
@@ -86,8 +81,11 @@ export default function AdminDashboard() {
         }
     });
 
-    const [topTeachers, setTopTeachers] = useState(INITIAL_TOP_RANKED_TEACHERS);
-    const [pendingQueue, setPendingQueue] = useState(INITIAL_PENDING_APPROVALS);
+    const [topTeachers, setTopTeachers] = useState([]);
+    const [pendingQueue, setPendingQueue] = useState([]);
+    const [weeklyAttendance, setWeeklyAttendance] = useState([]);
+    const [payrollTrend, setPayrollTrend] = useState([]);
+    const [dashboardError, setDashboardError] = useState('');
 
     // পেন্ডিং শিক্ষক অনুমোদন মডাল স্টেট (বেতন ও বায়োমেট্রিক আইডি নির্ধারণের জন্য)
     const [selectedPendingTeacher, setSelectedPendingTeacher] = useState(null);
@@ -115,16 +113,15 @@ export default function AdminDashboard() {
 
             const approvedList = list.filter((teacher) => teacher.registrationStatus === 'Approved');
             const pendingFromDb = list.filter((teacher) => teacher.registrationStatus === 'Pending');
+            const activeApprovedList = approvedList.filter((teacher) => teacher.isActive !== false);
             const teacherStats = overview.teacherStats;
             const present = Number(teacherStats.todayPresent) || 0;
             const late = Number(teacherStats.todayLate) || 0;
             const totalActive = Number(teacherStats.totalActiveTeachers) || 0;
-            const teachingCount = approvedList.filter((teacher) => teacher.staffCategory !== 'Non-Teaching').length;
-
             setStats({
                 totalTeachers: totalActive,
-                teachingCount,
-                nonTeachingCount: Math.max(0, totalActive - teachingCount),
+                teachingCount: activeApprovedList.filter((teacher) => teacher.staffCategory !== 'Non-Teaching').length,
+                nonTeachingCount: activeApprovedList.filter((teacher) => teacher.staffCategory === 'Non-Teaching').length,
                 monthlyPayrollNum: Number(overview.payrollOverview?.totalMonthlyPayroll) || 0,
                 todaySummary: {
                     present,
@@ -135,11 +132,13 @@ export default function AdminDashboard() {
                 }
             });
             setTopTeachers(
-                approvedList
+                activeApprovedList
                     .slice()
                     .sort((a, b) => (a.rankingMetrics?.overallMadrasahRank || Infinity) - (b.rankingMetrics?.overallMadrasahRank || Infinity))
                     .slice(0, 4)
             );
+            setWeeklyAttendance(Array.isArray(overview.weeklyAttendance) ? overview.weeklyAttendance : []);
+            setPayrollTrend(Array.isArray(overview.payrollTrend) ? overview.payrollTrend : []);
             setPendingQueue(
                 pendingFromDb.map((teacher) => ({
                     ...teacher,
@@ -148,11 +147,13 @@ export default function AdminDashboard() {
                     suggestedBasicSalary: String(teacher.basicSalary || '')
                 }))
             );
+            setDashboardError('');
 
             if (showNotification) {
                 toast.success('ড্যাশবোর্ডের সকল পরিসংখ্যান হালনাগাদ করা হয়েছে!');
             }
         } catch (error) {
+            setDashboardError(extractApiErrorMessage(error, 'ড্যাশবোর্ডের তথ্য লোড করা যায়নি।'));
             if (showNotification) {
                 toast.error(extractApiErrorMessage(error, 'ড্যাশবোর্ডের তথ্য লোড করা যায়নি।'));
             }
@@ -282,6 +283,12 @@ export default function AdminDashboard() {
                     </div>
                 </div>
             </section>
+
+            {dashboardError && (
+                <div role="alert" className="ledger-surface border-danger/30 bg-danger-bg p-4 font-bengali text-sm text-danger">
+                    {dashboardError}
+                </div>
+            )}
 
             {/* =================================================================
                 2. 4 EXECUTIVE KPI CARDS
@@ -464,17 +471,17 @@ export default function AdminDashboard() {
 
                     {/* চার্ট ক্যানভাস */}
                     <div className="w-full h-[270px] pt-2">
-                        {chartTab === 'ATTENDANCE' && INITIAL_WEEKLY_ATTENDANCE.length === 0 ? (
+                        {chartTab === 'ATTENDANCE' && weeklyAttendance.length === 0 ? (
                             <div className="h-full flex items-center justify-center font-bengali text-sm text-ink-muted">
                                 সাপ্তাহিক হাজিরার চার্ট দেখানোর মতো সার্ভার ডেটা নেই।
                             </div>
-                        ) : chartTab === 'PAYROLL' && INITIAL_PAYROLL_TREND.length === 0 ? (
+                        ) : chartTab === 'PAYROLL' && payrollTrend.length === 0 ? (
                             <div className="h-full flex items-center justify-center font-bengali text-sm text-ink-muted">
                                 বেতন ট্রেন্ডের চার্ট দেখানোর মতো সার্ভার ডেটা নেই।
                             </div>
                         ) : chartTab === 'ATTENDANCE' ? (
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={INITIAL_WEEKLY_ATTENDANCE} barSize={26}>
+                                <BarChart data={weeklyAttendance} barSize={26}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(18,29,24,0.08)" />
                                     <XAxis
                                         dataKey="dayBng"
@@ -493,11 +500,12 @@ export default function AdminDashboard() {
                                     <Bar dataKey="present" name="উপস্থিত (Present)" stackId="a" fill="#0E3B2E" radius={[0, 0, 0, 0]} />
                                     <Bar dataKey="late" name="বিলম্ব (Late - 0.5)" stackId="a" fill="#C69C3D" />
                                     <Bar dataKey="leave" name="ছুটি (Leave - 1.0)" stackId="a" fill="#1E4E79" radius={[6, 6, 0, 0]} />
+                                    <Bar dataKey="absent" name="অনুপস্থিত (Absent)" stackId="a" fill="#A62626" radius={[6, 6, 0, 0]} />
                                 </BarChart>
                             </ResponsiveContainer>
                         ) : (
                             <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={INITIAL_PAYROLL_TREND}>
+                                <AreaChart data={payrollTrend}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(18,29,24,0.08)" />
                                     <XAxis
                                         dataKey="monthBng"

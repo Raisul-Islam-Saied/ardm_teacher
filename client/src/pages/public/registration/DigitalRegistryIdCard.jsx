@@ -35,7 +35,9 @@ import {
     toBengaliDigits,
     formatDisplayDate,
     formatPhoneDisplay,
-    calculateLiveRankMetrics
+    formatTeacherAddress,
+    calculateLiveRankMetrics,
+    formatAcademicResult
 } from '@utils/formatters';
 import { cn } from '@utils/cn';
 
@@ -418,7 +420,7 @@ export default function DigitalRegistryIdCard({
                                 <div className="flex justify-between gap-3 py-1">
                                     <dt className="font-bengali text-ink-muted shrink-0">বর্তমান ঠিকানা:</dt>
                                     <dd className="font-bengali text-ink text-right">
-                                        {presentAddr.houseOrRoad}, {presentAddr.village}, {presentAddr.postOffice} ({presentAddr.postCode}), {presentAddr.upazila}, {presentAddr.district}
+                                        {formatTeacherAddress(presentAddr)}
                                     </dd>
                                 </div>
                             </dl>
@@ -603,7 +605,7 @@ export default function DigitalRegistryIdCard({
                                             <th className="py-2 px-3">পরীক্ষার নাম ও বিভাগ</th>
                                             <th className="py-2 px-3">বোর্ড / বিশ্ববিদ্যালয়</th>
                                             <th className="py-2 px-3 text-center">পাসের সন</th>
-                                            <th className="py-2 px-3 text-right">প্রাপ্ত GPA / CGPA</th>
+                                            <th className="py-2 px-3 text-right">ফলাফল</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-ink-faint font-bengali">
@@ -616,11 +618,20 @@ export default function DigitalRegistryIdCard({
                                                     </td>
                                                     <td className="py-2 px-3">
                                                         {q.examTitle} {q.majorOrGroup ? `(${q.majorOrGroup})` : ''}
+                                                        {(q.rollNumber || q.registrationNumber || q.courseDuration) && (
+                                                            <span className="mt-0.5 block text-[10px] text-ink-muted">
+                                                                {[
+                                                                    q.rollNumber && `রোল: ${q.rollNumber}`,
+                                                                    q.registrationNumber && `রেজি: ${q.registrationNumber}`,
+                                                                    q.courseDuration && `মেয়াদ: ${q.courseDuration} বছর`
+                                                                ].filter(Boolean).join(' · ')}
+                                                            </span>
+                                                        )}
                                                     </td>
                                                     <td className="py-2 px-3">{q.boardOrUniversity}</td>
                                                     <td className="py-2 px-3 text-center font-mono">{q.passingYear}</td>
                                                     <td className="py-2 px-3 text-right font-mono font-bold">
-                                                        {q.gpaOrCgpa} / {q.scale}.00
+                                                        {formatAcademicResult(q)}
                                                     </td>
                                                 </tr>
                                             );

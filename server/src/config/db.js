@@ -30,11 +30,11 @@ const cleanupOptionalUniqueTeacherFields = async () => {
     }
 };
 
-const connectDB = async () => {
+const connectDB = async (mongoUri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/ardm_enterprise_db') => {
     try {
         mongoose.set('strictQuery', true);
 
-        const conn = await mongoose.connect(process.env.MONGO_URI, {
+        const conn = await mongoose.connect(mongoUri, {
             serverSelectionTimeoutMS: 5000,
             maxPoolSize: 10,
         });

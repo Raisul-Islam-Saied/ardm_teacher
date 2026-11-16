@@ -7,6 +7,30 @@ import { STORAGE_KEYS } from '@constants/app.constants';
 
 export const REGISTRATION_DRAFT_KEY = 'ardm_teacher_registration_draft_v1';
 
+function createEmptyAddress() {
+    return {
+        houseNameBn: '',
+        houseNameEn: '',
+        villageBn: '',
+        villageEn: '',
+        unionBn: '',
+        unionEn: '',
+        wardNo: '',
+        upazilaBn: '',
+        upazilaEn: '',
+        districtBn: '',
+        districtEn: '',
+        divisionBn: '',
+        divisionEn: '',
+        houseOrRoad: '',
+        village: '',
+        postOffice: '',
+        postCode: '',
+        upazila: '',
+        district: ''
+    };
+}
+
 /**
  * ৪-ধাপের রেজিস্ট্রেশন স্টেপার কনফিগারেশন (ইংরেজি ও বাংলা শিরোনামসহ)
  */
@@ -85,23 +109,9 @@ export function createInitialRegistrationData() {
             relationship: '',
             phone: ''
         },
-        presentAddress: {
-            houseOrRoad: '',
-            village: '',
-            postOffice: '',
-            postCode: '',
-            upazila: '',
-            district: ''
-        },
+        presentAddress: createEmptyAddress(),
         sameAsPresentAddress: true,
-        permanentAddress: {
-            houseOrRoad: '',
-            village: '',
-            postOffice: '',
-            postCode: '',
-            upazila: '',
-            district: ''
-        },
+        permanentAddress: createEmptyAddress(),
 
         // Step 4: Portal Password & Attestation
         password: '',
@@ -118,11 +128,20 @@ export function loadRegistrationDraft() {
         if (!raw) return null;
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed === 'object' && parsed.data) {
+            const initialData = createInitialRegistrationData();
             return {
                 step: Number.isInteger(parsed.step) ? parsed.step : 0,
                 data: {
-                    ...createInitialRegistrationData(),
-                    ...parsed.data
+                    ...initialData,
+                    ...parsed.data,
+                    presentAddress: {
+                        ...initialData.presentAddress,
+                        ...parsed.data.presentAddress
+                    },
+                    permanentAddress: {
+                        ...initialData.permanentAddress,
+                        ...parsed.data.permanentAddress
+                    }
                 },
                 savedAt: parsed.savedAt || null
             };

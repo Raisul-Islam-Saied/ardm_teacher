@@ -13,6 +13,9 @@ const ApiResponse = require('../utils/ApiResponse');
 const asyncHandler = require('../utils/asyncHandler');
 const { ATTENDANCE_STATUS } = require('../constants/system.constants');
 
+const WEEKDAY_NAMES_BN = ['রবি', 'সোম', 'মঙ্গল', 'বুধ', 'বৃহস্পতি', 'শুক্র', 'শনি'];
+const MONTH_NAMES_BN = ['জানু', 'ফেব্রু', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুল', 'আগ', 'সেপ্টে', 'অক্টো', 'নভে', 'ডিসে'];
+
 // =========================================================================
 // ⚙️ ১. ডায়নামিক সিস্টেম সেটিংস (No-Code Policy Update)
 // =========================================================================
@@ -130,6 +133,15 @@ const getAdminDashboardOverview = asyncHandler(async (req, res) => {
     const todayStr = now.format('YYYY-MM-DD');
     const currentMonth = now.month() + 1;
     const currentYear = now.year();
+    const schoolWeekStart = now.clone().subtract((now.day() + 1) % 7, 'days').startOf('day');
+    const schoolWeekDates = Array.from({ length: 6 }, (_, index) =>
+        schoolWeekStart.clone().add(index, 'days')
+    );
+    const schoolWeekEnd = moment.min(schoolWeekDates[5], now).format('YYYY-MM-DD');
+    const payrollMonths = Array.from({ length: 6 }, (_, index) => {
+        const monthDate = now.clone().subtract(5 - index, 'months');
+        return { month: monthDate.month() + 1, year: monthDate.year() };
+    });
 
     const [
         totalActiveTeachers,
@@ -137,14 +149,22 @@ const getAdminDashboardOverview = asyncHandler(async (req, res) => {
         pendingApplicationsCount,
         currentMonthSalaries,
         activeLoans,
-        recentAuditLogs
+        recentAuditLogs,
+        schoolWeekAttendances,
+        recentPayrollSheets
     ] = await Promise.all([
         Teacher.countDocuments({ isActive: true, registrationStatus: 'Approved' }),
         Attendance.find({ date: todayStr }).populate('teacherId', 'teacherCode fullNameBng designation').lean(),
         LeaveRequest.countDocuments({ status: 'Pending' }),
         Salary.find({ month: currentMonth, year: currentYear }).lean(),
         LoanAdvance.find({ status: 'Active' }).lean(),
-        AuditLog.find().populate('performedBy', 'fullNameBng').sort({ createdAt: -1 }).limit(10).lean()
+        AuditLog.find().populate('performedBy', 'fullNameBng').sort({ createdAt: -1 }).limit(10).lean(),
+        Attendance.find({
+            date: { $gte: schoolWeekStart.format('YYYY-MM-DD'), $lte: schoolWeekEnd }
+        }).select('date status').lean(),
+        Salary.find({
+            $or: payrollMonths.map(({ month, year }) => ({ month, year }))
+        }).select('month year paymentStatus netPayableSalary leaveAndAbsentDeductionAmount').lean()
     ]);
 
     const todayPresent = todayAttendances.filter((a) => [
@@ -169,6 +189,37 @@ const getAdminDashboardOverview = asyncHandler(async (req, res) => {
         .reduce((s, item) => s + item.netPayableSalary, 0);
 
     const totalActiveLoanBalance = activeLoans.reduce((s, l) => s + l.remainingBalance, 0);
+    const weeklyAttendance = schoolWeekDates.map((date) => {
+        const dayAttendances = schoolWeekAttendances.filter((attendance) => attendance.date === date.format('YYYY-MM-DD'));
+        return {
+            dayBng: WEEKDAY_NAMES_BN[date.day()],
+            present: dayAttendances.filter((attendance) => [
+                ATTENDANCE_STATUS.PRESENT,
+                ATTENDANCE_STATUS.OFFICIAL_DUTY,
+                ATTENDANCE_STATUS.HOLIDAY_DUTY
+            ].includes(attendance.status)).length,
+            late: dayAttendances.filter((attendance) => [
+                ATTENDANCE_STATUS.LATE,
+                ATTENDANCE_STATUS.EXCUSED_LATE
+            ].includes(attendance.status)).length,
+            leave: dayAttendances.filter((attendance) => [
+                ATTENDANCE_STATUS.LEAVE,
+                ATTENDANCE_STATUS.APPROVED_SICK_LEAVE,
+                ATTENDANCE_STATUS.APPROVED_CASUAL_LEAVE
+            ].includes(attendance.status)).length,
+            absent: dayAttendances.filter((attendance) => attendance.status === ATTENDANCE_STATUS.ABSENT).length
+        };
+    });
+    const payrollTrend = payrollMonths.map(({ month, year }) => {
+        const monthSheets = recentPayrollSheets.filter((salary) => salary.month === month && salary.year === year);
+        return {
+            monthBng: `${MONTH_NAMES_BN[month - 1]} ${String(year).slice(-2)}`,
+            netPaid: monthSheets
+                .filter((salary) => salary.paymentStatus === 'Paid')
+                .reduce((sum, salary) => sum + Number(salary.netPayableSalary || 0), 0),
+            deduction: monthSheets.reduce((sum, salary) => sum + Number(salary.leaveAndAbsentDeductionAmount || 0), 0)
+        };
+    });
 
     return res.status(200).json(
         new ApiResponse(200, 'ড্যাশবোর্ড লাইভ ওভারভিউ', {
@@ -197,7 +248,9 @@ const getAdminDashboardOverview = asyncHandler(async (req, res) => {
                 totalActiveLoanBalance
             },
             todayLiveFeed: todayAttendances,
-            recentAuditLogs
+            recentAuditLogs,
+            weeklyAttendance,
+            payrollTrend
         })
     );
 });

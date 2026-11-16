@@ -44,6 +44,37 @@ import Step3AddressContact, { validateStep3AddressContactData } from './Step3Add
 import Step4PhotoReview, { validateStep4PhotoReviewData } from './Step4PhotoReview';
 import DigitalRegistryIdCard from './DigitalRegistryIdCard';
 
+const ADDRESS_TEXT_FIELDS = [
+    'houseNameBn',
+    'houseNameEn',
+    'villageBn',
+    'villageEn',
+    'unionBn',
+    'unionEn',
+    'wardNo',
+    'upazilaBn',
+    'upazilaEn',
+    'districtBn',
+    'districtEn',
+    'divisionBn',
+    'divisionEn'
+];
+
+function prepareAddressPayload(address = {}) {
+    const preparedAddress = { ...address };
+    ADDRESS_TEXT_FIELDS.forEach((field) => {
+        preparedAddress[field] = String(address[field] || '').trim();
+    });
+
+    return {
+        ...preparedAddress,
+        houseOrRoad: preparedAddress.houseNameBn || preparedAddress.houseNameEn || address.houseOrRoad || '',
+        village: preparedAddress.villageBn || preparedAddress.villageEn || address.village || '',
+        upazila: preparedAddress.upazilaEn || address.upazila || '',
+        district: preparedAddress.districtEn || address.district || ''
+    };
+}
+
 export default function PublicRegistrationLedger() {
     const toast = useToast();
     const ledgerTopRef = useRef(null);
@@ -285,17 +316,24 @@ export default function PublicRegistrationLedger() {
                     relationship: formData.emergencyContact.relationship,
                     phone: extractPureDigits(formData.emergencyContact.phone)
                 },
-                presentAddress: formData.presentAddress,
-                permanentAddress: formData.sameAsPresentAddress
-                    ? formData.presentAddress
-                    : formData.permanentAddress,
+                presentAddress: prepareAddressPayload(formData.presentAddress),
+                permanentAddress: prepareAddressPayload(
+                    formData.sameAsPresentAddress
+                        ? formData.presentAddress
+                        : formData.permanentAddress
+                ),
                 academicQualifications: formData.academicQualifications.map((q) => ({
                     degreeLevel: q.degreeLevel,
                     examTitle: q.examTitle.trim(),
                     majorOrGroup: q.majorOrGroup ? q.majorOrGroup.trim() : '',
                     boardOrUniversity: q.boardOrUniversity.trim(),
+                    rollNumber: q.rollNumber ? q.rollNumber.trim() : '',
+                    registrationNumber: q.registrationNumber ? q.registrationNumber.trim() : '',
                     passingYear: Number(toEnglishDigits(q.passingYear)),
-                    gpaOrCgpa: Number(toEnglishDigits(q.gpaOrCgpa)),
+                    courseDuration: q.courseDuration || '',
+                    resultType: q.resultType || 'GPA',
+                    resultGrade: q.resultGrade || undefined,
+                    gpaOrCgpa: q.gpaOrCgpa ? Number(toEnglishDigits(q.gpaOrCgpa)) : undefined,
                     scale: Number(q.scale) === 4 ? 4 : 5
                 })),
                 profilePicture: {

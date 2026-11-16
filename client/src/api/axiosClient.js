@@ -76,21 +76,23 @@ axiosClient.interceptors.response.use(
     (error) => Promise.reject(error)
 );
 
-let __authMeCachePromise = null;
-let __authMeLastTime = 0;
+let __authMeCache = null;
 const __origGet = axiosClient.get.bind(axiosClient);
 
 axiosClient.get = function (url, config) {
     if (typeof url === 'string' && url.includes('/auth/me')) {
-        const now = Date.now();
-        if (__authMeCachePromise && now - __authMeLastTime < 10000) {
-            return __authMeCachePromise;
+        const token = getStoredAuthToken();
+        if (__authMeCache?.token === token) {
+            return __authMeCache.promise;
         }
-        __authMeLastTime = now;
-        __authMeCachePromise = __origGet(url, config).finally(() => {
-            setTimeout(() => { __authMeCachePromise = null; }, 10000);
+        const cacheEntry = { token, promise: null };
+        cacheEntry.promise = __origGet(url, config).finally(() => {
+            if (__authMeCache === cacheEntry) {
+                __authMeCache = null;
+            }
         });
-        return __authMeCachePromise;
+        __authMeCache = cacheEntry;
+        return cacheEntry.promise;
     }
     return __origGet(url, config);
 };

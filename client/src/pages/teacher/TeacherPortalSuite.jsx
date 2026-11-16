@@ -9,6 +9,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import moment from 'moment-timezone';
 import {
     GraduationCap,
     Fingerprint,
@@ -343,8 +344,9 @@ export function TeacherAttendanceView() {
     const { teacher, dashboard, loadError } = useResolvedTeacherProfile();
     const logs = dashboard?.selectedMonthAttendance?.logs || [];
     const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
+    const [isSubmittingLeave, setIsSubmittingLeave] = useState(false);
     const [leaveForm, setLeaveForm] = useState({
-        date: new Date().toISOString().slice(0, 10),
+        date: moment().tz('Asia/Dhaka').format('YYYY-MM-DD'),
         reason: ''
     });
 
@@ -353,10 +355,12 @@ export function TeacherAttendanceView() {
 
     const handleSubmitLeaveRequest = async (e) => {
         e.preventDefault();
+        if (isSubmittingLeave) return;
         if (!leaveForm.reason.trim()) {
             toast.error('অনুগ্রহ করে ছুটির কারণ উল্লেখ করুন।');
             return;
         }
+        setIsSubmittingLeave(true);
         try {
             await axiosClient.post('/payroll/leaves/apply', {
                 applicationType: 'Casual Leave',
@@ -366,9 +370,11 @@ export function TeacherAttendanceView() {
             });
             toast.success(`${formatDisplayDate(leaveForm.date, 'bn')} তারিখের ছুটির আবেদন সার্ভারে জমা হয়েছে।`);
             setIsLeaveModalOpen(false);
-            setLeaveForm({ date: new Date().toISOString().slice(0, 10), reason: '' });
+            setLeaveForm({ date: moment().tz('Asia/Dhaka').format('YYYY-MM-DD'), reason: '' });
         } catch (error) {
             toast.error(extractApiErrorMessage(error, 'ছুটির আবেদন জমা দেওয়া যায়নি।'));
+        } finally {
+            setIsSubmittingLeave(false);
         }
     };
 
@@ -504,7 +510,12 @@ export function TeacherAttendanceView() {
                         <Button variant="ghost" size="sm" onClick={() => setIsLeaveModalOpen(false)}>
                             <span className="font-bengali">বাতিল</span>
                         </Button>
-                        <Button variant="emerald" size="sm" onClick={handleSubmitLeaveRequest}>
+                        <Button
+                            variant="emerald"
+                            size="sm"
+                            isLoading={isSubmittingLeave}
+                            onClick={handleSubmitLeaveRequest}
+                        >
                             <span className="font-bengali">আবেদন জমা দিন</span>
                         </Button>
                     </>

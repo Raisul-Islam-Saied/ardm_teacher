@@ -146,7 +146,7 @@ export default function Step1PersonalIdentity({
 
     const designationOptions = DESIGNATION_LIST.map((d) => ({
         value: d.titleEng,
-        label: `[Rank #${d.rankPriority}] ${d.titleBng} — (${d.titleEng})`
+        label: d.titleEng
     }));
 
     const bloodGroupOptions = BLOOD_GROUPS.map((bg) => ({
@@ -257,18 +257,15 @@ export default function Step1PersonalIdentity({
                         </h3>
                     </div>
 
-                    {/* সিলেক্ট করা পদবীর লাইভ র‍্যাংক ও ক্যাটাগরি ব্যাজ */}
+                    {/* সিলেক্ট করা পদবীর ক্যাটাগরি ব্যাজ */}
                     <div className="flex items-center gap-2">
-                        <Badge variant="emerald" size="sm" mono>
-                            Base Rank #{selectedDesigObj.rankPriority}
-                        </Badge>
                         <Badge
                             variant={selectedDesigObj.staffCategory === 'Teaching' ? 'gold' : 'info'}
                             size="sm"
                         >
                             {selectedDesigObj.staffCategory === 'Teaching'
-                                ? 'শিক্ষক (Teaching Staff)'
-                                : 'কর্মচারী (Non-Teaching Staff)'}
+                                ? 'Teaching Staff'
+                                : 'Non-Teaching Staff'}
                         </Badge>
                     </div>
                 </div>
@@ -276,7 +273,7 @@ export default function Step1PersonalIdentity({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-7 gap-y-1">
                     <FormSelect
                         labelEng="Designation"
-                        labelBng="পদবী নির্বাচন করুন"
+                        labelBng=""
                         name="designation"
                         value={formData.designation}
                         onChange={(e) => {
@@ -290,8 +287,8 @@ export default function Step1PersonalIdentity({
                             }
                         }}
                         options={designationOptions}
+                        placeholder="Select"
                         required
-                        hint={`১০-ডিজিট টিচার আইডিতে পদবীর কোড যুক্ত হবে: ${selectedDesigObj.code}`}
                     />
 
                     <FormInput

@@ -20,6 +20,31 @@ const BD_PHONE_REGEX = /^01[3-9]\d{8}$/;
 const NID_REGEX = /^(\d{10}|\d{13}|\d{17})$/;
 const BIRTH_REG_REGEX = /^\d{17}$/;
 const REPEATED_DIGITS_REGEX = /^(\d)\1+$/; // 1111111111 বা 0000000000 ব্লক করার জন্য
+const ADDRESS_TEXT_FIELDS = [
+    ['houseNameBn', 'বাড়ির নাম (বাংলা)'],
+    ['houseNameEn', 'বাড়ির নাম (ইংরেজি)'],
+    ['villageBn', 'গ্রামের নাম (বাংলা)'],
+    ['villageEn', 'গ্রামের নাম (ইংরেজি)'],
+    ['unionBn', 'ইউনিয়নের নাম (বাংলা)'],
+    ['unionEn', 'ইউনিয়নের নাম (ইংরেজি)'],
+    ['upazilaBn', 'উপজেলার নাম (বাংলা)'],
+    ['upazilaEn', 'উপজেলার নাম (ইংরেজি)'],
+    ['districtBn', 'জেলার নাম (বাংলা)'],
+    ['districtEn', 'জেলার নাম (ইংরেজি)'],
+    ['divisionBn', 'বিভাগের নাম (বাংলা)'],
+    ['divisionEn', 'বিভাগের নাম (ইংরেজি)']
+];
+
+const addressLocationValidators = (addressKey) => [
+    ...ADDRESS_TEXT_FIELDS.map(([field, label]) => (
+        body(`${addressKey}.${field}`)
+            .customSanitizer(sanitizeClean)
+            .isLength({ min: 2, max: 80 }).withMessage(`${label} ২ থেকে ৮০ অক্ষরের মধ্যে হতে হবে`)
+    )),
+    body(`${addressKey}.wardNo`)
+        .customSanitizer(sanitizeClean)
+        .matches(/^\d{1,3}$/).withMessage('ওয়ার্ড নম্বর ১ থেকে ৩ সংখ্যার হতে হবে')
+];
 
 const commonMilitaryRules = [
     // ১. বাংলা ও ইংরেজি নামের কড়া ভ্যালিডেশন (শিক্ষক, পিতা ও মাতা)
@@ -149,7 +174,7 @@ const commonMilitaryRules = [
             return true;
         }),
 
-    // ৬. ঠিকানা (বাড়ি ও গ্রাম বাধ্যতামূলক, বাকিগুলো ডিফল্ট সরফভাটা/রাঙ্গুনিয়া/চট্টগ্রাম)
+    // ৬. ঠিকানা (বাড়ি ও গ্রাম বাধ্যতামূলক)
     body('presentAddress.houseOrRoad')
         .customSanitizer(sanitizeClean)
         .isLength({ min: 2, max: 80 }).withMessage('বাড়ি বা রাস্তার নাম ২ থেকে ৮০ অক্ষরের মধ্যে হতে হবে'),
@@ -166,8 +191,65 @@ const commonMilitaryRules = [
     body('academicQualifications.*.degreeLevel')
         .isIn(Object.keys(DEGREE_LEVEL_WEIGHTS)).withMessage('সঠিক ডিগ্রি লেভেল নির্বাচন করুন'),
 
+    body('academicQualifications.*.resultType')
+        .optional({ checkFalsy: true })
+        .isIn(['GPA', 'CGPA', 'Division', 'Class', 'Passed'])
+        .withMessage('ফলাফলের ধরন সঠিক নয়'),
+
+    body('academicQualifications.*.resultGrade')
+        .optional({ checkFalsy: true })
+        .isIn(['First', 'Second', 'Third'])
+        .withMessage('বিভাগ বা শ্রেণির ফলাফল সঠিক নয়'),
+
+    body('academicQualifications.*.scale')
+        .optional()
+        .custom((value) => [4, 5].includes(Number(value)))
+        .withMessage('GPA/CGPA স্কেল ৪ অথবা ৫ হতে হবে'),
+
     body('academicQualifications.*.gpaOrCgpa')
-        .isFloat({ min: 1.0, max: 5.0 }).withMessage('GPA বা CGPA অবশ্যই ১.০০ থেকে ৫.০০ এর মধ্যে হতে হবে')
+        .optional({ checkFalsy: true })
+        .isFloat({ min: 1.0, max: 5.0 }).withMessage('GPA বা CGPA অবশ্যই ১.০০ থেকে ৫.০০ এর মধ্যে হতে হবে'),
+
+    body('academicQualifications.*.rollNumber')
+        .optional({ checkFalsy: true })
+        .customSanitizer(sanitizeClean)
+        .isLength({ max: 50 }).withMessage('রোল নম্বর সর্বোচ্চ ৫০ অক্ষরের হতে পারে'),
+
+    body('academicQualifications.*.registrationNumber')
+        .optional({ checkFalsy: true })
+        .customSanitizer(sanitizeClean)
+        .isLength({ max: 50 }).withMessage('রেজিস্ট্রেশন নম্বর সর্বোচ্চ ৫০ অক্ষরের হতে পারে'),
+
+    body('academicQualifications.*.courseDuration')
+        .optional({ checkFalsy: true })
+        .customSanitizer(sanitizeClean)
+        .isLength({ max: 30 }).withMessage('কোর্সের মেয়াদ সর্বোচ্চ ৩০ অক্ষরের হতে পারে'),
+
+    body('academicQualifications').custom((qualifications) => {
+        if (!Array.isArray(qualifications)) return true;
+
+        for (const qualification of qualifications) {
+            const resultType = qualification.resultType || 'GPA';
+            const hasNumericResult = resultType === 'GPA' || resultType === 'CGPA';
+            const score = Number(qualification.gpaOrCgpa);
+
+            if (hasNumericResult) {
+                const scale = Number(qualification.scale) === 4 ? 4 : 5;
+                if (!Number.isFinite(score) || score < 1 || score > scale) {
+                    throw new Error(`GPA/CGPA অবশ্যই নির্বাচিত স্কেলের (৪.০০ বা ৫.০০) মধ্যে হতে হবে`);
+                }
+            } else if (qualification.gpaOrCgpa !== undefined && qualification.gpaOrCgpa !== '') {
+                throw new Error('বিভাগ, শ্রেণি বা উত্তীর্ণ ফলাফলের ক্ষেত্রে GPA/CGPA দেওয়া যাবে না');
+            }
+
+            if (['Division', 'Class'].includes(resultType)
+                && !['First', 'Second', 'Third'].includes(qualification.resultGrade)) {
+                throw new Error('বিভাগ বা শ্রেণির ফলাফল নির্বাচন করুন');
+            }
+        }
+
+        return true;
+    })
 ];
 
 const createTeacherValidator = [
@@ -197,12 +279,15 @@ const createTeacherValidator = [
 
 const publicSelfRegisterValidator = [
     ...commonMilitaryRules,
+    ...addressLocationValidators('presentAddress'),
+    ...addressLocationValidators('permanentAddress'),
     body('password')
         .optional()
         .isLength({ min: 6 }).withMessage('পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে')
 ];
 
 const updateTeacherValidator = [
+    body('role').optional().isIn(Object.values(ROLES)).withMessage('পোর্টাল অ্যাক্সেস রোল সঠিক নয়'),
     body('fullNameEng').optional().customSanitizer(sanitizeClean).matches(ENG_NAME_REGEX),
     body('fullNameBng').optional().customSanitizer(sanitizeClean).matches(BNG_NAME_REGEX),
     body('fathersNameEng').optional().customSanitizer(sanitizeClean).matches(ENG_NAME_REGEX),

@@ -48,6 +48,10 @@ const registerTeacher = asyncHandler(async (req, res) => {
         designation
     } = req.body;
 
+    if (req.body.role === ROLES.SUPER_ADMIN && req.user.role !== ROLES.SUPER_ADMIN) {
+        throw new ApiError(403, 'সুপার অ্যাডমিন অ্যাকাউন্ট তৈরির অনুমতি শুধু বর্তমান সুপার অ্যাডমিনের রয়েছে।');
+    }
+
     // ডুপ্লিকেট চেক (ফোন, এনআইডি, জন্ম নিবন্ধন, ইমেইল, ইনডেক্স নম্বর)
     const orConditions = [{ phone }];
     if (nidNumber) orConditions.push({ nidNumber });
@@ -79,6 +83,7 @@ const registerTeacher = asyncHandler(async (req, res) => {
         biometricDeviceId: finalBiometricId,
         uid,
         editToken,
+        role: req.body.role || ROLES.TEACHER,
         registrationStatus: 'Approved',
         isActive: true
     });
@@ -130,6 +135,7 @@ const publicSelfRegisterTeacher = asyncHandler(async (req, res) => {
         biometricDeviceId: finalBiometricId,
         uid,
         editToken,
+        role: ROLES.TEACHER,
         basicSalary: 0, // অ্যাডমিন অ্যাপ্রুভ করার সময় মূল বেতন বসাবেন
         registrationStatus: 'Pending',
         isActive: false
@@ -278,6 +284,12 @@ const updateTeacher = asyncHandler(async (req, res) => {
     const teacher = await Teacher.findById(req.params.id);
     if (!teacher) {
         throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
+    }
+    if (
+        req.user.role !== ROLES.SUPER_ADMIN &&
+        (teacher.role === ROLES.SUPER_ADMIN || req.body.role === ROLES.SUPER_ADMIN)
+    ) {
+        throw new ApiError(403, 'সুপার অ্যাডমিন অ্যাকাউন্ট পরিবর্তন বা নির্ধারণের অনুমতি শুধু সুপার অ্যাডমিনের রয়েছে।');
     }
 
     Object.assign(teacher, req.body);

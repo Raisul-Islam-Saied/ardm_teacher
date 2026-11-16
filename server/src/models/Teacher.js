@@ -31,8 +31,37 @@ const academicQualificationSchema = new mongoose.Schema({
     examTitle: { type: String, required: true, trim: true }, // যেমন: কামিল (হাদিস), বি.এসসি (অনার্স)
     majorOrGroup: { type: String, trim: true, default: '' },
     boardOrUniversity: { type: String, required: true, trim: true },
+    rollNumber: { type: String, trim: true, default: '', maxlength: 50 },
+    registrationNumber: { type: String, trim: true, default: '', maxlength: 50 },
     passingYear: { type: Number, required: true, min: 1960, max: 2050 },
-    gpaOrCgpa: { type: Number, required: true, min: 1.0, max: 5.0 },
+    courseDuration: { type: String, trim: true, default: '', maxlength: 30 },
+    resultType: {
+        type: String,
+        enum: ['GPA', 'CGPA', 'Division', 'Class', 'Passed'],
+        default: 'GPA',
+        required: true
+    },
+    resultGrade: {
+        type: String,
+        enum: ['First', 'Second', 'Third'],
+        required: function () {
+            return ['Division', 'Class'].includes(this.resultType);
+        }
+    },
+    gpaOrCgpa: {
+        type: Number,
+        required: function () {
+            return ['GPA', 'CGPA'].includes(this.resultType);
+        },
+        validate: {
+            validator(value) {
+                if (!['GPA', 'CGPA'].includes(this.resultType)) return value == null;
+                const scale = this.scale === 4 ? 4 : 5;
+                return Number.isFinite(value) && value >= 1 && value <= scale;
+            },
+            message: 'GPA/CGPA নির্বাচিত স্কেলের সীমার মধ্যে হতে হবে'
+        }
+    },
     scale: { type: Number, enum: [4, 5], default: 5 }
 }, { _id: false });
 
@@ -137,6 +166,19 @@ const teacherSchema = new mongoose.Schema({
 
     // ৫. ঠিকানা
     presentAddress: {
+        houseNameBn: { type: String, trim: true, default: '', maxlength: 80 },
+        houseNameEn: { type: String, trim: true, default: '', maxlength: 80 },
+        villageBn: { type: String, trim: true, default: '', maxlength: 80 },
+        villageEn: { type: String, trim: true, default: '', maxlength: 80 },
+        unionBn: { type: String, trim: true, default: '', maxlength: 80 },
+        unionEn: { type: String, trim: true, default: '', maxlength: 80 },
+        wardNo: { type: String, trim: true, default: '', maxlength: 20 },
+        upazilaBn: { type: String, trim: true, default: '', maxlength: 80 },
+        upazilaEn: { type: String, trim: true, default: '', maxlength: 80 },
+        districtBn: { type: String, trim: true, default: '', maxlength: 80 },
+        districtEn: { type: String, trim: true, default: '', maxlength: 80 },
+        divisionBn: { type: String, trim: true, default: '', maxlength: 80 },
+        divisionEn: { type: String, trim: true, default: '', maxlength: 80 },
         houseOrRoad: { type: String, required: [true, 'বাড়ি বা রাস্তার নাম আবশ্যক'], trim: true },
         village: { type: String, required: [true, 'গ্রামের নাম আবশ্যক'], trim: true },
         postOffice: { type: String, trim: true, default: '' },
@@ -145,6 +187,19 @@ const teacherSchema = new mongoose.Schema({
         district: { type: String, trim: true, default: '' }
     },
     permanentAddress: {
+        houseNameBn: { type: String, trim: true, default: '', maxlength: 80 },
+        houseNameEn: { type: String, trim: true, default: '', maxlength: 80 },
+        villageBn: { type: String, trim: true, default: '', maxlength: 80 },
+        villageEn: { type: String, trim: true, default: '', maxlength: 80 },
+        unionBn: { type: String, trim: true, default: '', maxlength: 80 },
+        unionEn: { type: String, trim: true, default: '', maxlength: 80 },
+        wardNo: { type: String, trim: true, default: '', maxlength: 20 },
+        upazilaBn: { type: String, trim: true, default: '', maxlength: 80 },
+        upazilaEn: { type: String, trim: true, default: '', maxlength: 80 },
+        districtBn: { type: String, trim: true, default: '', maxlength: 80 },
+        districtEn: { type: String, trim: true, default: '', maxlength: 80 },
+        divisionBn: { type: String, trim: true, default: '', maxlength: 80 },
+        divisionEn: { type: String, trim: true, default: '', maxlength: 80 },
         houseOrRoad: { type: String, trim: true, default: '' },
         village: { type: String, trim: true, default: '' },
         postOffice: { type: String, trim: true, default: '' },
@@ -285,9 +340,14 @@ teacherSchema.pre('validate', async function (next) {
     let maxWeight = 0;
     let bestGpaNormalized = 0;
     let totalNormalizedGpa = 0;
+    let rankedQualificationCount = 0;
 
     if (Array.isArray(this.academicQualifications) && this.academicQualifications.length > 0) {
         for (const q of this.academicQualifications) {
+            if (!['GPA', 'CGPA'].includes(q.resultType || 'GPA') || !Number.isFinite(q.gpaOrCgpa)) {
+                continue;
+            }
+
             const weight = DEGREE_LEVEL_WEIGHTS[q.degreeLevel] || 0;
             // ৪ স্কেলের CGPA হলে সেটিকে ৫ স্কেলের সমমান করে তুলনা করা যেন GPA ও CGPA-এর মধ্যে নিখুঁত বিচার হয়
             const normalizedGpa = q.scale === 4
@@ -295,6 +355,7 @@ teacherSchema.pre('validate', async function (next) {
                 : Number(q.gpaOrCgpa.toFixed(3));
 
             totalNormalizedGpa += normalizedGpa;
+            rankedQualificationCount += 1;
 
             if (weight > maxWeight || (weight === maxWeight && normalizedGpa > bestGpaNormalized)) {
                 maxWeight = weight;
@@ -303,8 +364,8 @@ teacherSchema.pre('validate', async function (next) {
         }
     }
 
-    const avgGpa = this.academicQualifications?.length
-        ? Number((totalNormalizedGpa / this.academicQualifications.length).toFixed(3))
+    const avgGpa = rankedQualificationCount > 0
+        ? Number((totalNormalizedGpa / rankedQualificationCount).toFixed(3))
         : 0;
 
     this.rankingMetrics = {

@@ -195,6 +195,8 @@ export function calculateLiveRankMetrics(designation, academicQualifications = [
 
     if (Array.isArray(academicQualifications)) {
         academicQualifications.forEach((item) => {
+            if (!['GPA', 'CGPA'].includes(item.resultType || 'GPA')) return;
+
             const degInfo = DEGREE_LEVELS.find((d) => d.key === item.degreeLevel);
             const weight = degInfo ? degInfo.weight : 0;
             const rawGpa = Number(toEnglishDigits(item.gpaOrCgpa));
@@ -245,6 +247,24 @@ export function calculateLiveRankMetrics(designation, academicQualifications = [
     };
 }
 
+export function formatAcademicResult(qualification) {
+    const resultType = qualification?.resultType || 'GPA';
+    if (resultType === 'GPA' || resultType === 'CGPA') {
+        const score = qualification.gpaOrCgpa ?? '—';
+        const scale = Number(qualification.scale) === 4 ? 4 : 5;
+        return `${resultType} ${score} / ${scale}.00`;
+    }
+
+    if (resultType === 'Division' || resultType === 'Class') {
+        const gradeLabels = { First: '১ম', Second: '২য়', Third: '৩য়' };
+        const grade = gradeLabels[qualification.resultGrade] || '';
+        const suffix = resultType === 'Division' ? 'বিভাগ' : 'শ্রেণি';
+        return `${grade} ${suffix}`.trim();
+    }
+
+    return resultType === 'Passed' ? 'উত্তীর্ণ' : '—';
+}
+
 /**
  * ১০. তারিখ সুন্দরভাবে বাংলা বা ইংরেজিতে দেখানোর ফাংশন
  */
@@ -271,6 +291,29 @@ export function formatPhoneDisplay(phone, useBengali = false) {
     if (clean.length !== 11) return phone || '—';
     const formatted = `${clean.slice(0, 5)}-${clean.slice(5)}`;
     return useBengali ? toBengaliDigits(formatted) : formatted;
+}
+
+export function formatTeacherAddress(address = {}) {
+    address = address || {};
+    const formatBilingualPart = (nameBn, nameEn) => {
+        if (nameBn && nameEn && nameBn !== nameEn) return `${nameBn} (${nameEn})`;
+        return nameBn || nameEn || '';
+    };
+    const postOffice = [
+        address.postOffice,
+        address.postCode ? `(${address.postCode})` : ''
+    ].filter(Boolean).join(' ');
+
+    return [
+        formatBilingualPart(address.houseNameBn, address.houseNameEn) || address.houseOrRoad,
+        formatBilingualPart(address.villageBn, address.villageEn) || address.village,
+        formatBilingualPart(address.unionBn, address.unionEn),
+        address.wardNo ? `ওয়ার্ড ${address.wardNo}` : '',
+        postOffice,
+        formatBilingualPart(address.upazilaBn, address.upazilaEn) || address.upazila,
+        formatBilingualPart(address.districtBn, address.districtEn) || address.district,
+        formatBilingualPart(address.divisionBn, address.divisionEn)
+    ].filter(Boolean).join(', ') || '—';
 }
 
 /**

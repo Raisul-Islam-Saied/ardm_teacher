@@ -36,12 +36,12 @@ export default function DesktopSidebar({ isCollapsed, onToggleCollapse }) {
         <aside
             aria-label="Primary Sidebar Navigation"
             className={cn(
-                'hidden md:flex flex-col justify-between shrink-0 bg-gradient-to-b from-emerald-deep via-emerald to-emerald-deep text-[#EFE9D4] border-r border-gold/25 select-none transition-all duration-300 relative z-30 no-print',
+                'hidden md:flex fixed inset-y-0 left-0 h-screen flex-col overflow-hidden shrink-0 bg-gradient-to-b from-emerald-deep via-emerald to-emerald-deep text-[#EFE9D4] border-r border-gold/25 select-none transition-all duration-300 z-30 no-print',
                 isCollapsed ? 'w-[82px]' : 'w-[272px]'
             )}
         >
             {/* ১. সাইডবার ব্র্যান্ড হেডার ও কল্যাপ্স টগল বাটন */}
-            <div>
+            <div className="flex flex-1 min-h-0 flex-col">
                 <div className="h-[70px] px-4 flex items-center justify-between border-b border-white/10">
                     <div
                         onClick={() => navigate(isAdmin ? '/admin/dashboard' : '/teacher/portal')}
@@ -97,7 +97,7 @@ export default function DesktopSidebar({ isCollapsed, onToggleCollapse }) {
                 )}
 
                 {/* ৩. মেইন নেভিগেশন লিংকসমূহ */}
-                <nav className="mt-4 px-2.5 space-y-1">
+                <nav className="mt-4 min-h-0 flex-1 overflow-y-auto overscroll-contain px-2.5 space-y-1">
                     {!isCollapsed && (
                         <div className="px-2.5 pb-1.5 text-[10px] font-mono uppercase tracking-widest text-gold-soft/75">
                             {isAdmin && !isViewingTeacherPortal
@@ -166,7 +166,7 @@ export default function DesktopSidebar({ isCollapsed, onToggleCollapse }) {
             </div>
 
             {/* ৪. সাইডবার ফুটার: পোর্টাল সুইচ, পাবলিক রেজিস্ট্রেশন ও লগআউট */}
-            <div className="p-3 border-t border-white/10 space-y-1.5">
+            <div className="shrink-0 p-3 border-t border-white/10 space-y-1.5">
                 {/* অ্যাডমিন হলে ১ ক্লিকে নিজের টিচার পোর্টাল এবং অ্যাডমিন প্যানেলের মধ্যে সুইচ করার বাটন */}
                 {isAdmin && (
                     <button
