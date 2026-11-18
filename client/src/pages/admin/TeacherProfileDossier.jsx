@@ -11,6 +11,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import {
     ArrowLeft,
+    Pencil,
     User,
     GraduationCap,
     Fingerprint,
@@ -52,6 +53,9 @@ import {
     formatAcademicResult
 } from '@utils/formatters';
 import DigitalRegistryIdCard from '@pages/public/registration/DigitalRegistryIdCard';
+import AdminTeacherProfileEditor from './AdminTeacherProfileEditor';
+import { useAuth } from '@context/AuthContext';
+import { openOfficialIdCardPrint } from '@components/teacher/OfficialTeacherIdCard';
 import { cn } from '@utils/cn';
 
 const PROFILE_TABS = [
@@ -66,6 +70,7 @@ export default function TeacherProfileDossier() {
     const location = useLocation();
     const navigate = useNavigate();
     const toast = useToast();
+    const { isSuperAdmin } = useAuth();
 
     const [activeTab, setActiveTab] = useState('DOSSIER');
     const [teacher, setTeacher] = useState(() => location.state?.teacher || null);
@@ -75,6 +80,7 @@ export default function TeacherProfileDossier() {
     const [salaryHistory, setSalaryHistory] = useState([]);
 
     const [isIdCardModalOpen, setIsIdCardModalOpen] = useState(false);
+    const [isProfileEditorOpen, setIsProfileEditorOpen] = useState(false);
     const [selectedVoucher, setSelectedVoucher] = useState(null);
 
     // কোটা ওভাররাইড স্টেট
@@ -188,15 +194,18 @@ export default function TeacherProfileDossier() {
 
     // ৩. অ্যাকাউন্ট সক্রিয় / নিষ্ক্রিয় টগল হ্যান্ডলার
     const handleToggleAccountStatus = async () => {
-        const nextStatus = teacher.isActive === false ? true : false;
+        if (teacher.isActive === false) {
+            setIsProfileEditorOpen(true);
+            toast.info('পুনরায় যোগদানের তারিখ দিয়ে একই প্রোফাইল সক্রিয় করুন।');
+            return;
+        }
+
         try {
-            await axiosClient.patch(`/teachers/${teacher._id}/toggle-status`);
-            setTeacher((prev) => ({ ...prev, isActive: nextStatus }));
-            toast.info(
-                nextStatus
-                    ? `${teacher.fullNameBng}-এর পোর্টাল অ্যাকাউন্ট পুনরায় সক্রিয় (Active) করা হয়েছে।`
-                    : `${teacher.fullNameBng}-এর পোর্টাল অ্যাকাউন্ট সাময়িকভাবে নিষ্ক্রিয় (Deactivated) করা হয়েছে।`
-            );
+            const response = await axiosClient.patch(`/teachers/${teacher._id}/toggle-status`);
+            const updatedTeacher = response.data?.data?.teacher || response.data?.data;
+            if (!updatedTeacher) throw new Error('সার্ভার নতুন অ্যাকাউন্ট স্ট্যাটাস নিশ্চিত করেনি।');
+            setTeacher(updatedTeacher);
+            toast.info(`${teacher.fullNameBng}-এর অ্যাকাউন্ট নিষ্ক্রিয় করে সাবেক শিক্ষক তালিকায় রাখা হয়েছে।`);
         } catch (error) {
             toast.error(extractApiErrorMessage(error, 'অ্যাকাউন্টের অবস্থা পরিবর্তন করা যায়নি।'));
         }
@@ -220,6 +229,9 @@ export default function TeacherProfileDossier() {
     const usedQuotaThisMonth = Number(attendanceSummary?.totalQuotaUsed) || 0;
     const totalQuotaAllowed = Number(teacher.customLeaveQuota ?? attendanceSummary?.monthlyAllowedQuota ?? 2);
     const remainingQuota = Math.max(0, totalQuotaAllowed - usedQuotaThisMonth);
+    const employmentPeriods = teacher.employmentHistory?.length
+        ? teacher.employmentHistory
+        : [{ startDate: teacher.joiningDate, endDate: teacher.resignationDate }];
 
     return (
         <div className="space-y-6 animate-fade-up">
@@ -238,11 +250,21 @@ export default function TeacherProfileDossier() {
                 </Button>
 
                 <div className="flex flex-wrap items-center gap-2">
+                    {(isSuperAdmin || teacher?.role !== 'SuperAdmin') && teacher && (
+                        <Button
+                            variant="emerald"
+                            size="sm"
+                            leftIcon={Pencil}
+                            onClick={() => setIsProfileEditorOpen(true)}
+                        >
+                            <span className="font-bengali">তথ্য আপডেট</span>
+                        </Button>
+                    )}
                     <Button
                         variant="outline"
                         size="sm"
                         leftIcon={IdCard}
-                        onClick={() => setIsIdCardModalOpen(true)}
+                        onClick={() => openOfficialIdCardPrint(teacher)}
                     >
                         <span className="font-bengali">ডিজিটাল আইডি কার্ড</span>
                     </Button>
@@ -440,6 +462,31 @@ export default function TeacherProfileDossier() {
                             </dl>
                         </div>
                     </div>
+
+                    <section className="ledger-surface p-6 bg-paper-panel">
+                        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-ink-faint pb-3">
+                            <h3 className="font-bengali text-base font-bold text-emerald-deep">
+                                চাকরির মেয়াদসমূহ
+                            </h3>
+                            <Badge variant={teacher.isActive !== false ? 'success' : 'gold'} size="sm">
+                                {teacher.isActive !== false ? 'বর্তমানে কর্মরত' : 'সাবেক শিক্ষক'}
+                            </Badge>
+                        </div>
+                        <ol className="space-y-2">
+                            {employmentPeriods.map((period, index) => (
+                                <li key={`${period.startDate || 'period'}-${index}`} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-paper px-4 py-3 font-bengali text-sm">
+                                    <span>
+                                        মেয়াদ {toBengaliDigits(index + 1)} · যোগদান: {formatDisplayDate(period.startDate, 'bn')}
+                                    </span>
+                                    <span className="text-ink-soft">
+                                        {period.endDate
+                                            ? `চাকরি শেষ: ${formatDisplayDate(period.endDate, 'bn')}`
+                                            : teacher.isActive !== false ? 'চলমান' : 'শেষের তারিখ সংরক্ষিত নেই'}
+                                    </span>
+                                </li>
+                            ))}
+                        </ol>
+                    </section>
 
                     {/* শিক্ষাগত যোগ্যতা ও সিজিপিএ ছক */}
                     <div className="ledger-surface p-6 bg-paper-panel">
@@ -757,12 +804,23 @@ export default function TeacherProfileDossier() {
                                 onClick={handleToggleAccountStatus}
                             >
                                 <span className="font-bengali">
-                                    {teacher.isActive !== false ? 'অ্যাকাউন্ট নিষ্ক্রিয় করুন' : 'অ্যাকাউন্ট সক্রিয় করুন'}
+                                    {teacher.isActive !== false ? 'অ্যাকাউন্ট নিষ্ক্রিয় করুন' : 'পুনরায় যোগদান করুন'}
                                 </span>
                             </Button>
                         </div>
                     </div>
                 </div>
+            )}
+
+            {isProfileEditorOpen && teacher && (
+                <AdminTeacherProfileEditor
+                    teacher={teacher}
+                    onClose={() => setIsProfileEditorOpen(false)}
+                    onUpdated={(updatedTeacher) => {
+                        setTeacher(updatedTeacher);
+                        setQuotaInput(String(updatedTeacher.customLeaveQuota ?? 2));
+                    }}
+                />
             )}
 
             {/* ডিজিটাল আইডি কার্ড মডাল */}

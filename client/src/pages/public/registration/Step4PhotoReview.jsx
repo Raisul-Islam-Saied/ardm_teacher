@@ -71,6 +71,8 @@ export default function Step4PhotoReview({
     onJumpToStep,
     idPreview,
     rankPreview,
+    photoOnly = false,
+    allowPhotoRemove = true,
     stepErrors = {},
     submittingState = { isSubmitting: false, stageText: '', uploadPercent: 0 }
 }) {
@@ -253,7 +255,7 @@ export default function Step4PhotoReview({
                                     </span>
                                 </Button>
 
-                                {photoData?.dataUrl && (
+                                {photoData?.dataUrl && allowPhotoRemove && (
                                     <Button
                                         variant="ghost"
                                         size="sm"
@@ -278,6 +280,8 @@ export default function Step4PhotoReview({
                 </div>
             </section>
 
+            {!photoOnly && (
+                <>
             {/* =================================================================
                 SECTION 2: OPTIONAL PORTAL PASSWORD SETUP
                ================================================================= */}
@@ -581,6 +585,8 @@ export default function Step4PhotoReview({
                     </div>
                 )}
             </section>
+                </>
+            )}
         </div>
     );
 }

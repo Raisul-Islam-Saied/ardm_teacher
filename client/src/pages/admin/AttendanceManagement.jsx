@@ -94,6 +94,13 @@ export default function AttendanceManagement() {
     const [isSyncing, setIsSyncing] = useState(false);
     const [isSavingSheet, setIsSavingSheet] = useState(false);
     const [isHolidayConfirmOpen, setIsHolidayConfirmOpen] = useState(false);
+    const [isOpenDayConfirmOpen, setIsOpenDayConfirmOpen] = useState(false);
+    const [dayHolidayState, setDayHolidayState] = useState({
+        isHoliday: false,
+        isSpecialHoliday: false,
+        isOpenOverride: false,
+        holidayTitle: ''
+    });
 
     // ম্যানুয়াল ওভাররাইড মডাল স্টেট
     const [overrideRow, setOverrideRow] = useState(null);
@@ -103,7 +110,7 @@ export default function AttendanceManagement() {
         remarks: ''
     });
 
-    const isSelectedHoliday = rows.length > 0 && rows.every((row) => row.status === 'Holiday');
+    const isSelectedHoliday = dayHolidayState.isHoliday;
 
     // তারিখ পরিবর্তন করলে বা সার্ভার থেকে সিঙ্ক করলে হাজিরা লোড করা
     const loadAttendanceForDate = useCallback(async (targetDate, showNotify = false) => {
@@ -114,6 +121,12 @@ export default function AttendanceManagement() {
             if (!Array.isArray(serverRecords)) {
                 throw new Error('সার্ভার থেকে হাজিরার তালিকা পাওয়া যায়নি।');
             }
+            setDayHolidayState({
+                isHoliday: Boolean(res?.data?.data?.isHoliday),
+                isSpecialHoliday: Boolean(res?.data?.data?.isSpecialHoliday),
+                isOpenOverride: Boolean(res?.data?.data?.isOpenOverride),
+                holidayTitle: res?.data?.data?.holidayTitle || ''
+            });
             setRows(serverRecords.map((rec) => {
                 const teacher = rec.teacher || {};
                 const inTime24 = rec.inTime24 || '';
@@ -206,6 +219,28 @@ export default function AttendanceManagement() {
             setIsHolidayConfirmOpen(false);
         } catch (error) {
             toast.error(extractApiErrorMessage(error, 'ছুটির দিন সংরক্ষণ করা যায়নি।'));
+        } finally {
+            setIsSavingSheet(false);
+        }
+    };
+
+    const handleOpenSelectedDay = async () => {
+        setIsSavingSheet(true);
+        try {
+            if (dayHolidayState.isSpecialHoliday) {
+                await axiosClient.delete(`/attendance/special-date/${selectedDate}`);
+            } else {
+                await axiosClient.post('/attendance/special-date', {
+                    date: selectedDate,
+                    title: 'প্রাতিষ্ঠানিক কর্মদিবস',
+                    isHoliday: false
+                });
+            }
+            await loadAttendanceForDate(selectedDate, false);
+            toast.success(`${formatDisplayDate(selectedDate, 'bn')}-এর ছুটি বাতিল করে দিনটি খোলা ঘোষণা করা হয়েছে।`);
+            setIsOpenDayConfirmOpen(false);
+        } catch (error) {
+            toast.error(extractApiErrorMessage(error, 'দিনটি খোলা ঘোষণা করা যায়নি।'));
         } finally {
             setIsSavingSheet(false);
         }
@@ -304,10 +339,41 @@ export default function AttendanceManagement() {
                             />
                         </div>
 
-                        {isSelectedHoliday ? (
-                            <Badge variant="gold" size="md" dot>
-                                এই তারিখটি ছুটির দিন হিসেবে নির্ধারিত
-                            </Badge>
+                        {dayHolidayState.isOpenOverride ? (
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Badge variant="success" size="md" dot>
+                                    এই তারিখটি খোলা দিন হিসেবে নির্ধারিত
+                                </Badge>
+                                <Button
+                                    variant="gold"
+                                    size="xs"
+                                    leftIcon={Sun}
+                                    isLoading={isSavingSheet}
+                                    onClick={() => setIsHolidayConfirmOpen(true)}
+                                >
+                                    <span className="font-bengali">এ দিনটিকে আবার ছুটি ঘোষণা করুন</span>
+                                </Button>
+                            </div>
+                        ) : isSelectedHoliday ? (
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Badge variant="gold" size="md" dot>
+                                    {dayHolidayState.isOpenOverride
+                                        ? 'এই তারিখটি খোলা দিন হিসেবে নির্ধারিত'
+                                        : dayHolidayState.holidayTitle || 'এই তারিখটি ছুটির দিন হিসেবে নির্ধারিত'}
+                                </Badge>
+                                {!dayHolidayState.isOpenOverride && (
+                                    <Button
+                                        variant="danger"
+                                        size="xs"
+                                        leftIcon={Sun}
+                                        isLoading={isSavingSheet}
+                                        onClick={() => setIsOpenDayConfirmOpen(true)}
+                                        className="border border-ink-faint"
+                                    >
+                                        <span className="font-bengali">এই দিনটিকে খোলা দিন করুন</span>
+                                    </Button>
+                                )}
+                            </div>
                         ) : (
                             <Button
                                 variant="ghost"
@@ -511,6 +577,19 @@ export default function AttendanceManagement() {
                 messageBng={`${formatDisplayDate(selectedDate, 'bn')} তারিখকে প্রতিষ্ঠানের ছুটি হিসেবে ঘোষণা করা হবে। এতে ওই দিনের হাজিরা ও বেতন গণনায় প্রভাব পড়বে।`}
                 confirmText="হ্যাঁ, ছুটি ঘোষণা করুন"
                 variant="gold"
+                isLoading={isSavingSheet}
+            />
+
+            <ConfirmDialog
+                isOpen={isOpenDayConfirmOpen}
+                onClose={() => {
+                    if (!isSavingSheet) setIsOpenDayConfirmOpen(false);
+                }}
+                onConfirm={handleOpenSelectedDay}
+                titleBng="এই তারিখে কর্মদিবস খুলবেন?"
+                messageBng={`${formatDisplayDate(selectedDate, 'bn')} তারিখের ছুটির ঘোষণা বাতিল করে খোলা দিন হিসেবে সেট করা হবে। ওই দিন উপস্থিত, বিলম্ব ও বেতন গণনার স্বাভাবিক নিয়ম আবার চালু হবে।`}
+                confirmText="হ্যাঁ, দিনটি খোলা করুন"
+                variant="emerald"
                 isLoading={isSavingSheet}
             />
 

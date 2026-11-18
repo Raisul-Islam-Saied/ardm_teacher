@@ -65,6 +65,17 @@ const academicQualificationSchema = new mongoose.Schema({
     scale: { type: Number, enum: [4, 5], default: 5 }
 }, { _id: false });
 
+const employmentPeriodSchema = new mongoose.Schema({
+    startDate: {
+        type: Date,
+        required: true
+    },
+    endDate: {
+        type: Date,
+        default: null
+    }
+}, { _id: false });
+
 const teacherSchema = new mongoose.Schema({
     // ১. ১০ সংখ্যার স্বয়ংক্রিয় ইউনিক টিচার আইডি (যেমন: 1026030301) ও বায়োমেট্রিক আইডি
     teacherCode: {
@@ -241,6 +252,10 @@ const teacherSchema = new mongoose.Schema({
         type: Date,
         default: null
     },
+    employmentHistory: {
+        type: [employmentPeriodSchema],
+        default: []
+    },
 
     // ৭. শিক্ষাগত যোগ্যতা ও অটো-র‍্যাংকিং স্কোর
     academicQualifications: {
@@ -329,6 +344,15 @@ const teacherSchema = new mongoose.Schema({
 
 // সেভ হওয়ার আগে বাংলা পদবী, স্টাফ ক্যাটাগরি এবং র‍্যাংকিং মেট্রিক্স স্বয়ংক্রিয়ভাবে হিসাব করা
 teacherSchema.pre('validate', async function (next) {
+    if (
+        this.registrationStatus === 'Approved'
+        && this.isActive !== false
+        && this.employmentHistory.length === 0
+        && this.joiningDate
+    ) {
+        this.employmentHistory.push({ startDate: this.joiningDate, endDate: null });
+    }
+
     // ১. পদবীর বাংলা নাম ও বেস র‍্যাংক সেট করা
     const desigInfo = DESIGNATION_DETAILS.find(d => d.titleEng === this.designation)
         || DESIGNATION_DETAILS[DESIGNATION_DETAILS.length - 1];

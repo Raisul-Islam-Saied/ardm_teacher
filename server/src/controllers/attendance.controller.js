@@ -38,12 +38,20 @@ const setSpecialDateConfig = asyncHandler(async (req, res) => {
         record.status = updatedEval.status;
         record.deductionWeight = updatedEval.deductionWeight;
         record.directSalaryPenaltyDays = updatedEval.directSalaryPenaltyDays;
-        record.remarks = `স্পেশাল ইন-টাইম (${customInTime}) অনুযায়ী পুনরায় সমন্বয়কৃত`;
+        record.remarks = isHoliday
+            ? updatedEval.remarks
+            : `স্পেশাল ইন-টাইম (${customInTime}) অনুযায়ী পুনরায় সমন্বয়কৃত`;
         await record.save();
     }
 
     return res.status(200).json(
-        new ApiResponse(200, `${date} তারিখের ইন-টাইম সফলভাবে ${customInTime} সেট করা হয়েছে!`, specialDate)
+        new ApiResponse(
+            200,
+            isHoliday
+                ? `${date} তারিখ সফলভাবে ছুটির দিন ঘোষণা করা হয়েছে!`
+                : `${date} তারিখ সফলভাবে খোলা দিন ঘোষণা করা হয়েছে!`,
+            specialDate
+        )
     );
 });
 
@@ -57,16 +65,8 @@ const deleteSpecialDate = asyncHandler(async (req, res) => {
     if (!specialDate || !specialDate.isHoliday) {
         throw new ApiError(404, 'ছুটির দিনটি খুঁজে পাওয়া যায়নি!');
     }
-    const hasCustomSchedule =
-        specialDate.customInTime !== '09:00' ||
-        specialDate.customLateLimit !== '10:00' ||
-        specialDate.ignoreThirtyPercentRule;
-    if (!hasCustomSchedule) {
-        await specialDate.deleteOne();
-    } else {
-        specialDate.isHoliday = false;
-        await specialDate.save();
-    }
+    specialDate.isHoliday = false;
+    await specialDate.save();
 
     const attendanceRecords = await Attendance.find({
         date: req.params.date,
@@ -85,7 +85,7 @@ const deleteSpecialDate = asyncHandler(async (req, res) => {
         record.remarks = evaluated.remarks;
         await record.save();
     }
-    return res.status(200).json(new ApiResponse(200, 'বিশেষ দিনটি মুছে ফেলা হয়েছে।'));
+    return res.status(200).json(new ApiResponse(200, 'তারিখটি পুনরায় খোলা দিন হিসেবে ফিরিয়ে নেওয়া হয়েছে।', specialDate));
 });
 
 const getDailyAttendance = asyncHandler(async (req, res) => {
@@ -115,7 +115,9 @@ const getDailyAttendance = asyncHandler(async (req, res) => {
         monthlyQuotaByTeacherId.set(key, (monthlyQuotaByTeacherId.get(key) || 0) + (Number(log.deductionWeight) || 0));
     });
     const weekendDays = settings.attendancePolicy?.weekendDays || [5];
-    const isHoliday = Boolean(specialDate?.isHoliday) || weekendDays.includes(moment.tz(date, 'YYYY-MM-DD', 'Asia/Dhaka').day());
+    const isHoliday = specialDate
+        ? Boolean(specialDate.isHoliday)
+        : weekendDays.includes(moment.tz(date, 'YYYY-MM-DD', 'Asia/Dhaka').day());
 
     const records = teachers.map((teacher) => {
         const log = logsByTeacherId.get(String(teacher._id));
@@ -132,7 +134,14 @@ const getDailyAttendance = asyncHandler(async (req, res) => {
         };
     });
 
-    return res.status(200).json(new ApiResponse(200, 'দৈনিক হাজিরার তালিকা', { date, records }));
+    return res.status(200).json(new ApiResponse(200, 'দৈনিক হাজিরার তালিকা', {
+        date,
+        isHoliday,
+        isSpecialHoliday: Boolean(specialDate?.isHoliday),
+        isOpenOverride: Boolean(specialDate && !specialDate.isHoliday),
+        holidayTitle: specialDate?.title || '',
+        records
+    }));
 });
 
 // ২. সিঙ্গেল পাঞ্চ রেকর্ড

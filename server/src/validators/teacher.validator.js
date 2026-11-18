@@ -287,7 +287,6 @@ const publicSelfRegisterValidator = [
 ];
 
 const updateTeacherValidator = [
-    body('role').optional().isIn(Object.values(ROLES)).withMessage('পোর্টাল অ্যাক্সেস রোল সঠিক নয়'),
     body('fullNameEng').optional().customSanitizer(sanitizeClean).matches(ENG_NAME_REGEX),
     body('fullNameBng').optional().customSanitizer(sanitizeClean).matches(BNG_NAME_REGEX),
     body('fathersNameEng').optional().customSanitizer(sanitizeClean).matches(ENG_NAME_REGEX),
@@ -297,7 +296,65 @@ const updateTeacherValidator = [
     body('phone').optional().customSanitizer(sanitizeClean).matches(BD_PHONE_REGEX),
     body('designation').optional().isIn(DESIGNATIONS),
     body('bloodGroup').optional().isIn(BLOOD_GROUPS),
-    body('basicSalary').optional().isFloat({ min: 0 })
+    body('email').optional({ checkFalsy: true }).isEmail().normalizeEmail(),
+    body('dateOfBirth').optional({ checkFalsy: true }).isISO8601(),
+    body('joiningDate').optional({ checkFalsy: true }).isISO8601(),
+    body('resignationDate').optional({ nullable: true, checkFalsy: true }).isISO8601(),
+    body('gender').optional({ checkFalsy: true }).isIn(['Male', 'Female', 'Other']),
+    body('religion').optional({ checkFalsy: true }).isIn(['Islam', 'Hinduism', 'Buddhism', 'Christianity', 'Other']),
+    body('maritalStatus').optional({ checkFalsy: true }).isIn(['Single', 'Married', 'Widowed', 'Divorced']),
+    body('nidNumber').optional({ checkFalsy: true }).customSanitizer(sanitizeClean).matches(NID_REGEX),
+    body('birthRegNumber').optional({ checkFalsy: true }).customSanitizer(sanitizeClean).matches(BIRTH_REG_REGEX),
+    body('indexNumber').optional({ checkFalsy: true }).customSanitizer(sanitizeClean).isLength({ max: 50 }),
+    body('emergencyContact').optional().isObject(),
+    body('emergencyContact.contactName').optional({ checkFalsy: true }).customSanitizer(sanitizeClean).isLength({ max: 80 }),
+    body('emergencyContact.relationship').optional({ checkFalsy: true }).customSanitizer(sanitizeClean).isLength({ max: 40 }),
+    body('emergencyContact.phone').optional({ checkFalsy: true }).customSanitizer(sanitizeClean).matches(BD_PHONE_REGEX),
+    body('presentAddress').optional().isObject(),
+    body('permanentAddress').optional().isObject(),
+    ...['presentAddress', 'permanentAddress'].flatMap((addressKey) => [
+        ...[
+            ...ADDRESS_TEXT_FIELDS,
+            ['houseOrRoad', 'বাড়ি বা রাস্তা'],
+            ['village', 'গ্রাম'],
+            ['postOffice', 'ডাকঘর'],
+            ['postCode', 'পোস্ট কোড'],
+            ['upazila', 'উপজেলা'],
+            ['district', 'জেলা']
+        ].map(([field, label]) => (
+            body(`${addressKey}.${field}`)
+                .optional({ checkFalsy: true })
+                .customSanitizer(sanitizeClean)
+                .isLength({ max: 80 }).withMessage(`${label} সর্বোচ্চ ৮০ অক্ষরের মধ্যে হতে হবে`)
+        )),
+        body(`${addressKey}.wardNo`).optional({ checkFalsy: true }).customSanitizer(sanitizeClean).matches(/^\d{1,3}$/)
+    ]),
+    body('academicQualifications').optional().isArray({ max: 6 }),
+    body('academicQualifications.*.degreeLevel').optional().isIn(Object.keys(DEGREE_LEVEL_WEIGHTS)),
+    body('academicQualifications.*.examTitle').optional({ checkFalsy: true }).customSanitizer(sanitizeClean).isLength({ max: 100 }),
+    body('academicQualifications.*.majorOrGroup').optional({ checkFalsy: true }).customSanitizer(sanitizeClean).isLength({ max: 100 }),
+    body('academicQualifications.*.boardOrUniversity').optional({ checkFalsy: true }).customSanitizer(sanitizeClean).isLength({ max: 100 }),
+    body('academicQualifications.*.rollNumber').optional({ checkFalsy: true }).customSanitizer(sanitizeClean).isLength({ max: 50 }),
+    body('academicQualifications.*.registrationNumber').optional({ checkFalsy: true }).customSanitizer(sanitizeClean).isLength({ max: 50 }),
+    body('academicQualifications.*.passingYear').optional().isInt({ min: 1960, max: 2050 }),
+    body('academicQualifications.*.courseDuration').optional({ checkFalsy: true }).customSanitizer(sanitizeClean).isLength({ max: 30 }),
+    body('academicQualifications.*.resultType').optional().isIn(['GPA', 'CGPA', 'Division', 'Class', 'Passed']),
+    body('academicQualifications.*.resultGrade').optional({ checkFalsy: true }).isIn(['First', 'Second', 'Third']),
+    body('academicQualifications.*.gpaOrCgpa').optional({ nullable: true }).isFloat({ min: 1, max: 5 }),
+    body('academicQualifications.*.scale').optional().isIn([4, 5, '4', '5']),
+    body('subject').optional({ checkFalsy: true }).customSanitizer(sanitizeClean).isLength({ max: 100 }),
+    body('employmentType').optional().isIn(Object.values(EMPLOYMENT_TYPES)),
+    body('basicSalary').optional().isFloat({ min: 0 }),
+    body('biometricDeviceId').optional().isInt({ min: 1 }),
+    body('customLeaveQuota').optional().isFloat({ min: 0, max: 15 }),
+    body('paymentMethod').optional().isIn(Object.values(PAYMENT_METHODS)),
+    body('bankDetails').optional().isObject(),
+    ...['bankName', 'branchName', 'accountHolderName', 'accountNumber', 'routingNumber'].map((field) => (
+        body(`bankDetails.${field}`).optional({ checkFalsy: true }).customSanitizer(sanitizeClean).isLength({ max: 100 })
+    )),
+    body('role').optional().isIn(Object.values(ROLES)).withMessage('পোর্টাল অ্যাক্সেস রোল সঠিক নয়'),
+    body('isActive').optional().isBoolean(),
+    body('registrationStatus').optional().isIn(['Approved', 'Pending', 'Rejected'])
 ];
 
 module.exports = {

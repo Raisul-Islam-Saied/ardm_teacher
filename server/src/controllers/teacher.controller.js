@@ -277,10 +277,76 @@ const resetTeacherPassword = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, 'শিক্ষকের পাসওয়ার্ড সফলভাবে রিসেট করা হয়েছে!'));
 });
 
+function getEmploymentHistory(teacher) {
+    return (teacher.employmentHistory || []).map((period) => ({
+        startDate: period.startDate,
+        endDate: period.endDate || null
+    }));
+}
+
+function findOpenEmploymentPeriodIndex(history) {
+    for (let index = history.length - 1; index >= 0; index -= 1) {
+        if (!history[index].endDate) return index;
+    }
+    return -1;
+}
+
+function closeEmploymentPeriod(teacher, fallbackStartDate, endDate) {
+    const history = getEmploymentHistory(teacher);
+    const end = new Date(endDate);
+    const openIndex = findOpenEmploymentPeriodIndex(history);
+
+    if (openIndex >= 0) {
+        if (new Date(history[openIndex].startDate) > end) {
+            throw new ApiError(400, 'চাকরি ছাড়ার তারিখ যোগদানের তারিখের আগে হতে পারবে না।');
+        }
+        history[openIndex].endDate = end;
+    } else {
+        const startDate = fallbackStartDate ? new Date(fallbackStartDate) : null;
+        if (!startDate || Number.isNaN(startDate.getTime()) || startDate > end) {
+            throw new ApiError(400, 'চাকরির মেয়াদের যোগদান ও ছাড়ার তারিখ সঠিক নয়।');
+        }
+        history.push({ startDate, endDate: end });
+    }
+
+    teacher.set('employmentHistory', history);
+}
+
+function startEmploymentPeriod(
+    teacher,
+    startDate,
+    fallbackPreviousJoiningDate = teacher.joiningDate,
+    fallbackPreviousEndDate = teacher.resignationDate
+) {
+    if (!startDate) {
+        throw new ApiError(400, 'পুনরায় সক্রিয় করার আগে নতুন যোগদানের তারিখ দিন।');
+    }
+    const start = new Date(startDate);
+    if (Number.isNaN(start.getTime())) {
+        throw new ApiError(400, 'পুনরায় যোগদানের তারিখ সঠিক নয়।');
+    }
+
+    const history = getEmploymentHistory(teacher);
+    if (history.length === 0 && fallbackPreviousJoiningDate && fallbackPreviousEndDate) {
+        history.push({
+            startDate: fallbackPreviousJoiningDate,
+            endDate: fallbackPreviousEndDate
+        });
+    }
+    const lastPeriod = history[history.length - 1];
+    const previousEnd = lastPeriod?.endDate || fallbackPreviousEndDate;
+    if (previousEnd && start <= new Date(previousEnd)) {
+        throw new ApiError(400, 'পুনরায় যোগদানের তারিখ আগের চাকরির শেষ তারিখের পরের দিন বা তার পরে হতে হবে।');
+    }
+
+    history.push({ startDate: start, endDate: null });
+    teacher.set('employmentHistory', history);
+    teacher.joiningDate = start;
+    teacher.resignationDate = null;
+}
+
 // ৮. শিক্ষকের তথ্য আপডেট এবং স্বয়ংক্রিয় র‍্যাংক পুনর্বিন্যাস
 const updateTeacher = asyncHandler(async (req, res) => {
-    delete req.body.password;
-
     const teacher = await Teacher.findById(req.params.id);
     if (!teacher) {
         throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
@@ -292,11 +358,110 @@ const updateTeacher = asyncHandler(async (req, res) => {
         throw new ApiError(403, 'সুপার অ্যাডমিন অ্যাকাউন্ট পরিবর্তন বা নির্ধারণের অনুমতি শুধু সুপার অ্যাডমিনের রয়েছে।');
     }
 
-    Object.assign(teacher, req.body);
+    const wasActive = teacher.isActive !== false;
+    const previousJoiningDate = teacher.joiningDate;
+    const previousResignationDate = teacher.resignationDate;
+    const editableFields = [
+        'fullNameBng',
+        'fullNameEng',
+        'fathersNameBng',
+        'fathersNameEng',
+        'mothersNameBng',
+        'mothersNameEng',
+        'dateOfBirth',
+        'gender',
+        'religion',
+        'bloodGroup',
+        'maritalStatus',
+        'nidNumber',
+        'birthRegNumber',
+        'indexNumber',
+        'phone',
+        'email',
+        'designation',
+        'subject',
+        'employmentType',
+        'joiningDate',
+        'resignationDate',
+        'academicQualifications',
+        'basicSalary',
+        'paymentMethod',
+        'customLeaveQuota',
+        'biometricDeviceId',
+        'role',
+        'registrationStatus',
+        'isActive'
+    ];
+
+    editableFields.forEach((field) => {
+        if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+            teacher.set(field, req.body[field]);
+        }
+    });
+
+    const editableNestedFields = {
+        emergencyContact: ['contactName', 'relationship', 'phone'],
+        presentAddress: [
+            'houseNameBn', 'houseNameEn', 'villageBn', 'villageEn', 'unionBn', 'unionEn', 'wardNo',
+            'upazilaBn', 'upazilaEn', 'districtBn', 'districtEn', 'divisionBn', 'divisionEn',
+            'houseOrRoad', 'village', 'postOffice', 'postCode', 'upazila', 'district'
+        ],
+        permanentAddress: [
+            'houseNameBn', 'houseNameEn', 'villageBn', 'villageEn', 'unionBn', 'unionEn', 'wardNo',
+            'upazilaBn', 'upazilaEn', 'districtBn', 'districtEn', 'divisionBn', 'divisionEn',
+            'houseOrRoad', 'village', 'postOffice', 'postCode', 'upazila', 'district'
+        ],
+        bankDetails: ['bankName', 'branchName', 'accountHolderName', 'accountNumber', 'routingNumber']
+    };
+
+    Object.entries(editableNestedFields).forEach(([field, allowedFields]) => {
+        if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+            const existingValue = teacher[field];
+            const existing = existingValue?.toObject
+                ? existingValue.toObject()
+                : existingValue || {};
+            const changes = Object.fromEntries(
+                allowedFields
+                    .filter((key) => Object.prototype.hasOwnProperty.call(req.body[field] || {}, key))
+                    .map((key) => [key, req.body[field][key]])
+            );
+            teacher.set(field, { ...existing, ...changes });
+        }
+    });
+
+    if (req.body.isActive === false && wasActive) {
+        if (!teacher.resignationDate) teacher.resignationDate = new Date();
+        closeEmploymentPeriod(teacher, previousJoiningDate, teacher.resignationDate);
+    } else if (req.body.isActive === true && !wasActive) {
+        startEmploymentPeriod(
+            teacher,
+            req.body.joiningDate,
+            previousJoiningDate,
+            previousResignationDate
+        );
+    } else if (req.body.isActive === true) {
+        teacher.resignationDate = null;
+        if (req.body.joiningDate) {
+            const history = getEmploymentHistory(teacher);
+            const openIndex = findOpenEmploymentPeriodIndex(history);
+            if (openIndex >= 0) {
+                history[openIndex].startDate = teacher.joiningDate;
+                teacher.set('employmentHistory', history);
+            }
+        }
+    }
+
     await teacher.save();
     await recalculateAllTeachersRank();
 
     const updated = await Teacher.findById(req.params.id);
+    await AuditLog.recordLog({
+        req,
+        action: 'UPDATE_TEACHER_PROFILE',
+        module: 'Teacher',
+        targetId: String(teacher._id),
+        description: `${teacher.fullNameBng}-এর পূর্ণ প্রোফাইল ও অ্যাকাউন্ট কন্ট্রোল হালনাগাদ করা হয়েছে`
+    });
     res.status(200).json(new ApiResponse(200, 'শিক্ষকের তথ্য ও র‍্যাংক সফলভাবে আপডেট করা হয়েছে', updated));
 });
 
@@ -307,11 +472,14 @@ const toggleTeacherActiveStatus = asyncHandler(async (req, res) => {
         throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
     }
 
-    teacher.isActive = !teacher.isActive;
-    if (!teacher.isActive && !teacher.resignationDate) {
-        teacher.resignationDate = new Date();
-    } else if (teacher.isActive) {
-        teacher.resignationDate = null;
+    if (teacher.isActive !== false) {
+        const resignationDate = new Date();
+        closeEmploymentPeriod(teacher, teacher.joiningDate, resignationDate);
+        teacher.isActive = false;
+        teacher.resignationDate = resignationDate;
+    } else {
+        startEmploymentPeriod(teacher, req.body.joiningDate);
+        teacher.isActive = true;
     }
     await teacher.save();
     await recalculateAllTeachersRank();
