@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const Teacher = require('../models/Teacher');
+const Student = require('../models/Student');
 
 const OPTIONAL_UNIQUE_TEACHER_FIELDS = [
     'uid',
@@ -41,6 +42,18 @@ const connectDB = async (mongoUri = process.env.MONGO_URI || 'mongodb://127.0.0.
 
         console.log(`✅ MongoDB Connected: ${conn.connection.host} (DB: ${conn.connection.name})`);
         await cleanupOptionalUniqueTeacherFields();
+        for (const field of ['uid', 'boardRegNo', 'biometricDeviceId']) {
+            await Student.collection.updateMany({ [field]: { $type: 10 } }, { $unset: { [field]: 1 } });
+            await Student.collection.updateMany({ [field]: { $type: 'string', $regex: /^\s*$/ } }, { $unset: { [field]: 1 } });
+        }
+        for (const field of ['uid', 'boardRegNo', 'biometricDeviceId']) {
+            await Student.collection.updateMany({ [field]: { $type: 10 } }, { $unset: { [field]: 1 } });
+            await Student.collection.updateMany({ [field]: { $type: 'string', $regex: /^\s*$/ } }, { $unset: { [field]: 1 } });
+        }
+        for (const field of ['uid', 'boardRegNo', 'biometricDeviceId']) {
+            await Student.collection.updateMany({ [field]: { $type: 10 } }, { $unset: { [field]: 1 } });
+            await Student.collection.updateMany({ [field]: { $type: 'string', $regex: /^\s*$/ } }, { $unset: { [field]: 1 } });
+        }
 
         mongoose.connection.on('error', (err) => {
             console.error(`❌ MongoDB Runtime Error: ${err}`);

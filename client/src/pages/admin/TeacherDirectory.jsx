@@ -192,6 +192,11 @@ export default function TeacherDirectory() {
                                 </span>
                                 <span className="mt-2 flex flex-wrap items-center gap-2">
                                     <Badge variant="gold" size="sm" mono>{teacher.teacherCode || 'No ID'}</Badge>
+                                    {teacher.assignedClass && (
+                                        <Badge variant="emerald-subtle" size="sm">
+                                            শ্রেণি শিক্ষক: {teacher.assignedClass}
+                                        </Badge>
+                                    )}
                                     {statusView === 'FORMER' && (
                                         <span className="rounded-full bg-paper-deep px-2 py-0.5 font-bengali text-[10px] text-ink-muted">
                                             সাবেক

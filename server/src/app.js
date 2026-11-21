@@ -11,10 +11,12 @@ const errorHandler = require('./middlewares/error.middleware');
 
 const authRoutes = require('./routes/auth.routes');
 const teacherRoutes = require('./routes/teacher.routes');
+const studentRoutes = require('./routes/student.routes');
 const attendanceRoutes = require('./routes/attendance.routes');
 const payrollRoutes = require('./routes/payroll.routes');
 const uploadRoutes = require('./routes/upload.routes');
 const systemRoutes = require('./routes/system.routes');
+const resultsRoutes = require('./routes/results.routes');
 const { zkTecoHandshake, zkTecoReceiveLogs } = require('./controllers/attendance.controller');
 
 const app = express();
@@ -50,6 +52,11 @@ const apiLimiter = rateLimit({
     legacyHeaders: false,
 });
 app.use('/api', apiLimiter);
+app.use(
+    '/api/v1/results',
+    express.text({ type: ['text/plain', 'application/json'], limit: '5mb' }),
+    resultsRoutes
+);
 
 app.use(express.json({ limit: '50kb' }));
 app.use(express.urlencoded({ extended: true, limit: '50kb' }));
@@ -69,10 +76,12 @@ app.get('/health', (req, res) => {
         activeRoutes: [
             '/api/v1/auth',
             '/api/v1/teachers',
+            '/api/v1/students',
             '/api/v1/attendance',
             '/api/v1/payroll',
             '/api/v1/upload',
             '/api/v1/system',
+            '/api/v1/results',
             '/iclock/cdata'
         ],
         timezone: process.env.TIMEZONE,
@@ -90,6 +99,7 @@ app.get('/iclock/getrequest', (req, res) => {
 // Enterprise API v1 Routes
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/teachers', teacherRoutes);
+app.use('/api/v1/students', studentRoutes);
 app.use('/api/v1/attendance', attendanceRoutes);
 app.use('/api/v1/payroll', payrollRoutes);
 app.use('/api/v1/upload', uploadRoutes);

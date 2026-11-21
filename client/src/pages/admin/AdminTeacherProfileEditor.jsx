@@ -258,6 +258,8 @@ export default function AdminTeacherProfileEditor({ teacher, onClose, onUpdated 
             customLeaveQuota,
             paymentMethod: adminFields.paymentMethod,
             bankDetails: adminFields.bankDetails,
+            assignedClass: adminFields.assignedClass || '',
+            canEditAssignedClass: Boolean(adminFields.canEditAssignedClass),
             role: adminFields.role,
             registrationStatus: adminFields.registrationStatus,
             isActive: adminFields.isActive
@@ -373,6 +375,32 @@ export default function AdminTeacherProfileEditor({ teacher, onClose, onUpdated 
                         বায়োমেট্রিক আইডি ও পোর্টাল অ্যাক্সেসের নিয়ন্ত্রণ এখান থেকে আপডেট হবে।
                     </div>
                     <div className="grid grid-cols-1 gap-x-5 sm:grid-cols-2">
+                        
+                        <FormSelect
+                            labelEng="Assigned Class (Class Teacher)"
+                            labelBng="শ্রেণি শিক্ষক হিসেবে দায়িত্ব (Assigned Class)"
+                            variant="erp"
+                            value={adminFields.assignedClass}
+                            onChange={(event) => {
+                                const val = event.target.value;
+                                updateAdminField('assignedClass', val);
+                                if (!val) updateAdminField('canEditAssignedClass', false);
+                            }}
+                            options={[
+                                { value: '', label: 'কোনো শ্রেণির ক্লাস টিচার নন (সাধারণ শিক্ষক / স্টাফ)' },
+                                'প্লে', 'নার্সারি', 'কেজি', '১ম', '২য়', '৩য়', '৪র্থ', '৫ম', '৬ষ্ঠ', '৭ম', '৮ম', '৯ম', '১০ম'
+                            ]}
+                        />
+                        {adminFields.assignedClass && (
+                            <label className="sm:col-span-2 flex items-center gap-2 rounded-xl border border-gold/40 bg-gold-subtle/20 p-3 font-bengali text-sm text-emerald-deep">
+                                <input
+                                    type="checkbox"
+                                    checked={adminFields.canEditAssignedClass}
+                                    onChange={(event) => updateAdminField('canEditAssignedClass', event.target.checked)}
+                                />
+                                <span>এই শিক্ষক তার নিজ নির্ধারিত শ্রেণির (${adminFields.assignedClass}) শিক্ষার্থীদের প্রোফাইল ও তথ্য এডিট করতে পারবেন</span>
+                            </label>
+                        )}
                         <FormSelect labelEng="Employment Type" labelBng="চাকরির ধরন" variant="erp" value={adminFields.employmentType} onChange={(event) => updateAdminField('employmentType', event.target.value)} options={['Non-MPO', 'MPO', 'Part-Time', 'Contractual']} />
                         <FormInput labelEng="Resignation Date" labelBng="চাকরি ছাড়ার তারিখ" type="date" variant="erp" value={adminFields.resignationDate} onChange={(event) => updateAdminField('resignationDate', event.target.value)} />
                         <FormInput labelEng="Monthly Basic Salary (BDT)" labelBng="মাসিক মূল বেতন (টাকা)" inputMode="decimal" isMonoText variant="erp" value={adminFields.basicSalary} error={stepErrors.basicSalary} onChange={(event) => updateAdminField('basicSalary', event.target.value)} required />
@@ -415,6 +443,38 @@ export default function AdminTeacherProfileEditor({ teacher, onClose, onUpdated 
                             onChange={(event) => updateAdminField('registrationStatus', event.target.value)}
                             options={['Approved', 'Pending', 'Rejected']}
                         />
+                    </div>
+
+                    <div className="rounded-xl border border-ink-faint bg-paper p-4 space-y-3">
+                        <FormSelect
+                            labelEng="Assigned Class (Optional — Only for Class Teachers)"
+                            labelBng="শ্রেণি শিক্ষক হিসেবে দায়িত্ব (সকল শিক্ষকের জন্য প্রযোজ্য নয়)"
+                            variant="erp"
+                            value={adminFields.assignedClass}
+                            onChange={(event) => {
+                                const selectedClass = event.target.value;
+                                updateAdminField('assignedClass', selectedClass);
+                                if (!selectedClass) {
+                                    updateAdminField('canEditAssignedClass', false);
+                                }
+                            }}
+                            options={[
+                                { value: '', label: 'কোনো শ্রেণির ক্লাস টিচার নন (সাধারণ শিক্ষক / স্টাফ)' },
+                                'প্লে', 'নার্সারি', 'কেজি', '১ম', '২য়', '৩য়', '৪র্থ', '৫ম', '৬ষ্ঠ', '৭ম', '৮ম', '৯ম', '১০ম'
+                            ]}
+                        />
+                        {adminFields.assignedClass && (
+                            <label className="flex items-center gap-2.5 rounded-lg border border-gold/40 bg-gold-subtle/20 px-3 py-2.5 font-bengali text-xs sm:text-sm text-emerald-deep cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={adminFields.canEditAssignedClass}
+                                    onChange={(event) => updateAdminField('canEditAssignedClass', event.target.checked)}
+                                />
+                                <span>
+                                    এই শিক্ষক তার নিজ নির্ধারিত শ্রেণির (<b>{adminFields.assignedClass}</b>) শিক্ষার্থীদের তথ্য যোগ ও সম্পাদনা করতে পারবেন
+                                </span>
+                            </label>
+                        )}
                     </div>
                     <label className="flex items-center gap-2 rounded-xl border border-ink-faint bg-paper p-3 font-bengali text-sm">
                         <input type="checkbox" checked={adminFields.isActive} onChange={(event) => updateAdminField('isActive', event.target.checked)} />

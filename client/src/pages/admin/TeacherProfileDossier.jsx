@@ -305,6 +305,11 @@ export default function TeacherProfileDossier() {
                                 <Badge variant="emerald-subtle" size="sm" mono>
                                     ZKTeco PIN #{teacher.biometricDeviceId}
                                 </Badge>
+                                {teacher.assignedClass && (
+                                    <Badge variant="gold" size="sm">
+                                        শ্রেণি শিক্ষক: {teacher.assignedClass}
+                                    </Badge>
+                                )}
                                 <Badge
                                     variant={teacher.isActive !== false ? 'success' : 'danger'}
                                     size="sm"
@@ -451,6 +456,14 @@ export default function TeacherProfileDossier() {
                                     <dt className="font-bengali text-ink-muted shrink-0">বর্তমান ঠিকানা:</dt>
                                     <dd className="font-bengali text-ink text-right">
                                         {formatTeacherAddress(teacher.presentAddress)}
+                                    </dd>
+                                </div>
+                                <div className="flex justify-between gap-4 border-b border-ink-faint/60 pb-2">
+                                    <dt className="font-bengali text-ink-muted">শ্রেণি শিক্ষক দায়িত্ব:</dt>
+                                    <dd className="font-bengali font-semibold text-emerald-deep text-right">
+                                        {teacher.assignedClass
+                                            ? `${teacher.assignedClass} শ্রেণি (${teacher.canEditAssignedClass ? 'এডিট অনুমতি সক্রিয়' : 'শুধুমাত্র দেখার অনুমতি'})`
+                                            : 'প্রযোজ্য নয় (সাধারণ শিক্ষক / স্টাফ)'}
                                     </dd>
                                 </div>
                                 <div className="flex justify-between gap-4">

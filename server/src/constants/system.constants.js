@@ -1,7 +1,8 @@
 const ROLES = Object.freeze({
     SUPER_ADMIN: 'SuperAdmin',
     ADMIN: 'Admin',
-    TEACHER: 'Teacher'
+    TEACHER: 'Teacher',
+    STUDENT: 'Student'
 });
 
 const EMPLOYMENT_TYPES = Object.freeze({
@@ -26,7 +27,6 @@ const BLOOD_GROUPS = Object.freeze([
     'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'N/A'
 ]);
 
-// ১৫টি নির্ধারিত পদবী (ইংরেজি, বাংলা, বেস র‍্যাংক এবং স্টাফ ক্যাটাগরি সহ)
 const DESIGNATION_DETAILS = Object.freeze([
     { titleEng: 'Superintendent', titleBng: 'সুপারিনটেনডেন্ট (সুপার)', rankPriority: 1, code: '01', staffCategory: 'Teaching' },
     { titleEng: 'Assistant Superintendent', titleBng: 'সহকারী সুপারিনটেনডেন্ট (সহ-সুপার)', rankPriority: 2, code: '02', staffCategory: 'Teaching' },
@@ -123,6 +123,42 @@ const ATTENDANCE_RULES = Object.freeze({
     AUTO_IGNORE_ATTENDANCE_THRESHOLD_PERCENT: 30
 });
 
+const STUDENT_CLASSES = Object.freeze([
+    { classBn: 'প্লে', classEn: 'Play', code: '99', order: 1 },
+    { classBn: 'নার্সারি', classEn: 'Nursery', code: '00', order: 2 },
+    { classBn: 'কেজি', classEn: 'KG', code: '98', order: 3 },
+    { classBn: '১ম', classEn: 'One', code: '01', order: 4 },
+    { classBn: '২য়', classEn: 'Two', code: '02', order: 5 },
+    { classBn: '৩য়', classEn: 'Three', code: '03', order: 6 },
+    { classBn: '৪র্থ', classEn: 'Four', code: '04', order: 7 },
+    { classBn: '৫ম', classEn: 'Five', code: '05', order: 8 },
+    { classBn: '৬ষ্ঠ', classEn: 'Six', code: '06', order: 9 },
+    { classBn: '৭ম', classEn: 'Seven', code: '07', order: 10 },
+    { classBn: '৮ম', classEn: 'Eight', code: '08', order: 11 },
+    { classBn: '৯ম', classEn: 'Nine', code: '09', order: 12 },
+    { classBn: '১০ম', classEn: 'Ten', code: '10', order: 13 }
+]);
+
+const VALID_CLASS_BN = Object.freeze(STUDENT_CLASSES.map(c => c.classBn));
+const VALID_CLASS_EN = Object.freeze(STUDENT_CLASSES.map(c => c.classEn));
+
+const STUDENT_GROUPS = Object.freeze(['General', 'Science', 'Muzabbid', '']);
+
+const FEE_CATEGORIES = Object.freeze([
+    'Regular',
+    'Sibling Waiver',
+    'Half Free',
+    'Full Free',
+    'Orphan'
+]);
+
+const STUDENT_STATUSES = Object.freeze([
+    'Active',
+    'Inactive',
+    'Transferred',
+    'Deleted'
+]);
+
 module.exports = {
     ROLES,
     EMPLOYMENT_TYPES,
@@ -137,5 +173,11 @@ module.exports = {
     LEAVE_TYPES,
     LEAVE_APPROVAL_STATUS,
     SALARY_ADJUSTMENT_MODES,
-    ATTENDANCE_RULES
+    ATTENDANCE_RULES,
+    STUDENT_CLASSES,
+    VALID_CLASS_BN,
+    VALID_CLASS_EN,
+    STUDENT_GROUPS,
+    FEE_CATEGORIES,
+    STUDENT_STATUSES
 };

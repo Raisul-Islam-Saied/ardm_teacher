@@ -3,6 +3,7 @@ const SystemSettings = require('../models/SystemSettings');
 const LoanAdvance = require('../models/LoanAdvance');
 const AuditLog = require('../models/AuditLog');
 const Teacher = require('../models/Teacher');
+const Student = require('../models/Student');
 const Attendance = require('../models/Attendance');
 const Salary = require('../models/Salary');
 const SalaryHistory = require('../models/SalaryHistory');
@@ -309,6 +310,7 @@ const exportFullDatabaseBackup = asyncHandler(async (req, res) => {
     const [
         settings,
         teachers,
+        students,
         attendances,
         specialDates,
         leaveRequests,
@@ -318,6 +320,7 @@ const exportFullDatabaseBackup = asyncHandler(async (req, res) => {
     ] = await Promise.all([
         SystemSettings.find().lean(),
         Teacher.find().lean(),
+        Student.find().lean(),
         Attendance.find().lean(),
         SpecialDate.find().lean(),
         LeaveRequest.find().lean(),
@@ -332,6 +335,7 @@ const exportFullDatabaseBackup = asyncHandler(async (req, res) => {
         collections: {
             settings,
             teachers,
+            students,
             attendances,
             specialDates,
             leaveRequests,

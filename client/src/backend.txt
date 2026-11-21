@@ -1,0 +1,231 @@
+/**
+ * SCHOOL APP BACKEND (SMART AUTO-TRANSLATE)
+ * Logic:
+ * 1. If English Input exists -> Use it.
+ * 2. If Update & Old English exists -> Keep it.
+ * 3. Else -> Auto Translate from Bangla.
+ */
+
+function doGet(e){ return handleRequest(e); }
+function doPost(e){ return handleRequest(e); }
+
+function handleRequest(e) {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return response({ status: "busy" });
+
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var rows = sheet.getDataRange().getValues();
+
+    // HEADER INITIALIZATION
+    if (rows.length === 0 || rows[0][0] === "") {
+      sheet.appendRow([
+        "ID","Time","Session",
+        "StudentNameBn","StudentNameEn","Gender","Roll","ClassBn","ClassEn","BRN","DOB","BloodGroup",
+        "FatherNameBn","FatherNameEn","MotherNameBn","MotherNameEn",
+        "WhatsApp","EmergencyNo",
+        "HouseNameBn","HouseNameEn","VillageBn","VillageEn",
+        "UnionBn","UnionEn","WardNo",
+        "UpazilaBn","UpazilaEn","DistrictBn","DistrictEn","ImageURL","Status","LastUpdated"
+      ]);
+      rows = sheet.getDataRange().getValues();
+    }
+
+    var params = e.parameter;
+    var postData = e.postData ? JSON.parse(e.postData.contents) : {};
+    var action = params.action || postData.action;
+
+    // --- HELPER FUNCTIONS ---
+
+    function safeTranslate(t){
+      if(!t) return "";
+      try { return LanguageApp.translate(t, 'bn', 'en'); }
+      catch(e){ return t; }
+    }
+
+    // NEW: English Normalizer (only formatting)
+    function normalizeEn(str){
+      if(!str) return "";
+      return str
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase()
+        .replace(/\b\w/g, c => c.toUpperCase());
+    }
+
+    function getClassEn(bn){
+      var map = {
+        'প্লে':'Play','নার্সারি':'Nursery','কেজি':'KG',
+        '১ম':'One','২য়':'Two','৩য়':'Three','৪র্থ':'Four','৫ম':'Five',
+        '৬ষ্ঠ':'Six','৭ম':'Seven','৮ম':'Eight','৯ম':'Nine','১০ম':'Ten'
+      };
+      return map[bn] || bn;
+    }
+
+    // SMART FIELD LOGIC (unchanged)
+    function getSmartField(newVal, oldVal, banglaSource) {
+      if (newVal && newVal.toString().trim() !== "")
+        return normalizeEn(newVal);
+
+      if (oldVal && oldVal.toString().trim() !== "")
+        return oldVal;
+
+      return safeTranslate(banglaSource);
+    }
+
+    // --- ACTION: READ ---
+ if(action === "read"){
+  var data = [];
+  var headers = rows[0];
+  for(var i=1;i<rows.length;i++){
+
+    // যদি Deleted হয়, skip
+    if(rows[i][30] === "Deleted") continue;
+
+    var obj = {};
+    for(var j=0;j<headers.length;j++) obj[headers[j]] = rows[i][j];
+    data.push(obj);
+  }
+  return response({status:"success", data:data.reverse()});
+}
+
+
+    // --- ACTION: CREATE ---
+    if(action === "create"){
+      // DUPLICATE CHECK (Roll, BRN, Mobile)
+for (var i = 1; i < rows.length; i++) {
+
+  // Same Class + Same Roll
+  if (
+    rows[i][7] == postData.classBn &&
+    String(rows[i][6]) == String(postData.roll)
+  ) {
+    return response({ status: "error", message: "Duplicate Roll" });
+  }
+
+  // Same BRN
+  if (rows[i][9] == "'"+postData.brn) {
+    return response({ status: "error", message: "Duplicate BRN" });
+  }
+
+  // Same Mobile
+  if (rows[i][16] == "'"+postData.whatsappNumber) {
+    return response({ status: "error", message: "Duplicate Mobile" });
+  }
+}
+
+      for(var i=1;i<rows.length;i++){
+        if(rows[i][0] == postData.studentId)
+          return response({status:"error",message:"Duplicate ID"});
+      }
+
+      var ts = new Date().toLocaleString();
+      var classEn = getClassEn(postData.classBn);
+
+      var newRow = [
+        postData.studentId, ts, postData.sessionYear,
+        postData.studentNameBn, normalizeEn(postData.studentNameEn),
+        postData.gender,
+        postData.roll, postData.classBn, classEn,
+        "'"+postData.brn, postData.dob, postData.bloodGroup,
+
+        postData.fatherNameBn, getSmartField(postData.fatherNameEn, "", postData.fatherNameBn),
+        postData.motherNameBn, getSmartField(postData.motherNameEn, "", postData.motherNameBn),
+
+        "'"+postData.whatsappNumber, "'"+postData.emergencyNumber,
+
+        postData.houseNameBn, getSmartField(postData.houseNameEn, "", postData.houseNameBn),
+        postData.villageBn, getSmartField(postData.villageEn, "", postData.villageBn),
+        postData.unionBn, getSmartField(postData.unionEn, "", postData.unionBn),
+        postData.wardNo,
+        postData.upazilaBn, getSmartField(postData.upazilaEn, "", postData.upazilaBn),
+        postData.districtBn, getSmartField(postData.districtEn, "", postData.districtBn),
+        postData.imageUrl, "Active", ts
+      ];
+
+      sheet.appendRow(newRow);
+      return response({status:"success",message:"Saved Successfully"});
+    }
+
+    // --- ACTION: UPDATE ---
+    if(action === "update"){
+      // DUPLICATE ROLL CHECK (excluding self)
+for (var i = 1; i < rows.length; i++) {
+  if (
+    rows[i][0] != postData.id &&        // নিজের ID বাদ
+    rows[i][7] == postData.classBn &&
+    String(rows[i][6]) == String(postData.roll)
+  ) {
+    return response({ status: "error", message: "Duplicate Roll" });
+  }
+}
+
+      var id = postData.id;
+      var rowIndex = -1;
+
+      for(var i=1;i<rows.length;i++){
+        if(rows[i][0] == id){ rowIndex=i+1; break; }
+      }
+      if(rowIndex<0) return response({status:"error",message:"ID Not Found"});
+
+      var old = rows[rowIndex-1];
+      var ts = new Date().toLocaleString();
+      var classEn = getClassEn(postData.classBn);
+
+      var updatedRow = [[
+        postData.studentId, old[1], postData.sessionYear,
+        postData.studentNameBn, normalizeEn(postData.studentNameEn),
+        postData.gender,
+        postData.roll, postData.classBn, classEn,
+        "'"+postData.brn, postData.dob, postData.bloodGroup,
+
+        postData.fatherNameBn, getSmartField(postData.fatherNameEn, old[13], postData.fatherNameBn),
+        postData.motherNameBn, getSmartField(postData.motherNameEn, old[15], postData.motherNameBn),
+
+        "'"+postData.whatsappNumber, "'"+postData.emergencyNumber,
+
+        postData.houseNameBn, getSmartField(postData.houseNameEn, old[19], postData.houseNameBn),
+        postData.villageBn, getSmartField(postData.villageEn, old[21], postData.villageBn),
+        postData.unionBn, getSmartField(postData.unionEn, old[23], postData.unionBn),
+        postData.wardNo,
+        postData.upazilaBn, getSmartField(postData.upazilaEn, old[26], postData.upazilaBn),
+        postData.districtBn, getSmartField(postData.districtEn, old[28], postData.districtBn),
+        postData.imageUrl, "Active", ts
+      ]];
+
+      sheet.getRange(rowIndex, 1, 1, 32).setValues(updatedRow);
+      return response({status:"success",message:"Updated Successfully"});
+    }
+
+    // --- ACTION: DELETE ---
+ // --- ACTION: DELETE (SOFT) ---
+if(action === "delete"){
+  for(var i=1;i<rows.length;i++){
+    if(rows[i][0] == postData.id){
+      var rowIndex = i + 1;
+      var ts = new Date().toLocaleString();
+
+      // Status = Deleted, LastUpdated update
+      sheet.getRange(rowIndex, 31).setValue("Deleted"); // Status column
+      sheet.getRange(rowIndex, 32).setValue(ts);        // LastUpdated
+
+      return response({status:"success",message:"Soft Deleted"});
+    }
+  }
+  return response({status:"error",message:"ID Not Found"});
+}
+
+
+  } catch(e){
+    return response({status:"error",message:e.toString()});
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function response(data){
+  return ContentService
+    .createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON)
+   
+}

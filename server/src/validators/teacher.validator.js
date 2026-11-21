@@ -5,7 +5,8 @@ const {
     PAYMENT_METHODS,
     BLOOD_GROUPS,
     DESIGNATIONS,
-    DEGREE_LEVEL_WEIGHTS
+    DEGREE_LEVEL_WEIGHTS,
+    VALID_CLASS_BN
 } = require('../constants/system.constants');
 
 // HTML ট্যাগ ও অতিরিক্ত স্পেস মুছে ফেলার মিলিটারি স্যানিটাইজার
@@ -343,6 +344,8 @@ const updateTeacherValidator = [
     body('academicQualifications.*.gpaOrCgpa').optional({ nullable: true }).isFloat({ min: 1, max: 5 }),
     body('academicQualifications.*.scale').optional().isIn([4, 5, '4', '5']),
     body('subject').optional({ checkFalsy: true }).customSanitizer(sanitizeClean).isLength({ max: 100 }),
+    body('assignedClass').optional({ checkFalsy: true }).isIn(['', ...VALID_CLASS_BN]).withMessage('সঠিক নির্ধারিত শ্রেণি নির্বাচন করুন'),
+    body('canEditAssignedClass').optional().isBoolean(),
     body('employmentType').optional().isIn(Object.values(EMPLOYMENT_TYPES)),
     body('basicSalary').optional().isFloat({ min: 0 }),
     body('biometricDeviceId').optional().isInt({ min: 1 }),

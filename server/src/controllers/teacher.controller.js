@@ -380,6 +380,8 @@ const updateTeacher = asyncHandler(async (req, res) => {
         'email',
         'designation',
         'subject',
+        'assignedClass',
+        'canEditAssignedClass',
         'employmentType',
         'joiningDate',
         'resignationDate',

@@ -7,7 +7,8 @@ const {
     BLOOD_GROUPS,
     DESIGNATIONS,
     DESIGNATION_DETAILS,
-    DEGREE_LEVEL_WEIGHTS
+    DEGREE_LEVEL_WEIGHTS,
+    VALID_CLASS_BN
 } = require('../constants/system.constants');
 
 const optionalUniqueString = () => ({
@@ -238,6 +239,15 @@ const teacherSchema = new mongoose.Schema({
         type: String,
         trim: true,
         default: ''
+    },
+    assignedClass: {
+        type: String,
+        enum: ['', ...VALID_CLASS_BN],
+        default: ''
+    },
+    canEditAssignedClass: {
+        type: Boolean,
+        default: false
     },
     employmentType: {
         type: String,
