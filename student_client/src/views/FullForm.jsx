@@ -7,14 +7,20 @@ import {
   Check,
   CheckCircle2,
   CreditCard,
+  FileCheck2,
   Home,
   Loader2,
   Lock,
   MapPin,
+  QrCode,
+  RotateCcw,
   Search,
   ShieldCheck,
+  Sparkles,
   User,
-  Users
+  UserPlus,
+  Users,
+  X
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -32,8 +38,10 @@ import { studentApi } from '../services/studentApiService';
 import { Input } from './UIComponents';
 
 // ==============================================
-// MILITARY-GRADE VALIDATION RULES
+// CONSTANTS & STORAGE KEYS
 // ==============================================
+const DRAFT_STORAGE_KEY = 'ardm_admission_draft_v2';
+
 const RX = {
   BN_NAME: /^[\u0980-\u09FF][\u0980-\u09FF\s.'-]{1,59}$/,
   EN_NAME: /^[A-Za-z][A-Za-z\s.'-]{2,59}$/,
@@ -47,7 +55,7 @@ const RX = {
   BN_HOUSE: /^[\u0980-\u09FF0-9\s.,'-]{2,80}$/,
   EN_HOUSE: /^[A-Za-z0-9\s.,'-]{2,80}$/,
   POST_OFFICE: /^[\u0980-\u09FFA-Za-z\s.'-]{2,60}$/,
-  WARD: /^\d{1,3}$/
+  WARD: /^\d{1,2}$/
 };
 
 const FAKE_NUM_PATTERNS = [
@@ -58,6 +66,10 @@ const FAKE_NUM_PATTERNS = [
 const REPEATED_CHAR = /(.)\1{3,}/u;
 const isFakeNumber = (v) => FAKE_NUM_PATTERNS.some((r) => r.test(String(v)));
 const collapse = (v) => String(v ?? '').replace(/\s+/g, ' ').trim();
+const toTitleCase = (v) =>
+  collapse(v)
+    .toLowerCase()
+    .replace(/\b[a-z]/g, (c) => c.toUpperCase());
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const addrKey = (prefix, field) => (prefix ? `${prefix}${cap(field)}` : field);
 
@@ -68,7 +80,6 @@ const todayISO = () => {
 
 const getDefaultAcademicSession = () => {
   const now = new Date();
-  // অক্টোবর (9) থেকে ডিসেম্বর পর্যন্ত পরের বছর একাডেমিক সেশন হবে
   return String(now.getMonth() >= 9 ? now.getFullYear() + 1 : now.getFullYear());
 };
 
@@ -126,13 +137,192 @@ const STEPS_META = [
   { id: 3, title: 'অভিভাবক ও যোগাযোগ', sub: 'Parents & Contact', icon: Users },
   { id: 4, title: 'ঠিকানা', sub: 'Address', icon: MapPin },
   { id: 5, title: 'ফি ও ভাই-বোন', sub: 'Fee & Sibling', icon: CreditCard },
-  { id: 6, title: 'শিক্ষার্থীর ছবি', sub: 'Student Photo', icon: Camera }
+  { id: 6, title: 'ছবি ও চূড়ান্ত যাচাই', sub: 'Photo & Review', icon: Camera }
 ];
 const TOTAL_STEPS = STEPS_META.length;
 
-// ---- Cascading Select Box ----
+// ==============================================
+// LIVE QR CODE SCANNER MODAL (Zero-Dependency Safe)
+// ==============================================
+const QrScannerModal = ({ isOpen, onClose, onDetected }) => {
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const rafRef = useRef(null);
+  const [camError, setCamError] = useState('');
+  const [supported, setSupported] = useState(true);
+  const [manualText, setManualText] = useState('');
+
+  const extractStudentCode = (raw) => {
+    const str = String(raw || '').trim();
+    const match = str.match(/\b(\d{10})\b/) || str.match(/(\d{10})/);
+    return match ? match[1] : null;
+  };
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    let active = true;
+    setCamError('');
+    setManualText('');
+
+    const hasNativeDetector = typeof window !== 'undefined' && 'BarcodeDetector' in window;
+    setSupported(hasNativeDetector);
+
+    const startCamera = async () => {
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) {
+          setCamError('এই ব্রাউজারে ক্যামেরা অ্যাক্সেস সমর্থিত নয়। নিচে আইডি বা লিংক পেস্ট করুন।');
+          return;
+        }
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } },
+          audio: false
+        });
+        if (!active) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
+
+        if (hasNativeDetector) {
+          const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+          const scanLoop = async () => {
+            if (!active || !videoRef.current) return;
+            try {
+              if (videoRef.current.readyState >= 2) {
+                const barcodes = await detector.detect(videoRef.current);
+                if (barcodes && barcodes.length > 0) {
+                  const code = extractStudentCode(barcodes[0].rawValue);
+                  if (code) {
+                    active = false;
+                    onDetected(code);
+                    return;
+                  }
+                }
+              }
+            } catch {}
+            rafRef.current = requestAnimationFrame(scanLoop);
+          };
+          rafRef.current = requestAnimationFrame(scanLoop);
+        }
+      } catch {
+        setCamError('ক্যামেরা চালু করা যায়নি। পারমিশন চেক করুন অথবা নিচে আইডি কার্ডের লিংক/আইডি দিন।');
+      }
+    };
+
+    startCamera();
+
+    return () => {
+      active = false;
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+    };
+  }, [isOpen, onDetected]);
+
+  if (!isOpen) return null;
+
+  const handleManualExtract = () => {
+    const code = extractStudentCode(manualText);
+    if (!code) {
+      setCamError('সঠিক ১০-ডিজিটের স্টুডেন্ট আইডি বা QR লিংক পাওয়া যায়নি।');
+      return;
+    }
+    onDetected(code);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[120] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+      <div className="bg-white rounded-[28px] w-full max-w-sm overflow-hidden shadow-2xl border border-slate-200">
+        <div className="bg-[#060D1F] text-white px-5 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-[#D4A843]/20 text-[#D4A843] flex items-center justify-center">
+              <QrCode size={18} />
+            </div>
+            <div>
+              <h4 className="text-sm font-black leading-tight">আইডি কার্ড QR স্ক্যানার</h4>
+              <p className="text-[10px] text-slate-400 font-bold">পুরনো আইডি কার্ডের QR কোড ক্যামেরায় ধরুন</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div className="relative aspect-square w-full rounded-2xl overflow-hidden bg-slate-900 border-2 border-slate-800 flex items-center justify-center">
+            <video ref={videoRef} playsInline muted className="w-full h-full object-cover" />
+            <div className="absolute inset-8 border-2 border-[#D4A843] rounded-2xl pointer-events-none shadow-[0_0_0_9999px_rgba(6,13,31,0.45)]">
+              <span className="absolute -top-1 -left-1 w-4 h-4 border-t-4 border-l-4 border-emerald-400 rounded-tl-md" />
+              <span className="absolute -top-1 -right-1 w-4 h-4 border-t-4 border-r-4 border-emerald-400 rounded-tr-md" />
+              <span className="absolute -bottom-1 -left-1 w-4 h-4 border-b-4 border-l-4 border-emerald-400 rounded-bl-md" />
+              <span className="absolute -bottom-1 -right-1 w-4 h-4 border-b-4 border-r-4 border-emerald-400 rounded-br-md" />
+            </div>
+            {!supported && !camError && (
+              <div className="absolute bottom-3 inset-x-3 bg-amber-500/95 text-white text-[11px] font-bold p-2.5 rounded-xl text-center">
+                এই ব্রাউজারে অটো-QR ডিটেক্টর নেই—নিচে আইডি বা স্ক্যান করা লিংক পেস্ট করুন
+              </div>
+            )}
+          </div>
+
+          {camError && (
+            <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-xs font-bold flex items-start gap-2">
+              <AlertCircle size={14} className="shrink-0 mt-0.5" />
+              <span>{camError}</span>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">
+              অথবা স্ক্যান করা QR লিংক / ১০-ডিজিট আইডি দিন
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={manualText}
+                onChange={(e) => setManualText(e.target.value)}
+                placeholder="যেমন: 2026140101 বা URL"
+                className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold outline-none focus:border-[#060D1F]"
+              />
+              <button
+                type="button"
+                onClick={handleManualExtract}
+                className="px-4 py-2.5 rounded-xl bg-[#060D1F] text-[#D4A843] text-xs font-black shrink-0"
+              >
+                যাচাই করুন
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ==============================================
+// CASCADING GEO SELECT BOX
+// ==============================================
 const GeoSelectBox = ({
-  stepNum, label, name, value, onChange, options, disabled, loading, error, fallbackText, placeholder = 'নির্বাচন করুন...'
+  stepNum,
+  label,
+  name,
+  value,
+  onChange,
+  options,
+  disabled,
+  loading,
+  error,
+  fallbackText,
+  placeholder = 'নির্বাচন করুন...'
 }) => {
   const isFilled = Boolean(value || fallbackText);
   return (
@@ -194,8 +384,10 @@ const GeoSelectBox = ({
   );
 };
 
-// ---- Progressive Locked Input ----
-const LockedField = ({ stepNum, label, name, value, onChange, disabled, error, placeholder, inputMode, maxLength }) => {
+// ==============================================
+// PROGRESSIVE LOCKED INPUT
+// ==============================================
+const LockedField = ({ stepNum, label, name, value, onChange, onBlur, disabled, error, placeholder, inputMode, maxLength }) => {
   const isFilled = Boolean(collapse(value)) && !error;
   return (
     <div className="relative w-full">
@@ -223,6 +415,7 @@ const LockedField = ({ stepNum, label, name, value, onChange, disabled, error, p
         placeholder={disabled ? 'আগের ধাপ পূরণ করুন' : placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
         className={`w-full px-4 py-3.5 rounded-2xl text-sm font-bold outline-none transition-all border ${
           error
             ? 'bg-red-50/60 border-red-400 text-red-900 focus:ring-2 focus:ring-red-200'
@@ -242,9 +435,23 @@ const LockedField = ({ stepNum, label, name, value, onChange, disabled, error, p
   );
 };
 
-// ---- Progressive Address Section (Strictly Single-Column) ----
+// ==============================================
+// PROGRESSIVE ADDRESS SECTION (Single-Column)
+// ==============================================
 const AddressCascadeBlock = ({
-  title, subtitle, prefix = '', form, errors, geo, geoSel, geoLoading, geoError, onPickGeo, onFieldChange, accent = 'emerald'
+  title,
+  subtitle,
+  prefix = '',
+  form,
+  errors,
+  geo,
+  geoSel,
+  geoLoading,
+  geoError,
+  onPickGeo,
+  onFieldChange,
+  onFieldBlur,
+  accent = 'emerald'
 }) => {
   const k = (f) => addrKey(prefix, f);
 
@@ -297,7 +504,6 @@ const AddressCascadeBlock = ({
         </div>
       )}
 
-      {/* 1. Division */}
       <GeoSelectBox
         stepNum={1}
         label="বিভাগ (Division)"
@@ -310,7 +516,6 @@ const AddressCascadeBlock = ({
         onChange={(id) => onPickGeo('division', id)}
       />
 
-      {/* 2. District */}
       <GeoSelectBox
         stepNum={2}
         label="জেলা (District)"
@@ -324,7 +529,6 @@ const AddressCascadeBlock = ({
         onChange={(id) => onPickGeo('district', id)}
       />
 
-      {/* 3. Upazila */}
       <GeoSelectBox
         stepNum={3}
         label="উপজেলা / থানা (Upazila)"
@@ -338,7 +542,6 @@ const AddressCascadeBlock = ({
         onChange={(id) => onPickGeo('upazila', id)}
       />
 
-      {/* 4. Union */}
       <GeoSelectBox
         stepNum={4}
         label="ইউনিয়ন / পৌরসভা (Union)"
@@ -361,7 +564,6 @@ const AddressCascadeBlock = ({
         </div>
       )}
 
-      {/* 5. Village (Single Column) */}
       <LockedField
         stepNum={5}
         label="গ্রাম (বাংলা)"
@@ -371,6 +573,7 @@ const AddressCascadeBlock = ({
         placeholder="যেমন: মীরেরখীল"
         error={errors[k('villageBn')]}
         onChange={(v) => onFieldChange(k('villageBn'), v)}
+        onBlur={() => onFieldBlur(k('villageBn'))}
       />
       <LockedField
         stepNum={5}
@@ -381,9 +584,9 @@ const AddressCascadeBlock = ({
         placeholder="e.g. Mirerkhil"
         error={errors[k('villageEn')]}
         onChange={(v) => onFieldChange(k('villageEn'), v)}
+        onBlur={() => onFieldBlur(k('villageEn'), true)}
       />
 
-      {/* 6. Post Office & Post Code (Single Column) */}
       <LockedField
         stepNum={6}
         label="ডাকঘর (Post Office)"
@@ -393,6 +596,7 @@ const AddressCascadeBlock = ({
         placeholder="যেমন: সরফভাটা"
         error={errors[k('postOffice')]}
         onChange={(v) => onFieldChange(k('postOffice'), v)}
+        onBlur={() => onFieldBlur(k('postOffice'))}
       />
       <LockedField
         stepNum={6}
@@ -407,13 +611,12 @@ const AddressCascadeBlock = ({
         onChange={(v) => onFieldChange(k('postCode'), v)}
       />
 
-      {/* 7. Ward No */}
       <LockedField
         stepNum={7}
         label="ওয়ার্ড নং (Ward No)"
         name={k('wardNo')}
         inputMode="numeric"
-        maxLength={3}
+        maxLength={2}
         value={form[k('wardNo')]}
         disabled={!hasPost}
         placeholder="যেমন: 2"
@@ -421,7 +624,6 @@ const AddressCascadeBlock = ({
         onChange={(v) => onFieldChange(k('wardNo'), v)}
       />
 
-      {/* 8. House Name (Single Column) */}
       <LockedField
         stepNum={8}
         label="বাড়ির নাম (বাংলা)"
@@ -431,6 +633,7 @@ const AddressCascadeBlock = ({
         placeholder="যেমন: ছমদ মেম্বর বাড়ি"
         error={errors[k('houseNameBn')]}
         onChange={(v) => onFieldChange(k('houseNameBn'), v)}
+        onBlur={() => onFieldBlur(k('houseNameBn'))}
       />
       <LockedField
         stepNum={8}
@@ -441,13 +644,14 @@ const AddressCascadeBlock = ({
         placeholder="e.g. Chamad Member House"
         error={errors[k('houseNameEn')]}
         onChange={(v) => onFieldChange(k('houseNameEn'), v)}
+        onBlur={() => onFieldBlur(k('houseNameEn'), true)}
       />
     </div>
   );
 };
 
 // ==============================================
-// MAIN FULLFORM COMPONENT (6-STEP, MOBILE-FIRST)
+// MAIN FULLFORM COMPONENT (ULTRA-PREMIUM 6-STEP)
 // ==============================================
 const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdmin }) => {
   const isUpdate = !!initialData;
@@ -539,17 +743,33 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
     imageUrl: ''
   };
 
-  const [form, setForm] = useState(defaultState);
-  const [step, setStep] = useState(1);
+  // Restore draft synchronously on first mount if creating new student
+  const loadSavedDraft = () => {
+    if (isUpdate) return null;
+    try {
+      const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  };
+  const initialDraft = useRef(loadSavedDraft()).current;
+
+  const [admissionMode, setAdmissionMode] = useState(initialDraft?.admissionMode || 'new'); // 'new' | 'old'
+  const [form, setForm] = useState(() => (initialDraft?.form ? { ...defaultState, ...initialDraft.form } : defaultState));
+  const [step, setStep] = useState(() => (initialDraft?.step >= 1 && initialDraft?.step <= TOTAL_STEPS ? initialDraft.step : 1));
   const [errors, setErrors] = useState({});
-  const [imgPreview, setImgPreview] = useState(null);
+  const [imgPreview, setImgPreview] = useState(() => initialDraft?.form?.imageUrl || null);
   const [imgChecking, setImgChecking] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [migration, setMigration] = useState(null);
-  const [legacyId, setLegacyId] = useState('');
+  const [migration, setMigration] = useState(() => initialDraft?.migration || null);
+  const [legacyId, setLegacyId] = useState(() => initialDraft?.legacyId || '');
   const [legacyBusy, setLegacyBusy] = useState(false);
+  const [isQrOpen, setIsQrOpen] = useState(false);
+  const [restoredNotice, setRestoredNotice] = useState(() => Boolean(initialDraft?.form?.studentNameBn || initialDraft?.step > 1));
+
   const formRef = useRef(null);
-  const stepRef = useRef(1);
+  const stepRef = useRef(step);
 
   useEffect(() => {
     stepRef.current = step;
@@ -558,6 +778,11 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
   // ---- MOBILE BACK BUTTON FIX (Capture Phase) ----
   useEffect(() => {
     const handlePopState = (e) => {
+      if (isQrOpen) {
+        e.stopImmediatePropagation();
+        setIsQrOpen(false);
+        return;
+      }
       if (stepRef.current > 1) {
         e.stopImmediatePropagation();
         setStep((prev) => Math.max(1, prev - 1));
@@ -566,7 +791,7 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
     };
     window.addEventListener('popstate', handlePopState, true);
     return () => window.removeEventListener('popstate', handlePopState, true);
-  }, []);
+  }, [isQrOpen]);
 
   const goBackStep = () => {
     if (step > 1) {
@@ -730,23 +955,59 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
   const pickPresentGeo = makeGeoPicker('', geo, setGeo, geoSel, setGeoSel, setGeoLoading, setGeoError);
   const pickPermGeo = makeGeoPicker('perm', permGeo, setPermGeo, permGeoSel, setPermGeoSel, setPermGeoLoading, setPermGeoError);
 
-  // ---- Draft ----
+  // ---- Auto-Save Draft (Form + Current Step + Mode + Migration) ----
   useEffect(() => {
-    const saved = localStorage.getItem('draftStudentForm');
-    if (!initialData && saved) {
+    if (isUpdate) return;
+    try {
+      const payload = {
+        form,
+        step,
+        admissionMode,
+        migration,
+        legacyId,
+        savedAt: Date.now()
+      };
+      localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(payload));
+    } catch {
+      // If base64 image exceeds localStorage quota, save everything except raw base64 image
       try {
-        setForm({ ...defaultState, ...JSON.parse(saved) });
-      } catch (e) {}
+        const { imageUrl, ...formWithoutBase64 } = form;
+        localStorage.setItem(
+          DRAFT_STORAGE_KEY,
+          JSON.stringify({
+            form: { ...formWithoutBase64, imageUrl: imageUrl?.startsWith('http') ? imageUrl : '' },
+            step,
+            admissionMode,
+            migration,
+            legacyId,
+            savedAt: Date.now()
+          })
+        );
+      } catch {}
     }
-  }, []);
+  }, [form, step, admissionMode, migration, legacyId, isUpdate]);
 
-  useEffect(() => {
-    if (!initialData) {
-      localStorage.setItem('draftStudentForm', JSON.stringify(form));
-    }
-  }, [form]);
+  const handleResetDraft = () => {
+    if (!window.confirm('আপনি কি ফর্মের সংরক্ষিত সব তথ্য মুছে নতুন করে শুরু করতে চান?')) return;
+    localStorage.removeItem(DRAFT_STORAGE_KEY);
+    localStorage.removeItem('draftStudentForm');
+    setForm({
+      ...defaultState,
+      classBn: currentUser?.role === 'Class' ? currentUser.classBn : ''
+    });
+    setStep(1);
+    setAdmissionMode('new');
+    setMigration(null);
+    setLegacyId('');
+    setImgPreview(null);
+    setGeoSel(EMPTY_GEO_SEL);
+    setPermGeoSel(EMPTY_GEO_SEL);
+    setErrors({});
+    setRestoredNotice(false);
+    showToast('ফর্ম রিসেট করে নতুন অবস্থায় নেওয়া হয়েছে', 'success');
+  };
 
-  // ---- Load Initial Data (Edit) ----
+  // ---- Load Initial Data (Edit Mode) ----
   useEffect(() => {
     if (initialData) {
       const parseDate = (dStr) => {
@@ -854,9 +1115,7 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
         imageUrl: initialData.ImageURL || ''
       });
       setImgPreview(initialData.ImageURL || null);
-    } else {
-      setForm((f) => (f.studentNameBn || f.brn ? f : defaultState));
-      setImgPreview(null);
+      setStep(1);
     }
   }, [initialData]);
 
@@ -914,11 +1173,19 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
         if (!val) return '';
         return /^\d+$/.test(val) && Number(val) >= 0 && Number(val) <= 100000000 ? '' : 'সঠিক বার্ষিক আয় লিখুন';
       case 'whatsappNumber':
-      case 'emergencyNumber':
+      case 'emergencyNumber': {
         if (!val) return baseField === 'whatsappNumber' ? 'মোবাইল নম্বর আবশ্যক' : 'জরুরি নম্বর আবশ্যক';
         if (!RX.MOBILE.test(val)) return 'সঠিক বাংলাদেশি নম্বর দিন (013-019, ১১ ডিজিট)';
         if (isFakeNumber(val)) return 'ভুয়া বা অবৈধ মোবাইল নম্বর গ্রহণযোগ্য নয়';
+        if (
+          baseField === 'emergencyNumber' &&
+          collapse(all.whatsappNumber) &&
+          val === collapse(all.whatsappNumber)
+        ) {
+          return 'জরুরি নম্বর এবং মূল মোবাইল নম্বর একই হতে পারবে না, ভিন্ন নম্বর দিন';
+        }
         return '';
+      }
       case 'localGuardianName':
         if (!all.hasLocalGuardian) return '';
         if (!val) return 'স্থানীয় অভিভাবকের নাম আবশ্যক';
@@ -1001,7 +1268,7 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
       case 'wardNo': {
         if (!val) return 'ওয়ার্ড নম্বর আবশ্যক';
         const n = Number(val);
-        return RX.WARD.test(val) && n >= 1 && n <= 999 ? '' : 'সঠিক ওয়ার্ড নম্বর দিন (১-৯৯৯)';
+        return RX.WARD.test(val) && n >= 1 && n <= 99 ? '' : 'সঠিক ওয়ার্ড নম্বর দিন (১-৯৯)';
       }
       case 'houseNameBn':
         if (!val) return 'বাড়ির নাম (বাংলা) আবশ্যক';
@@ -1044,7 +1311,7 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
       v = String(v).replace(/[^0-9]/g, '').slice(0, 17);
     }
     if (f === 'wardNo' || f === 'permWardNo') {
-      v = String(v).replace(/[^0-9]/g, '').slice(0, 3);
+      v = String(v).replace(/[^0-9]/g, '').slice(0, 2);
     }
     if (f === 'postCode' || f === 'permPostCode') {
       v = String(v).replace(/[^0-9]/g, '').slice(0, 4);
@@ -1068,6 +1335,15 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
     if (f === 'status') upd.statusReason = fieldError('statusReason', next.statusReason, next);
     if (f === 'feeCategory') upd.siblingStudentCode = fieldError('siblingStudentCode', next.siblingStudentCode, next);
     setErrors((prev) => ({ ...prev, ...upd }));
+  };
+
+  const handleNormalizeBlur = (field, titleCase = false) => {
+    const raw = form[field];
+    if (!raw) return;
+    const cleaned = titleCase ? toTitleCase(raw) : collapse(raw);
+    if (cleaned !== raw) {
+      update(field, cleaned);
+    }
   };
 
   const getStepFields = (targetStep) => {
@@ -1131,6 +1407,24 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
     return Object.keys(e).length === 0;
   };
 
+  const handleStepPillClick = (targetStep) => {
+    if (targetStep === step) return;
+    if (targetStep < step) {
+      setStep(targetStep);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    for (let s = step; s < targetStep; s++) {
+      if (!validate(s)) {
+        setStep(s);
+        return;
+      }
+    }
+    window.history.pushState({ page: 'formStep', step: targetStep }, '');
+    setStep(targetStep);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleNext = () => {
     if (validate()) {
       const nextStep = step + 1;
@@ -1159,10 +1453,13 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
         focusField(Object.keys(srvErr)[0]);
       }
       if (unmapped.length && showToast) showToast(unmapped[0], 'error');
+    } else if (!isUpdate) {
+      localStorage.removeItem(DRAFT_STORAGE_KEY);
+      localStorage.removeItem('draftStudentForm');
     }
   };
 
-  // নতুন ছবি আপলোডেই শুধু উপরের দুই কোণা সাদা কিনা চেক হবে (পুরনো/আগে থাকা ছবিতে নয়)
+  // নতুন ছবি আপলোডেই শুধু উপরের দুই কোণা সাদা কিনা চেক হবে
   const handleImage = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -1188,9 +1485,12 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
     }
   };
 
-  const handleLegacyLookup = async () => {
-    const code = legacyId.trim();
-    if (!/^\d{10}$/.test(code)) return showToast('১০ ডিজিটের পুরনো স্টুডেন্ট আইডি দিন', 'error');
+  const handleLegacyLookup = async (overrideCode) => {
+    const code = String(overrideCode ?? legacyId).trim();
+    if (!/^\d{10}$/.test(code)) {
+      return showToast('১০ ডিজিটের পুরনো স্টুডেন্ট আইডি দিন', 'error');
+    }
+    setLegacyId(code);
     setLegacyBusy(true);
     try {
       const res = await studentApi.legacyLookup(code);
@@ -1199,11 +1499,18 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
         return;
       }
       const f = legacyToFormState(res.autoFillData);
-      setForm({ ...defaultState, ...f, sameAsPresent: true });
+      const merged = {
+        ...defaultState,
+        ...f,
+        sessionYear: getDefaultAcademicSession(),
+        classBn: currentUser?.role === 'Class' ? currentUser.classBn : (f.classBn || ''),
+        sameAsPresent: true
+      };
+      setForm(merged);
       setImgPreview(f.imageUrl || null);
       setMigration({ studentCode: res.autoFillData.studentCode, admissionDate: res.autoFillData.admissionDate });
       setErrors({});
-      showToast(res.message || 'পুরনো তথ্য পাওয়া গেছে — যাচাই করে সংরক্ষণ করুন', 'success');
+      showToast(res.message || 'পুরনো তথ্য অটো-ফিল হয়েছে — যাচাই করে পরবর্তী ধাপে যান', 'success');
     } catch (err) {
       showToast(extractApiErrorMessage(err, 'পুরনো শিট থেকে তথ্য আনা যায়নি'), 'error');
     } finally {
@@ -1220,80 +1527,377 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
 
   const currentMeta = STEPS_META[step - 1];
   const StepIcon = currentMeta.icon;
+  const progressPercent = Math.round((step / TOTAL_STEPS) * 100);
 
+
+  const FATHER_OCCUPATIONS = [
+  // কৃষি ও মৎস্য
+  'কৃষক (Farmer)',
+  'মৎস্যজীবী / জেলে (Fisherman)',
+  'মৎস্য ও পোল্ট্রি খামারি (Fish & Poultry Farmer)',
+  'গবাদিপশু খামারি (Livestock Farmer)',
+
+  // ব্যবসা ও বাণিজ্য
+  'ব্যবসায়ী (Business)',
+  'ক্ষুদ্র ব্যবসায়ী / দোকানদার (Small Business / Shopkeeper)',
+  'কাঁচামাল / সবজি ব্যবসায়ী (Produce / Vegetable Trader)',
+  'মুদি ব্যবসায়ী (Grocery Shopkeeper)',
+  'ফার্মেসি ব্যবসায়ী (Pharmacy Business)',
+  'ঠিকাদার (Contractor)',
+
+  // প্রবাসী
+  'প্রবাসী (Expatriate)',
+  'প্রবাসী - মধ্যপ্রাচ্য (Expatriate - Middle East)',
+  'প্রবাসী - ইউরোপ/আমেরিকা (Expatriate - Europe/USA)',
+  'প্রবাসী - মালয়েশিয়া/সিঙ্গাপুর (Expatriate - Malaysia/Singapore)',
+
+  // চাকরি (সরকারি ও বেসরকারি)
+  'সরকারি চাকরিজীবী (Government Service)',
+  'বেসরকারি চাকরিজীবী (Private Service)',
+  'ব্যাংকার (Banker)',
+  'এনজিও কর্মী (NGO Worker)',
+  'গার্মেন্টস কর্মী (Garments Worker)',
+  'নিরাপত্তা প্রহরী (Security Guard)',
+  'অফিস সহায়ক (Office Support Staff)',
+
+  // শিক্ষা ও ধর্মীয় পেশা
+  'শিক্ষক (Teacher)',
+  'মাদ্রাসা শিক্ষক (Madrasah Teacher)',
+  'কলেজ / বিশ্ববিদ্যালয় শিক্ষক (College/University Teacher)',
+  'ইমাম (Imam)',
+  'খতিব (Khatib)',
+  'মুয়াজ্জিন (Muezzin)',
+  'হাফেজ / ক্বারী (Hafez / Qari)',
+  'কাজী / নিকাহ রেজিস্ট্রার (Kazi / Marriage Registrar)',
+
+  // চিকিৎসা ও স্বাস্থ্য
+  'ডাক্তার (Doctor)',
+  'পল্লী চিকিৎসক (Village Doctor)',
+  'হোমিও চিকিৎসক (Homeopathic Doctor)',
+  'নার্স / স্বাস্থ্যকর্মী (Nurse / Health Worker)',
+  'প্যাথলজিস্ট / টেকনোলজিস্ট (Medical Technologist)',
+
+  // কারিগরি, নির্মাণ ও শ্রমজীবী
+  'দিনমজুর (Day Laborer)',
+  'রাজমিস্ত্রি (Mason)',
+  'কাঠমিস্ত্রি (Carpenter)',
+  'রংমিস্ত্রি (Painter)',
+  'ইলেকট্রিশিয়ান (Electrician)',
+  'প্লাম্বার / স্যানিটারি মিস্ত্রি (Plumber)',
+  'মেকানিক / টেকনিশিয়ান (Mechanic / Technician)',
+  'ওয়েল্ডার / গ্রিল মিস্ত্রি (Welder)',
+  'দর্জি / টেইলার্স (Tailor)',
+  'সেলুন / নাপিত (Barber)',
+  'কামার / স্বর্ণকার (Blacksmith / Goldsmith)',
+
+  // পরিবহন
+  'ড্রাইভার / গাড়িচালক (Driver)',
+  'বাস / ট্রাক ড্রাইভার (Bus / Truck Driver)',
+  'সিএনজি / অটোরিকশা চালক (CNG / Auto Driver)',
+  'রিকশা / ভ্যান চালক (Rickshaw / Van Puller)',
+  'হেলপার / পরিবহন শ্রমিক (Transport Worker)',
+
+  // পেশাজীবী, আইন ও প্রশাসন
+  'প্রকৌশলী / ইঞ্জিনিয়ার (Engineer)',
+  'আইনজীবী (Lawyer)',
+  'সাংবাদিক (Journalist)',
+  'পুলিশ / আইনশৃঙ্খলা বাহিনী (Police / Law Enforcement)',
+  'সেনাবাহিনী / বিজিবি / আনসার (Army / BGB / Ansar)',
+  'ফ্রিল্যান্সার / আইটি পেশাজীবী (Freelancer / IT Professional)',
+  'জনপ্রতিনিধি (Public Representative)',
+
+  // অন্যান্য অবস্থা
+  'অবসরপ্রাপ্ত (Retired)',
+  'বেকার / কর্মহীন (Unemployed)',
+  'অসুস্থ / অক্ষম (Sick / Disabled)',
+  'মৃত (Late)',
+  'অন্যান্য (Other)'
+];
+
+const MOTHER_OCCUPATIONS = [
+  // গৃহিণী ও পারিবারিক
+  'গৃহিণী (Housewife)',
+
+  // শিক্ষা ও ধর্মীয়
+  'শিক্ষিকা (Teacher)',
+  'মাদ্রাসা শিক্ষিকা (Madrasah Teacher)',
+  'কলেজ / বিশ্ববিদ্যালয় শিক্ষিকা (College/University Teacher)',
+  'গৃহশিক্ষিকা (Private Tutor)',
+  'কুরআন শিক্ষিকা / আলেমা (Quran Teacher / Alima)',
+
+  // চাকরি (সরকারি ও বেসরকারি)
+  'সরকারি চাকরিজীবী (Government Service)',
+  'বেসরকারি চাকরিজীবী (Private Service)',
+  'ব্যাংকার (Banker)',
+  'এনজিও কর্মী (NGO Worker)',
+  'গার্মেন্টস কর্মী (Garments Worker)',
+  'আয়া / অফিস সহায়িকা (Ayah / Office Attendant)',
+
+  // চিকিৎসা ও স্বাস্থ্য
+  'ডাক্তার (Doctor)',
+  'নার্স (Nurse)',
+  'স্বাস্থ্যকর্মী / ধাত্রী (Health Worker / Midwife)',
+
+  // স্বনির্ভর ও ব্যবসা
+  'দর্জি / সেলাই কর্মী (Tailor / Sewing Worker)',
+  'হস্তশিল্প / কুটির শিল্প (Handicrafts)',
+  'ক্ষুদ্র উদ্যোক্তা / ব্যবসায়ী (Entrepreneur / Business)',
+  'ফ্রিল্যান্সার (Freelancer)',
+  'প্রবাসী (Expatriate)',
+  'পোল্ট্রি / গবাদিপশু পালনকারী (Poultry / Livestock Rearing)',
+
+  // অন্যান্য অবস্থা
+  'অবসরপ্রাপ্ত (Retired)',
+  'অসুস্থ / অক্ষম (Sick / Disabled)',
+  'মৃত (Late)',
+  'অন্যান্য (Other)'
+];
   return (
     <div
       ref={formRef}
-      className="bg-white rounded-[28px] p-5 shadow-[0_12px_40px_rgba(6,13,31,0.06)] border border-slate-100 min-h-[72vh] flex flex-col"
+      className="bg-white rounded-[30px] shadow-[0_18px_50px_rgba(6,13,31,0.08)] border border-slate-200/80 min-h-[75vh] flex flex-col overflow-hidden"
     >
-      {/* COMPACT MOBILE-FRIENDLY 6-STEP HEADER */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-3">
+      {/* ==============================================================
+          OFFICIAL ROYAL EMERALD & GOLD HEADER
+         ============================================================== */}
+      <div className="bg-gradient-to-br from-[#060D1F] via-[#0B1C38] to-[#0E3B2E] px-5 pt-5 pb-4 text-white relative overflow-hidden">
+        <div className="absolute -right-8 -top-8 w-36 h-36 rounded-full bg-[#D4A843]/10 blur-2xl pointer-events-none" />
+
+        <div className="flex items-start justify-between gap-2 mb-4 relative z-10">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-[#060D1F] text-[#D4A843] flex items-center justify-center shadow-md">
+            <div className="w-11 h-11 rounded-2xl bg-[#D4A843]/15 border border-[#D4A843]/40 text-[#F7E09A] flex items-center justify-center shadow-inner shrink-0">
               <StepIcon size={20} />
             </div>
             <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                ধাপ {step} / {TOTAL_STEPS} · {currentMeta.sub}
-              </p>
-              <h3 className="text-base font-black text-slate-800 leading-tight">{currentMeta.title}</h3>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black uppercase tracking-[0.18em] text-[#D4A843]">
+                  ধাপ {step} / {TOTAL_STEPS} · {currentMeta.sub}
+                </span>
+              </div>
+              <h3 className="text-base sm:text-lg font-black text-white leading-tight mt-0.5">
+                {currentMeta.title}
+              </h3>
             </div>
           </div>
-          <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-full flex items-center gap-1">
-            <ShieldCheck size={12} /> Verified
-          </span>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            {!isUpdate && (
+              <button
+                type="button"
+                onClick={handleResetDraft}
+                title="সংরক্ষিত ড্রাফট মুছে নতুন করে শুরু করুন"
+                className="px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-red-500/25 border border-white/15 text-[10px] font-black text-slate-200 hover:text-red-200 flex items-center gap-1 transition-colors"
+              >
+                <RotateCcw size={11} /> রিসেট
+              </button>
+            )}
+            <span className="text-[10px] font-black text-emerald-300 bg-emerald-500/15 border border-emerald-400/30 px-2.5 py-1.5 rounded-xl flex items-center gap-1">
+              <ShieldCheck size={12} /> {progressPercent}%
+            </span>
+          </div>
         </div>
 
-        {/* 6-segment progress bar */}
-        <div className="flex gap-1.5">
-          {STEPS_META.map((s) => (
-            <div
-              key={s.id}
-              className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
-                step === s.id ? 'bg-[#060D1F]' : step > s.id ? 'bg-emerald-500' : 'bg-slate-100'
-              }`}
-            />
-          ))}
+        {/* Interactive Clickable Stepper Pills */}
+        <div className="grid grid-cols-6 gap-1.5 relative z-10">
+          {STEPS_META.map((s) => {
+            const isCurrent = step === s.id;
+            const isCompleted = step > s.id;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => handleStepPillClick(s.id)}
+                className="group flex flex-col items-center gap-1 outline-none"
+              >
+                <div
+                  className={`h-1.5 w-full rounded-full transition-all duration-300 ${
+                    isCurrent
+                      ? 'bg-[#D4A843] shadow-[0_0_8px_rgba(212,168,67,0.7)]'
+                      : isCompleted
+                      ? 'bg-emerald-400'
+                      : 'bg-white/15'
+                  }`}
+                />
+                <span
+                  className={`text-[9px] font-black tracking-tight transition-colors ${
+                    isCurrent ? 'text-[#F7E09A]' : isCompleted ? 'text-emerald-300' : 'text-slate-400'
+                  }`}
+                >
+                  {s.id}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* FORM BODY (STRICTLY SINGLE COLUMN) */}
-      <div className="flex-1">
-        {/* ==================== STEP 1: ACADEMIC ==================== */}
+      {/* Restored Draft Auto-Save Indicator */}
+      {!isUpdate && restoredNotice && (
+        <div className="bg-emerald-50/90 border-b border-emerald-100 px-5 py-2 flex items-center justify-between text-[11px] font-bold text-emerald-800">
+          <span className="flex items-center gap-1.5">
+            <Sparkles size={13} className="text-emerald-600 shrink-0" />
+            আগের অসম্পূর্ণ ফর্মটি লোকাল স্টোরেজ থেকে রিস্টোর করা হয়েছে
+          </span>
+          <button
+            type="button"
+            onClick={() => setRestoredNotice(false)}
+            className="text-emerald-600 hover:text-emerald-900 p-0.5"
+          >
+            <X size={13} />
+          </button>
+        </div>
+      )}
+
+      {/* ==============================================================
+          FORM BODY (STRICTLY SINGLE COLUMN)
+         ============================================================== */}
+      <div className="flex-1 p-5 sm:p-6">
+        {/* ==================== STEP 1: ACADEMIC & ADMISSION MODE ==================== */}
         {step === 1 && (
           <div className="space-y-4 animate-in fade-in slide-in-from-right-6 duration-300">
-            {!isUpdate && isAdmin && (
-              <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50/60 rounded-2xl border border-amber-200/70">
-                <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest mb-2">
-                  {migration ? `পুরনো শিট থেকে আনা হয়েছে (ID: ${migration.studentCode})` : 'পুরনো শিট থেকে মাইগ্রেট (ঐচ্ছিক)'}
-                </p>
-                <div className="flex gap-2">
-                  <input
-                    inputMode="numeric"
-                    maxLength={10}
-                    value={legacyId}
-                    onChange={(e) => setLegacyId(e.target.value.replace(/[^0-9]/g, ''))}
-                    placeholder="পুরনো ১০ ডিজিটের আইডি"
-                    className="flex-1 p-3 bg-white rounded-xl font-bold outline-none border border-amber-200/70 focus:ring-2 focus:ring-amber-400 text-sm"
-                  />
+            {/* 1. Admission Mode Selector (New vs Old Student) */}
+            {!isUpdate && (
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">
+                  ভর্তির ধরন নির্বাচন করুন (Admission Type)
+                </label>
+
+                <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
-                    onClick={handleLegacyLookup}
-                    disabled={legacyBusy}
-                    className="px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm flex items-center gap-1.5 disabled:opacity-60 transition-colors"
+                    onClick={() => {
+                      setAdmissionMode('new');
+                      setMigration(null);
+                      setLegacyId('');
+                    }}
+                    className={`p-3.5 rounded-2xl border-2 text-left transition-all relative overflow-hidden ${
+                      admissionMode === 'new'
+                        ? 'border-[#060D1F] bg-slate-900 text-white shadow-lg shadow-slate-900/15'
+                        : 'border-slate-200 bg-slate-50/70 text-slate-700 hover:border-slate-300'
+                    }`}
                   >
-                    {legacyBusy ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />} আনুন
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div
+                        className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                          admissionMode === 'new' ? 'bg-[#D4A843] text-[#060D1F]' : 'bg-white text-slate-600 border border-slate-200'
+                        }`}
+                      >
+                        <UserPlus size={16} />
+                      </div>
+                      {admissionMode === 'new' && <CheckCircle2 size={16} className="text-[#D4A843]" />}
+                    </div>
+                    <p className="text-xs sm:text-sm font-black leading-tight">নতুন ভর্তি</p>
+                    <p className={`text-[10px] font-semibold mt-0.5 ${admissionMode === 'new' ? 'text-slate-300' : 'text-slate-400'}`}>
+                      New Student Entry
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setAdmissionMode('old')}
+                    className={`p-3.5 rounded-2xl border-2 text-left transition-all relative overflow-hidden ${
+                      admissionMode === 'old'
+                        ? 'border-amber-500 bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/20'
+                        : 'border-slate-200 bg-slate-50/70 text-slate-700 hover:border-amber-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div
+                        className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                          admissionMode === 'old' ? 'bg-white text-amber-600' : 'bg-white text-amber-600 border border-slate-200'
+                        }`}
+                      >
+                        <QrCode size={16} />
+                      </div>
+                      {admissionMode === 'old' && <CheckCircle2 size={16} className="text-white" />}
+                    </div>
+                    <p className="text-xs sm:text-sm font-black leading-tight">পুরনো স্টুডেন্ট</p>
+                    <p className={`text-[10px] font-semibold mt-0.5 ${admissionMode === 'old' ? 'text-amber-100' : 'text-slate-400'}`}>
+                      ID / QR স্ক্যান করে আনুন
+                    </p>
                   </button>
                 </div>
+
+                {/* Old Student Lookup + QR Scanner Panel */}
+                {admissionMode === 'old' && (
+                  <div className="p-4 bg-gradient-to-br from-amber-50 via-orange-50/50 to-white rounded-2xl border border-amber-200 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[11px] font-black text-amber-900">
+                        {migration
+                          ? `✓ পুরনো শিট থেকে লোড হয়েছে (ID: ${migration.studentCode})`
+                          : 'পুরনো ১০-ডিজিট আইডি দিন অথবা QR স্ক্যান করুন'}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          window.history.pushState({ page: 'qrScan' }, '');
+                          setIsQrOpen(true);
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-[#060D1F] text-[#D4A843] text-[11px] font-black flex items-center gap-1.5 shadow-sm active:scale-95 transition-transform shrink-0"
+                      >
+                        <QrCode size={14} /> QR স্ক্যান
+                      </button>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <input
+                        inputMode="numeric"
+                        maxLength={10}
+                        value={legacyId}
+                        onChange={(e) => setLegacyId(e.target.value.replace(/[^0-9]/g, ''))}
+                        placeholder="১০-ডিজিট পুরনো আইডি (যেমন: 2026140101)"
+                        className="flex-1 px-3.5 py-3 bg-white rounded-xl font-mono font-bold outline-none border border-amber-300/80 focus:ring-2 focus:ring-amber-400 text-sm text-slate-800"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleLegacyLookup()}
+                        disabled={legacyBusy}
+                        className="px-4 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs flex items-center gap-1.5 disabled:opacity-60 transition-colors shrink-0"
+                      >
+                        {legacyBusy ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />} খুঁজুন
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
-            <Input name="sessionYear" label="Session (অক্টোবর থেকে পরের বছর)" type="number" val={form.sessionYear} set={(v) => update('sessionYear', v)} error={errors.sessionYear} />
-            <Input name="admissionDate" label="Admission Date (ভর্তির তারিখ)" type="date" val={form.admissionDate} set={(v) => update('admissionDate', v)} error={errors.admissionDate} />
+            <Input
+              name="sessionYear"
+              label="Session (অক্টোবর থেকে পরের বছর)"
+              type="number"
+              val={form.sessionYear}
+              set={(v) => update('sessionYear', v)}
+              error={errors.sessionYear}
+            />
+            <Input
+              name="admissionDate"
+              label="Admission Date (ভর্তির তারিখ)"
+              type="date"
+              val={form.admissionDate}
+              set={(v) => update('admissionDate', v)}
+              error={errors.admissionDate}
+            />
 
-            <Input name="studentNameBn" label="শিক্ষার্থীর নাম (বাংলা)" val={form.studentNameBn} set={(v) => update('studentNameBn', v)} error={errors.studentNameBn} />
-            <Input name="studentNameEn" label="Student Name (English)" val={form.studentNameEn} set={(v) => update('studentNameEn', v)} error={errors.studentNameEn} />
+            <div onBlur={() => handleNormalizeBlur('studentNameBn', false)}>
+              <Input
+                name="studentNameBn"
+                label="শিক্ষার্থীর নাম (বাংলা)"
+                val={form.studentNameBn}
+                set={(v) => update('studentNameBn', v)}
+                error={errors.studentNameBn}
+              />
+            </div>
+
+            <div onBlur={() => handleNormalizeBlur('studentNameEn', true)}>
+              <Input
+                name="studentNameEn"
+                label="Student Name (English)"
+                val={form.studentNameEn}
+                set={(v) => update('studentNameEn', v)}
+                error={errors.studentNameEn}
+              />
+            </div>
 
             <div className="relative pt-1 w-full">
               <label className="text-[10px] font-bold text-gray-400 uppercase ml-1 block">Class (শ্রেণি)</label>
@@ -1310,7 +1914,16 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
               {errors.classBn && <p className="text-red-500 text-xs font-bold mt-1">{errors.classBn}</p>}
             </div>
 
-            <Input name="roll" label="Roll (1-500)" type="number" min="1" max="500" val={form.roll} set={(v) => update('roll', v)} error={errors.roll} />
+            <Input
+              name="roll"
+              label="Roll (1-500)"
+              type="number"
+              min="1"
+              max="500"
+              val={form.roll}
+              set={(v) => update('roll', v)}
+              error={errors.roll}
+            />
 
             {isSeniorClass(form.classBn) && (
               <>
@@ -1334,9 +1947,11 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
               </>
             )}
 
-            <div className="mt-2 p-4 bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl text-white">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-amber-400 mb-1">Student ID (Auto Generated)</p>
-              <p className="text-xl font-black tracking-widest">{form.studentId || '— — — — — — — — — —'}</p>
+            <div className="mt-2 p-4 bg-gradient-to-r from-[#060D1F] to-slate-800 rounded-2xl text-white border border-[#D4A843]/30">
+              <p className="text-[10px] font-black uppercase tracking-widest text-[#D4A843] mb-1">
+                {migration ? 'Student ID (Preserved Legacy ID)' : 'Student ID (Auto Generated)'}
+              </p>
+              <p className="text-xl font-mono font-black tracking-widest">{form.studentId || '— — — — — — — — — —'}</p>
             </div>
           </div>
         )}
@@ -1380,7 +1995,16 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
               {liveAge && <p className="text-[11px] font-bold text-emerald-600 mt-1 ml-1">✓ শিক্ষার্থীর বয়স: {liveAge} বছর</p>}
             </div>
 
-            <Input name="brn" label="Birth Registration No (১৭ ডিজিট)" inputMode="numeric" maxLength={17} type="text" val={form.brn} set={(v) => update('brn', v)} error={errors.brn} />
+            <Input
+              name="brn"
+              label="Birth Registration No (১৭ ডিজিট)"
+              inputMode="numeric"
+              maxLength={17}
+              type="text"
+              val={form.brn}
+              set={(v) => update('brn', v)}
+              error={errors.brn}
+            />
 
             <div className="relative pt-1 w-full">
               <label className="text-[10px] font-bold text-gray-400 uppercase ml-1 block">Blood Group (রক্তের গ্রুপ)</label>
@@ -1402,17 +2026,63 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
         {/* ==================== STEP 3: PARENTS & CONTACT ==================== */}
         {step === 3 && (
           <div className="space-y-4 animate-in fade-in slide-in-from-right-6 duration-300">
-            <Input name="fatherNameBn" label="পিতার নাম (বাংলা)" val={form.fatherNameBn} set={(v) => update('fatherNameBn', v)} error={errors.fatherNameBn} />
-            <Input name="fatherNameEn" label="Father Name (English)" val={form.fatherNameEn} set={(v) => update('fatherNameEn', v)} error={errors.fatherNameEn} />
+            <div onBlur={() => handleNormalizeBlur('fatherNameBn', false)}>
+              <Input name="fatherNameBn" label="পিতার নাম (বাংলা)" val={form.fatherNameBn} set={(v) => update('fatherNameBn', v)} error={errors.fatherNameBn} />
+            </div>
+            <div onBlur={() => handleNormalizeBlur('fatherNameEn', true)}>
+              <Input name="fatherNameEn" label="Father Name (English)" val={form.fatherNameEn} set={(v) => update('fatherNameEn', v)} error={errors.fatherNameEn} />
+            </div>
             <Input name="fatherNid" label="পিতার NID (১০/১৩/১৭ ডিজিট · ঐচ্ছিক)" inputMode="numeric" maxLength={17} val={form.fatherNid} set={(v) => update('fatherNid', v)} error={errors.fatherNid} />
-            <Input name="fatherOccupation" label="পিতার পেশা (ঐচ্ছিক)" val={form.fatherOccupation} set={(v) => update('fatherOccupation', v)} error={errors.fatherOccupation} />
+           {/* পিতার পেশা */}
+<div className="relative pt-1 w-full">
+  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1 block">
+    পিতার পেশা (Father Occupation · ঐচ্ছিক)
+  </label>
+  <select
+    name="fatherOccupation"
+    className="w-full p-4 bg-gray-50 rounded-xl font-bold outline-none border border-transparent focus:bg-white focus:ring-2 focus:ring-slate-900"
+    value={form.fatherOccupation}
+    onChange={(e) => update('fatherOccupation', e.target.value)}
+  >
+    <option value="">নির্বাচন করুন...</option>
+    {form.fatherOccupation && !FATHER_OCCUPATIONS.includes(form.fatherOccupation) && (
+      <option value={form.fatherOccupation}>{form.fatherOccupation}</option>
+    )}
+    {FATHER_OCCUPATIONS.map((occ) => (
+      <option key={occ} value={occ}>{occ}</option>
+    ))}
+  </select>
+</div>
 
             <div className="h-px bg-slate-100 my-2" />
 
-            <Input name="motherNameBn" label="মাতার নাম (বাংলা)" val={form.motherNameBn} set={(v) => update('motherNameBn', v)} error={errors.motherNameBn} />
-            <Input name="motherNameEn" label="Mother Name (English)" val={form.motherNameEn} set={(v) => update('motherNameEn', v)} error={errors.motherNameEn} />
+            <div onBlur={() => handleNormalizeBlur('motherNameBn', false)}>
+              <Input name="motherNameBn" label="মাতার নাম (বাংলা)" val={form.motherNameBn} set={(v) => update('motherNameBn', v)} error={errors.motherNameBn} />
+            </div>
+            <div onBlur={() => handleNormalizeBlur('motherNameEn', true)}>
+              <Input name="motherNameEn" label="Mother Name (English)" val={form.motherNameEn} set={(v) => update('motherNameEn', v)} error={errors.motherNameEn} />
+            </div>
             <Input name="motherNid" label="মাতার NID (১০/১৩/১৭ ডিজিট · ঐচ্ছিক)" inputMode="numeric" maxLength={17} val={form.motherNid} set={(v) => update('motherNid', v)} error={errors.motherNid} />
-            <Input name="motherOccupation" label="মাতার পেশা (ঐচ্ছিক)" val={form.motherOccupation} set={(v) => update('motherOccupation', v)} error={errors.motherOccupation} />
+           {/* মাতার পেশা */}
+<div className="relative pt-1 w-full">
+  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1 block">
+    মাতার পেশা (Mother Occupation · ঐচ্ছিক)
+  </label>
+  <select
+    name="motherOccupation"
+    className="w-full p-4 bg-gray-50 rounded-xl font-bold outline-none border border-transparent focus:bg-white focus:ring-2 focus:ring-slate-900"
+    value={form.motherOccupation}
+    onChange={(e) => update('motherOccupation', e.target.value)}
+  >
+    <option value="">নির্বাচন করুন...</option>
+    {form.motherOccupation && !MOTHER_OCCUPATIONS.includes(form.motherOccupation) && (
+      <option value={form.motherOccupation}>{form.motherOccupation}</option>
+    )}
+    {MOTHER_OCCUPATIONS.map((occ) => (
+      <option key={occ} value={occ}>{occ}</option>
+    ))}
+  </select>
+</div>
 
             <Input name="annualIncome" label="পারিবারিক বার্ষিক আয় (টাকা · ঐচ্ছিক)" inputMode="numeric" val={form.annualIncome} set={(v) => update('annualIncome', v)} error={errors.annualIncome} />
 
@@ -1420,7 +2090,6 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
 
             <Input name="whatsappNumber" label="Mobile / WhatsApp (১১ ডিজিট)" type="tel" inputMode="numeric" maxLength={11} val={form.whatsappNumber} set={(v) => update('whatsappNumber', v)} error={errors.whatsappNumber} />
 
-            {/* Emergency Contact */}
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Emergency Contact (জরুরি যোগাযোগ)</p>
               <Input name="emergencyNumber" label="Emergency Phone (১১ ডিজিট)" type="tel" inputMode="numeric" maxLength={11} val={form.emergencyNumber} set={(v) => update('emergencyNumber', v)} error={errors.emergencyNumber} />
@@ -1442,7 +2111,6 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
               </div>
             </div>
 
-            {/* Local Guardian Toggle */}
             <label className="flex items-center gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-200 cursor-pointer select-none">
               <input
                 type="checkbox"
@@ -1482,6 +2150,7 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
               geoError={geoError}
               onPickGeo={pickPresentGeo}
               onFieldChange={update}
+              onFieldBlur={handleNormalizeBlur}
               accent="emerald"
             />
 
@@ -1529,6 +2198,7 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
                   geoError={permGeoError}
                   onPickGeo={pickPermGeo}
                   onFieldChange={update}
+                  onFieldBlur={handleNormalizeBlur}
                   accent="indigo"
                 />
               </div>
@@ -1539,7 +2209,6 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
         {/* ==================== STEP 5: FEE, SIBLING & STATUS ==================== */}
         {step === 5 && (
           <div className="space-y-4 animate-in fade-in slide-in-from-right-6 duration-300">
-            {/* Sibling Toggle (Required ID if checked) */}
             <label className="flex items-center justify-between gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-200 cursor-pointer select-none">
               <div className="flex items-center gap-3">
                 <input
@@ -1581,7 +2250,6 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
               </div>
             )}
 
-            {/* Fee Details */}
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Fee Details (বেতন ও ক্যাটাগরি)</p>
               <div className="relative pt-1 w-full">
@@ -1602,7 +2270,6 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
               <Input name="monthlyFee" label="Monthly Fee (মাসিক বেতন · টাকা)" inputMode="numeric" val={form.monthlyFee} set={(v) => update('monthlyFee', v)} error={errors.monthlyFee} />
             </div>
 
-            {/* Admin Status Control (Only on Update) */}
             {isUpdate && isAdmin && (
               <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 space-y-3">
                 <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest">Student Status (Admin Only)</p>
@@ -1624,11 +2291,11 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
           </div>
         )}
 
-        {/* ==================== STEP 6: STUDENT PHOTO ==================== */}
+        {/* ==================== STEP 6: STUDENT PHOTO & FINAL SUMMARY ==================== */}
         {step === 6 && (
-          <div className="flex flex-col items-center animate-in fade-in zoom-in duration-300 py-6">
+          <div className="flex flex-col items-center animate-in fade-in zoom-in duration-300 py-3 space-y-5">
             <div
-              className={`relative w-56 h-56 bg-slate-100 rounded-full flex items-center justify-center border-[6px] shadow-2xl ring-2 overflow-hidden transition-all ${
+              className={`relative w-52 h-52 bg-slate-100 rounded-full flex items-center justify-center border-[6px] shadow-2xl ring-2 overflow-hidden transition-all ${
                 errors.imageUrl ? 'border-red-500 ring-red-200' : 'border-white ring-slate-200'
               }`}
             >
@@ -1650,31 +2317,51 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
             </div>
 
             {errors.imageUrl && (
-              <p className="text-red-500 text-xs font-bold mt-4 text-center max-w-xs flex items-center justify-center gap-1.5">
+              <p className="text-red-500 text-xs font-bold text-center max-w-xs flex items-center justify-center gap-1.5">
                 <AlertCircle size={14} className="shrink-0" />
                 {typeof errors.imageUrl === 'string' && errors.imageUrl.length > 1 ? errors.imageUrl : 'ছবি আবশ্যক'}
               </p>
             )}
 
-            <div className="mt-6 p-4 rounded-2xl bg-slate-50 border border-slate-200/80 text-center max-w-xs space-y-1">
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 text-center w-full space-y-1">
               <p className="text-xs font-black text-slate-700">ছবি আপলোড করতে উপরে ট্যাপ করুন</p>
               <p className="text-[11px] font-semibold text-slate-400">
                 • ছবি অবশ্যই স্কয়ার (Square) হতে হবে <br />
                 • ব্যাকগ্রাউন্ড সম্পূর্ণ সাদা হতে হবে (উপরের দুই কোণা যাচাই করা হবে)
               </p>
             </div>
+
+            {/* Official Summary Review Card before Final Submit */}
+            <div className="w-full rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 space-y-2.5 text-xs">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-200/80">
+                <span className="font-black text-slate-800 flex items-center gap-1.5">
+                  <FileCheck2 size={15} className="text-emerald-600" /> চূড়ান্ত তথ্য সারসংক্ষেপ
+                </span>
+                <span className="font-mono text-[11px] font-black text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">
+                  ID: {form.studentId || 'N/A'}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                <div><span className="text-slate-400 block">নাম (বাংলা):</span><b className="text-slate-800">{form.studentNameBn || '—'}</b></div>
+                <div><span className="text-slate-400 block">শ্রেণি ও রোল:</span><b className="text-slate-800">{form.classBn || '—'} · রোল {form.roll || '—'}</b></div>
+                <div><span className="text-slate-400 block">পিতার নাম:</span><b className="text-slate-800">{form.fatherNameBn || '—'}</b></div>
+                <div><span className="text-slate-400 block">মোবাইল:</span><b className="font-mono text-slate-800">{form.whatsappNumber || '—'}</b></div>
+              </div>
+            </div>
           </div>
         )}
       </div>
 
-      {/* NAVIGATION FOOTER */}
-      <div className="flex justify-between items-center mt-8 pt-6 border-t border-slate-100">
+      {/* ==============================================================
+          NAVIGATION FOOTER
+         ============================================================== */}
+      <div className="flex justify-between items-center px-5 py-4 bg-slate-50/70 border-t border-slate-200/70">
         <button
           id="formBackBtn"
           type="button"
           onClick={goBackStep}
           className={`font-bold px-5 py-3 rounded-2xl flex items-center gap-1.5 transition-colors ${
-            step > 1 ? 'text-slate-600 bg-slate-100 hover:bg-slate-200' : 'text-red-500 hover:bg-red-50'
+            step > 1 ? 'text-slate-600 bg-white border border-slate-200 hover:bg-slate-100' : 'text-red-500 hover:bg-red-50'
           }`}
         >
           {step > 1 ? <><ArrowLeft size={16} /> Back</> : 'Cancel'}
@@ -1699,6 +2386,16 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
           </button>
         )}
       </div>
+
+      {/* Live QR Code Scanner Modal */}
+      <QrScannerModal
+        isOpen={isQrOpen}
+        onClose={() => setIsQrOpen(false)}
+        onDetected={(scannedCode) => {
+          setIsQrOpen(false);
+          handleLegacyLookup(scannedCode);
+        }}
+      />
     </div>
   );
 };

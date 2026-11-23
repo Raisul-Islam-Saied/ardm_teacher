@@ -1,14 +1,14 @@
+import { toPng } from 'html-to-image';
 import {
   AlertCircle,
   ArrowLeft,
-  Award,
   BarChart3,
-  Download,  
   BookOpen,
   Calendar,
   CheckCircle,
   ChevronRight,
   Clock,
+  Download,
   FileSpreadsheet,
   FileType,
   Hash,
@@ -16,53 +16,68 @@ import {
   LayoutDashboard,
   Loader2,
   PlusCircle,
-  Printer,
   RefreshCw,
   Search,
   Trash2,
-  MessageCircle,
   UploadCloud
 } from 'lucide-react';
-import { toPng } from 'html-to-image';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from "react-router-dom";
-// FIREBASE IMPORTS
-import { initializeApp } from "firebase/app";
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import ResultTimer from './ResultTimer';
 import { ONLY_ADMIN, RESULT_PUBLISH_TIME } from './systemConfig';
-// ==============================================
-// 1. FIREBASE & APP CONFIGURATION
-// ==============================================
-const firebaseConfig = {
-  apiKey: "AIzaSyCrmkkxixxtiLON5JGqSU3Rsx5WVgQaUDw",
-  authDomain: "central-pod-376117.firebaseapp.com",
-  projectId: "central-pod-376117",
-  storageBucket: "central-pod-376117.firebasestorage.app",
-  messagingSenderId: "1003594162237",
-  appId: "1:1003594162237:web:c7b377ab71e90c102d0a54",
-  measurementId: "G-QETBDY6355"
-};
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
 
-// ROLE MAPPING (Email to Role)
-const USER_ROLES = {
-  "admin@ardm.com": { role: "Admin" },
-  "visitor@ardm.com": { role: "Visitor" },
-  "play@ardm.com":    { role: "Class", classBn: "প্লে",    classEn: "Play" },
-  "nursery@ardm.com": { role: "Class", classBn: "নার্সারি", classEn: "Nursery" },
-  "kg@ardm.com":      { role: "Class", classBn: "কেজি",    classEn: "KG" },
-  "class1@ardm.com":  { role: "Class", classBn: "১ম", classEn: "One" },
-  "class2@ardm.com":  { role: "Class", classBn: "২য়", classEn: "Two" },
-  "class3@ardm.com":  { role: "Class", classBn: "৩য়", classEn: "Three" },
-  "class4@ardm.com":  { role: "Class", classBn: "৪র্থ", classEn: "Four" },
-  "class5@ardm.com":  { role: "Class", classBn: "৫ম", classEn: "Five" },
-  "class6@ardm.com":  { role: "Class", classBn: "৬ষ্ঠ", classEn: "Six" },
-  "class7@ardm.com":  { role: "Class", classBn: "৭ম", classEn: "Seven" },
-  "class8@ardm.com":  { role: "Class", classBn: "৮ম", classEn: "Eight" },
-  "class9@ardm.com":  { role: "Class", classBn: "৯ম", classEn: "Nine" },
-  "class10@ardm.com": { role: "Class", classBn: "১০ম", classEn: "Ten" },
+// ==============================================
+// 1. SHARED ERP SESSION READER (FROM '/')
+// ==============================================
+const ERP_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1';
+const TOKEN_STORAGE_KEY = 'ardm_erp_jwt_token';
+const USER_STORAGE_KEY = 'ardm_erp_auth_user';
+
+const CLASS_BN_TO_EN = {
+  'প্লে': 'Play',
+  'নার্সারি': 'Nursery',
+  'কেজি': 'KG',
+  '১ম': 'One',
+  '২য়': 'Two',
+  '২য়': 'Two',
+  '৩য়': 'Three',
+  '৩য়': 'Three',
+  '৪র্থ': 'Four',
+  '৫ম': 'Five',
+  '৬ষ্ঠ': 'Six',
+  '৭ম': 'Seven',
+  '৮ম': 'Eight',
+  '৯ম': 'Nine',
+  '১০ম': 'Ten'
+};
+
+const getSessionUser = () => {
+  try {
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+    const raw = localStorage.getItem(USER_STORAGE_KEY);
+    if (!token || !raw) return null;
+    const user = JSON.parse(raw);
+    if (!user || user.isActive === false || ['Pending', 'Rejected'].includes(user.registrationStatus)) {
+      return null;
+    }
+    if (user.role === 'SuperAdmin' || user.role === 'Admin') {
+      return { ...user, role: 'Admin' };
+    }
+    if (user.role === 'Teacher' && user.assignedClass) {
+      return {
+        ...user,
+        role: 'Class',
+        classBn: user.assignedClass,
+        classEn: CLASS_BN_TO_EN[user.assignedClass] || user.assignedClass
+      };
+    }
+    if (user.role === 'Teacher') {
+      return { ...user, role: 'Visitor' };
+    }
+    return null;
+  } catch {
+    return null;
+  }
 };
 
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxoQM0Xf5SrusbRuCwe4b3s92rK7e014DYkgiuM3yOLs9KKZ773MUkmysrM3PcxyCbpbw/exec';
@@ -89,7 +104,7 @@ const toEnNum = (n) => {
 // ==============================================
 // AI REMARK GENERATOR HELPERS
 // ==============================================
-const MAX_SUBJECTS_FOR_REMARK = 20; // ১২ এর বেশি বিষয় হলে রিমার্ক হাইড হবে
+const MAX_SUBJECTS_FOR_REMARK = 20; // ১২ এর বেশি বিষয় হলে রিমার্ক হাইড হবে
 
 const seededRandom = (seed) => {
   let x = Math.sin(seed) * 10000;
@@ -104,7 +119,7 @@ const pickAI = (arr, seed) => {
 const generateSmartRemark = (id, totalMarks, gpa, isPass, subjects) => {
   if (MAX_SUBJECTS_FOR_REMARK === 0 || subjects.length > MAX_SUBJECTS_FOR_REMARK) return "";
 
-  // আইডি এবং মোট নম্বর দিয়ে ইউনিক সিড তৈরি (যাতে রিলোডেও একই স্টুডেন্টের রিমার্ক সেম থাকে)
+  // আইডি এবং মোট নম্বর দিয়ে ইউনিক সিড তৈরি (যাতে রিলোডেও একই স্টুডেন্টের রিমার্ক সেম থাকে)
   const seed = (Number(toEnNum(id)) || 1) + (Number(toEnNum(totalMarks)) || 1); 
   
   let bestSub = "", worstSub = "";
@@ -120,22 +135,22 @@ const generateSmartRemark = (id, totalMarks, gpa, isPass, subjects) => {
       if (percent < 33) { failCount++; }
   });
 
-  let weakText = (weakCount > 1) ? `একাধিক বিষয়ে (বিশেষত '${worstSub}'-এ)` : `'${worstSub}' বিষয়ে`;
-  let strongText = `'${bestSub}' বিষয়ে`;
+  let weakText = (weakCount > 1) ? `একাধিক বিষয়ে (বিশেষত '${worstSub}'-এ)` : `'${worstSub}' বিষয়ে`;
+  let strongText = `'${bestSub}' বিষয়ে`;
 
   let remark = "";
   let numGpa = parseFloat(toEnNum(gpa));
 
-  // ফেল লিমিটের বেশি হলে (২টির বেশি বিষয়ে ফেল)
+  // ফেল লিমিটের বেশি হলে (২টির বেশি বিষয়ে ফেল)
   if (failCount > 2) {
-      return "একাধিক বিষয়ে অকৃতকার্য হওয়া পড়াশোনায় চরম অমনোযোগের লক্ষণ। শিক্ষাজীবন নিয়ে উদ্বেগজনক এই পরিস্থিতি উত্তরণে অভিভাবকের নিবিড় তদারকি ও ত্বরিত পদক্ষেপ প্রয়োজন।";
+      return "একাধিক বিষয়ে অকৃতকার্য হওয়া পড়াশোনায় চরম অমনোযোগের লক্ষণ। শিক্ষাজীবন নিয়ে উদ্বেগজনক এই পরিস্থিতি উত্তরণে অভিভাবকের নিবিড় তদারকি ও ত্বরিত পদক্ষেপ প্রয়োজন।";
   }
 
   if (numGpa >= 5.00 && isPass) {
       const intros = [
-          `অসাধারণ মেধার স্বাক্ষর! ${strongText} তার দক্ষতা প্রশংসনীয় এবং সবগুলো বিষয়েই পারফরম্যান্স অত্যন্ত ধারাবাহিক।`,
+          `অসাধারণ মেধার স্বাক্ষর! ${strongText} তার দক্ষতা প্রশংসনীয় এবং সবগুলো বিষয়েই পারফরম্যান্স অত্যন্ত ধারাবাহিক।`,
           `খুবই চমৎকার রেজাল্ট! মেধা ও চেষ্টার সঠিক প্রতিফলন ঘটেছে এই ফলাফলে।`,
-          `পড়াশোনায় একাগ্রতা ও অধ্যবসায়ের কারণেই এই অসামান্য ফলাফল অর্জন করা সম্ভব হয়েছে।`
+          `পড়াশোনায় একাগ্রতা ও অধ্যবসায়ের কারণেই এই অসামান্য ফলাফল অর্জন করা সম্ভব হয়েছে।`
       ];
       const middles = [
           `তার মতো একজন মেধাবী শিক্ষার্থীর কাছ থেকে ঠিক এমন একটি রেজাল্টই কাম্য।`,
@@ -146,36 +161,36 @@ const generateSmartRemark = (id, totalMarks, gpa, isPass, subjects) => {
   else if (numGpa >= 3.50 && isPass) {
       const intros = [
           `ফলাফল বেশ ভালো ও সন্তোষজনক। তবে ${strongText} ভালো করলেও ${weakText} তাকে আরও ফোকাস করতে হবে।`,
-          `পড়াশোনার প্রতি তার একাগ্রতা প্রশংসনীয়। তবে মেধা অনুযায়ী আরও ভালো করার সক্ষমতা তার রয়েছে।`,
-          `বেশ ভালো রেজাল্ট! নিয়মিত অনুশীলন করলে আগামীতে সে অনায়াসেই পূর্ণাঙ্গ সাফল্য অর্জন করতে পারবে।`
+          `পড়াশোনার প্রতি তার একাগ্রতা প্রশংসনীয়। তবে মেধা অনুযায়ী আরও ভালো করার সক্ষমতা তার রয়েছে।`,
+          `বেশ ভালো রেজাল্ট! নিয়মিত অনুশীলন করলে আগামীতে সে অনায়াসেই পূর্ণাঙ্গ সাফল্য অর্জন করতে পারবে।`
       ];
       const middles = [
-          `আরেকটু গাইডলাইন পেলে ফলাফল আরও নিখুঁত হতো। শুধু ${weakText} কিছুটা সময় দেওয়া প্রয়োজন।`,
-          `এই ধারাবাহিকতা ধরে রেখে নিজের দুর্বলতাগুলো কাটিয়ে ওঠার চেষ্টা করতে হবে।`
+          `আরেকটু গাইডলাইন পেলে ফলাফল আরও নিখুঁত হতো। শুধু ${weakText} কিছুটা সময় দেওয়া প্রয়োজন।`,
+          `এই ধারাবাহিকতা ধরে রেখে নিজের দুর্বলতাগুলো কাটিয়ে ওঠার চেষ্টা করতে হবে।`
       ];
       remark = pickAI(intros, seed) + " " + pickAI(middles, seed+1);
   }
   else if (isPass) {
       const intros = [
-          `কৃতকার্য হলেও এই ফলাফল তার আসল মেধার পরিচায়ক নয়। বিশেষ করে ${weakText} তাকে আরও অনেক বেশি সিরিয়াস হতে হবে।`,
-          `ফলাফল চলনসই। তবে ক্লাসে তাকে আরও মনোযোগী হতে হবে এবং বাসায় পড়ার সময় বাড়াতে হবে।`,
-          `পাস করলেও ফলাফলে পুরোপুরি সন্তুষ্ট হওয়ার সুযোগ নেই। তার আরও দায়িত্বশীল হওয়া প্রয়োজন।`
+          `কৃতকার্য হলেও এই ফলাফল তার আসল মেধার পরিচায়ক নয়। বিশেষ করে ${weakText} তাকে আরও অনেক বেশি সিরিয়াস হতে হবে।`,
+          `ফলাফল চলনসই। তবে ক্লাসে তাকে আরও মনোযোগী হতে হবে এবং বাসায় পড়ার সময় বাড়াতে হবে।`,
+          `পাস করলেও ফলাফলে পুরোপুরি সন্তুষ্ট হওয়ার সুযোগ নেই। তার আরও দায়িত্বশীল হওয়া প্রয়োজন।`
       ];
       const middles = [
-          `${weakText} দুর্বলতা কাটিয়ে উঠতে শিক্ষকদের পরামর্শ মেনে চলা অত্যন্ত জরুরি।`,
-          `আশা করি আগামী পরীক্ষায় সে নিজের এই ঘাটতিগুলো কাটিয়ে উঠতে সক্ষম হবে।`
+          `${weakText} দুর্বলতা কাটিয়ে উঠতে শিক্ষকদের পরামর্শ মেনে চলা অত্যন্ত জরুরি।`,
+          `আশা করি আগামী পরীক্ষায় সে নিজের এই ঘাটতিগুলো কাটিয়ে উঠতে সক্ষম হবে।`
       ];
       remark = pickAI(intros, seed) + " " + pickAI(middles, seed+1);
   }
   else {
       const intros = [
-          `অকৃতকার্য হওয়ার বিষয়টি হতাশাজনক। মূলত ${weakText} বেসিক ঘাটতির কারণেই এই ফলাফল।`,
-          `পড়াশোনায় অমনোযোগিতার কারণেই আশানুরূপ ফলাফল হয়নি। তাকে আরও অনেক বেশি যত্নশীল হতে হবে।`,
-          `আশা অনুযায়ী ফলাফল আসেনি। ভুল থেকে শিক্ষা নিয়ে তাকে শক্তভাবে ঘুরে দাঁড়াতে হবে।`
+          `অকৃতকার্য হওয়ার বিষয়টি হতাশাজনক। মূলত ${weakText} বেসিক ঘাটতির কারণেই এই ফলাফল।`,
+          `পড়াশোনায় অমনোযোগিতার কারণেই আশানুরূপ ফলাফল হয়নি। তাকে আরও অনেক বেশি যত্নশীল হতে হবে।`,
+          `আশা অনুযায়ী ফলাফল আসেনি। ভুল থেকে শিক্ষা নিয়ে তাকে শক্তভাবে ঘুরে দাঁড়াতে হবে।`
       ];
       const middles = [
-          `${weakText} স্পেশাল কেয়ার নেওয়া প্রয়োজন। নতুবা এই গ্যাপ পূরণ করা সম্ভব হবে না।`,
-          `নিয়মিত পড়ার টেবিলে বসার অভ্যাস না থাকলে আগামীতেও ফলাফল খারাপ হওয়ার আশঙ্কা রয়েছে।`
+          `${weakText} স্পেশাল কেয়ার নেওয়া প্রয়োজন। নতুবা এই গ্যাপ পূরণ করা সম্ভব হবে না।`,
+          `নিয়মিত পড়ার টেবিলে বসার অভ্যাস না থাকলে আগামীতেও ফলাফল খারাপ হওয়ার আশঙ্কা রয়েছে।`
       ];
       remark = pickAI(intros, seed) + " " + pickAI(middles, seed+1);
   }
@@ -239,7 +254,7 @@ const TypewriterText = ({ text }) => {
   useEffect(() => {
     const observer = new IntersectionObserver(
       ([entry]) => {
-        // স্ক্রিনে আসলে এবং আগে টাইপ না হয়ে থাকলে শুরু হবে
+        // স্ক্রিনে আসলে এবং আগে টাইপ না হয়ে থাকলে শুরু হবে
         if (entry.isIntersecting && displayedText.length === 0 && !isTyping) {
           setIsTyping(true);
         }
@@ -262,7 +277,7 @@ const TypewriterText = ({ text }) => {
           i++;
           if (i >= text.length) {
               clearInterval(timer);
-              // টাইপ শেষ হওয়ার ২ সেকেন্ড পর কার্সরটি হাইড হয়ে যাবে
+              // টাইপ শেষ হওয়ার ২ সেকেন্ড পর কার্সরটি হাইড হয়ে যাবে
               setTimeout(() => setIsTyping(false), 2000); 
           }
         }, 25); // স্পিড (প্রতি অক্ষরে ২৫ মিলি-সেকেন্ড)
@@ -275,10 +290,10 @@ const TypewriterText = ({ text }) => {
   return (
     <span ref={textRef} style={{ position: 'relative', display: 'block' }}>
       
-      {/* ১. সম্পূর্ণ টেক্সটটিকে হাইড করে রাখা হলো যাতে বক্স শুরুতেই সঠিক সাইজ নিয়ে নেয় */}
+      {/* ১. সম্পূর্ণ টেক্সটটিকে হাইড করে রাখা হলো যাতে বক্স শুরুতেই সঠিক সাইজ নিয়ে নেয় */}
       <span style={{ visibility: 'hidden' }}>{text}</span>
 
-      {/* ২. টাইপিং হওয়া টেক্সটটিকে উপরে পজিশন করা হলো */}
+      {/* ২. টাইপিং হওয়া টেক্সটটিকে উপরে পজিশন করা হলো */}
       <span style={{ position: 'absolute', top: 0, left: 0, right: 0 }}>
         {displayedText}
         <span 
@@ -426,7 +441,7 @@ const examMap = {
   '2nd Terminal': 'দ্বিতীয় সাময়িক পরীক্ষা',
   'Half Yearly': 'অর্ধ-বার্ষিক পরীক্ষা',
   'Annual': 'বার্ষিক পরীক্ষা',
-  'Final Result': 'চূড়ান্ত ফলাফল (গড়)'
+  'Final Result': 'চূড়ান্ত ফলাফল (গড়)'
 };
 
 // Single-digit codes used inside the compact student ID (encodeShortId/decodeShortId below).
@@ -513,180 +528,111 @@ const decodeShortId = (id) => {
   if (!cls) return null;
   return { year, exam, cls, roll };
 };
-// ==============================================
-// 3. LOGIN COMPONENT
-// ==============================================
-const LoginPage = ({ onBack }) => {
-  const [email, setEmail] = useState('');
-  const [pass, setPass] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
 
-  const handleLogin = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      await signInWithEmailAndPassword(auth, email, pass);
-    } catch (err) {
-      console.error(err);
-      if(err.code === 'auth/user-not-found') setError("ইমেইল পাওয়া যায়নি");
-      else if(err.code === 'auth/wrong-password') setError("ভুল পাসওয়ার্ড");
-      else setError("লগিন ব্যর্থ হয়েছে। তথ্য যাচাই করুন।");
-    }
-    setLoading(false);
-  };
+// ==========================================
+// NEXT LEVEL PREMIUM SELECT FIELD
+// ==========================================
+const SelectField = ({ label, icon: Icon, value, onChange, options, disabled, placeholder, error, errorMessage }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectedOption = options.find(opt => opt.val === value);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-100 px-6 font-sans relative z-[100]">
-      <button 
-        onClick={onBack} 
-        className="absolute top-6 left-6 p-3 bg-white rounded-full shadow-md text-slate-600 hover:text-slate-900 transition-all flex items-center gap-2"
+    <div className="relative w-full" ref={dropdownRef}>
+      {/* Label */}
+      <label className={`text-[12px] font-black uppercase tracking-widest pl-1 mb-1.5 flex items-center gap-1.5 transition-colors duration-300  text-slate-500`}>
+        <Icon className="w-4 h-4" /> {label}
+      </label>
+      
+      {/* Main Box */}
+      <div 
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        className={`w-full p-4 border rounded-xl font-bold flex justify-between items-center transition-all duration-300 ${
+          disabled 
+            ? 'opacity-70 bg-slate-100 cursor-not-allowed border-slate-200 text-slate-400' 
+            : error
+              ? 'bg-red-50/50 border-red-400 text-red-700 shadow-[0_0_0_4px_rgba(248,113,113,0.15)] cursor-pointer'
+              : isOpen 
+                ? 'bg-teal-50/40 border-teal-500 shadow-[0_0_0_4px_rgba(20,184,166,0.15)] text-teal-800 cursor-pointer' 
+                : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50 hover:shadow-sm cursor-pointer'
+        }`}
       >
-        <ArrowLeft size={20} /> <span className="font-bold hidden sm:block">ফিরে যান</span>
-      </button>
+        <span className={`${!selectedOption ? (error ? 'text-red-400' : 'text-slate-400') : ''}`}>
+          {selectedOption ? selectedOption.label : placeholder}
+        </span>
+        <ChevronRight className={`w-5 h-5 transition-transform duration-300 ${isOpen ? '-rotate-90 text-teal-600' : (error ? 'text-red-400' : 'text-slate-400')}`} />
+      </div>
 
-      <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-sm border border-slate-200 animate-slide-up">
-        <div className="w-16 h-16 bg-teal-100 text-teal-600 rounded-full flex items-center justify-center mx-auto mb-4">
-          <Award size={32} />
+      {/* Error Message Below (Animated) */}
+      <div className={`overflow-hidden transition-all duration-300 ${error ? 'max-h-10 opacity-100 mt-1.5' : 'max-h-0 opacity-0 mt-0'}`}>
+         <div className="text-red-500 text-[12px] font-bold pl-1 flex items-center gap-1.5">
+            <AlertCircle className="w-3.5 h-3.5" /> {errorMessage}
+         </div>
+      </div>
+
+      {/* Dropdown Menu (Glassmorphism) */}
+      <div 
+        className={`absolute z-50 w-full mt-2 bg-white/95 backdrop-blur-xl border border-slate-200/80 rounded-2xl shadow-[0_20px_50px_-10px_rgba(0,0,0,0.15)] overflow-hidden transition-all duration-300 origin-top ${
+          isOpen ? 'opacity-100 scale-y-100 translate-y-0' : 'opacity-0 scale-y-95 -translate-y-2 pointer-events-none'
+        }`}
+        style={{ top: '100%', left: 0 }}
+      >
+        <div className="max-h-[260px] overflow-y-auto p-2 space-y-1 custom-scrollbar">
+          {options.map((opt, i) => {
+            const isSelected = value === opt.val;
+            return (
+              <div 
+                key={i}
+                onClick={() => {
+                  onChange({ target: { value: opt.val } });
+                  setIsOpen(false);
+                }}
+                className={`px-4 py-3.5 rounded-xl text-sm font-bold flex items-center justify-between cursor-pointer transition-all duration-200 ${
+                  isSelected 
+                    ? 'bg-gradient-to-r from-teal-50 to-emerald-50/50 text-teal-800 shadow-sm border border-teal-100/50' 
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                <span>{opt.label}</span>
+                {isSelected && (
+                  <div className="w-5 h-5 rounded-full bg-teal-100 flex items-center justify-center animate-fade-in">
+                    <CheckCircle className="w-3 h-3 text-teal-700" />
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
-        <h2 className="text-2xl font-black text-center mb-2 text-slate-800">স্বাগতম</h2>
-        <p className="text-center text-gray-500 text-sm mb-8 font-medium">আবদুর রাজ্জাক দাখিল মাদ্রাসা ম্যানেজমেন্ট সিস্টেম</p>
-
-        <label className="text-xs font-bold text-gray-400 uppercase ml-1 block mb-1">Email</label>
-        <input 
-          type="email"
-          placeholder="Enter Your Email"
-          className="w-full p-4 mb-5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 rounded-xl outline-none font-bold transition-all text-slate-700"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
-        />
-
-        <label className="text-xs font-bold text-gray-400 uppercase ml-1 block mb-1">Password</label>
-        <input 
-          type="password"
-          placeholder="******"
-          className="w-full p-4 mb-6 bg-slate-50 border border-slate-200 focus:bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 rounded-xl outline-none font-bold transition-all text-slate-700"
-          value={pass}
-          onChange={e => setPass(e.target.value)}
-        />
-
-        {error && (
-          <div className="bg-red-50 text-red-600 text-sm font-bold p-4 rounded-xl mb-6 flex items-center gap-2 border border-red-100 shadow-sm">
-            <AlertCircle size={18} className="shrink-0"/> {error}
-          </div>
-        )}
-
-        <button 
-          onClick={handleLogin}
-          disabled={loading || !email || !pass}
-          className="w-full bg-teal-600 text-white py-4 rounded-xl font-bold hover:bg-teal-700 transition-all active:scale-95 disabled:opacity-60 disabled:active:scale-100 flex justify-center shadow-lg shadow-teal-500/30"
-        >
-          {loading ? <Loader2 className="animate-spin w-5 h-5"/> : "লগইন করুন"}
-        </button>
       </div>
     </div>
   );
 };
- // ==========================================
-  // NEXT LEVEL PREMIUM SELECT FIELD
-  // ==========================================
-  const SelectField = ({ label, icon: Icon, value, onChange, options, disabled, placeholder, error, errorMessage }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const dropdownRef = useRef(null);
-
-    useEffect(() => {
-      const handleClickOutside = (event) => {
-        if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-          setIsOpen(false);
-        }
-      };
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, []);
-
-    const selectedOption = options.find(opt => opt.val === value);
-
-    return (
-      <div className="relative w-full" ref={dropdownRef}>
-        {/* Label */}
-        <label className={`text-[12px] font-black uppercase tracking-widest pl-1 mb-1.5 flex items-center gap-1.5 transition-colors duration-300  text-slate-500`}>
-          <Icon className="w-4 h-4" /> {label}
-        </label>
-        
-        {/* Main Box */}
-        <div 
-          onClick={() => !disabled && setIsOpen(!isOpen)}
-          className={`w-full p-4 border rounded-xl font-bold flex justify-between items-center transition-all duration-300 ${
-            disabled 
-              ? 'opacity-70 bg-slate-100 cursor-not-allowed border-slate-200 text-slate-400' 
-              : error
-                ? 'bg-red-50/50 border-red-400 text-red-700 shadow-[0_0_0_4px_rgba(248,113,113,0.15)] cursor-pointer'
-                : isOpen 
-                  ? 'bg-teal-50/40 border-teal-500 shadow-[0_0_0_4px_rgba(20,184,166,0.15)] text-teal-800 cursor-pointer' 
-                  : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50 hover:shadow-sm cursor-pointer'
-          }`}
-        >
-          <span className={`${!selectedOption ? (error ? 'text-red-400' : 'text-slate-400') : ''}`}>
-            {selectedOption ? selectedOption.label : placeholder}
-          </span>
-          <ChevronRight className={`w-5 h-5 transition-transform duration-300 ${isOpen ? '-rotate-90 text-teal-600' : (error ? 'text-red-400' : 'text-slate-400')}`} />
-        </div>
-
-        {/* Error Message Below (Animated) */}
-        <div className={`overflow-hidden transition-all duration-300 ${error ? 'max-h-10 opacity-100 mt-1.5' : 'max-h-0 opacity-0 mt-0'}`}>
-           <div className="text-red-500 text-[12px] font-bold pl-1 flex items-center gap-1.5">
-              <AlertCircle className="w-3.5 h-3.5" /> {errorMessage}
-           </div>
-        </div>
-
-        {/* Dropdown Menu (Glassmorphism) */}
-        <div 
-          className={`absolute z-50 w-full mt-2 bg-white/95 backdrop-blur-xl border border-slate-200/80 rounded-2xl shadow-[0_20px_50px_-10px_rgba(0,0,0,0.15)] overflow-hidden transition-all duration-300 origin-top ${
-            isOpen ? 'opacity-100 scale-y-100 translate-y-0' : 'opacity-0 scale-y-95 -translate-y-2 pointer-events-none'
-          }`}
-          style={{ top: '100%', left: 0 }}
-        >
-          <div className="max-h-[260px] overflow-y-auto p-2 space-y-1 custom-scrollbar">
-            {options.map((opt, i) => {
-              const isSelected = value === opt.val;
-              return (
-                <div 
-                  key={i}
-                  onClick={() => {
-                    onChange({ target: { value: opt.val } });
-                    setIsOpen(false);
-                  }}
-                  className={`px-4 py-3.5 rounded-xl text-sm font-bold flex items-center justify-between cursor-pointer transition-all duration-200 ${
-                    isSelected 
-                      ? 'bg-gradient-to-r from-teal-50 to-emerald-50/50 text-teal-800 shadow-sm border border-teal-100/50' 
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                  }`}
-                >
-                  <span>{opt.label}</span>
-                  {isSelected && (
-                    <div className="w-5 h-5 rounded-full bg-teal-100 flex items-center justify-center animate-fade-in">
-                      <CheckCircle className="w-3 h-3 text-teal-700" />
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    );
-  };
 
 // ==============================================
 // 4. MAIN APP COMPONENT
 // ==============================================
 export default function Result() {
-  const [currentUser, setCurrentUser] = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [showLogin, setShowLogin] = useState(false);
+  const [currentUser, setCurrentUser] = useState(() => getSessionUser());
+  const [authLoading, setAuthLoading] = useState(false);
   const [isAutoSearching, setIsAutoSearching] = useState(false);
   
-  const [activeTab, setActiveTab] = useState('search'); 
+  const [activeTab, setActiveTab] = useState(() => {
+    const u = getSessionUser();
+    if (!u) return 'search';
+    const isClassEffective = ONLY_ADMIN ? false : u.role === 'Class';
+    return (u.role === 'Admin' || isClassEffective) ? 'dashboard' : 'search';
+  });
   
   const [publishedExams, setPublishedExams] = useState([]);
   const [isFetching, setIsFetching] = useState(false);
@@ -715,7 +661,7 @@ const showToast = (message, type = 'success', duration = 3000) => {
   }
 };
 // ফরম্যাট: "YYYY-MM-DDTHH:mm:ss" (২৪ ঘণ্টার ফরম্যাট)
-// উদাহরণ: "2026-02-15T14:00:00" মানে ২০২৬ সালের ১৫ ফেব্রুয়ারি দুপুর ২টা
+// উদাহরণ: "2026-02-15T14:00:00" মানে ২০২৬ সালের ১৫ ফেব্রুয়ারি দুপুর ২টা
 
 const hideToast = () => {
   setToast({ show: false, message: '', type: 'success' });
@@ -738,21 +684,19 @@ const [cachedSheets, setCachedSheets] = useState({}); // 👈 এই লাই�
 
   // URL Param logic trigger flag
   const [autoSearchTriggered, setAutoSearchTriggered] = useState(false);
- // Securely get roles directly from Firebase Auth
-  const secureUserEmail = auth.currentUser?.email;
-  const secureRoleData = secureUserEmail ? USER_ROLES[secureUserEmail] : null;
-  const isAdmin = secureRoleData?.role === 'Admin';
-  const isClassAdminRaw = secureRoleData?.role === 'Class';
+
+  const isAdmin = currentUser?.role === 'Admin';
+  const isClassAdminRaw = currentUser?.role === 'Class';
   const now = new Date();
 const publishTime = new Date(RESULT_PUBLISH_TIME);
 
-// সময় পার হয়েছে?
+// সময় পার হয়েছে?
 const isPublished = now >= publishTime;
 // Admin always allowed
 // Teacher allowed only when ONLY_ADMIN = false
 const canBypassTimer =
   isAdmin || (!ONLY_ADMIN && isClassAdminRaw);
-// ⏰ RESULT LOCK SYSTEM (সব সময় চেক হবে)
+// ⏰ RESULT LOCK SYSTEM (সব সময় চেক হবে)
 
 
   // Apply the Global ONLY_ADMIN rule
@@ -761,8 +705,8 @@ const canBypassTimer =
 
   // Get formatted class name for Class Admin securely
   const userFormattedClass = (() => {
-    if (!isClassAdminRaw || !secureRoleData) return '';
-    const en = secureRoleData.classEn;
+    if (!isClassAdminRaw || !currentUser) return '';
+    const en = currentUser.classEn;
     if (['Play', 'Nursery', 'KG'].includes(en)) return en;
     return `Class ${en}`;
   })();
@@ -805,7 +749,7 @@ const navigate = useNavigate();
   return () => window.removeEventListener('popstate', handlePopState);
 }, [searchResult, selectedExam, activeTab, canManage]);
 
-    // মার্কশিট ওপেন হলে পেজটি স্ক্রোল করে একদম উপরে নিয়ে যাওয়ার জন্য
+    // মার্কশিট ওপেন হলে পেজটি স্ক্রোল করে একদম উপরে নিয়ে যাওয়ার জন্য
   useEffect(() => {
     if (searchResult) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -826,34 +770,36 @@ useEffect(() => {
     }
     return () => observer.disconnect();
   }, [searchResult]);
-  // AUTHENTICATION LISTENER
+
+  // SHARED ERP SESSION VERIFICATION (FROM '/')
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        const roleData = USER_ROLES[user.email];
-        if (roleData) {
-          setCurrentUser({ ...user, ...roleData });
-          setShowLogin(false);
-          const isClassRaw = roleData.role === 'Class';
-          const isClassAdminEffective = ONLY_ADMIN ? false : isClassRaw;
-          
-          if (roleData.role === 'Admin' || isClassAdminEffective) {
-            setActiveTab('dashboard');
-          } else {
-            setActiveTab('search');
-          }
-        } else {
-          alert("এই ইমেইলের কোনো এক্সেস নেই। এডমিনের সাথে যোগাযোগ করুন।");
-          signOut(auth);
-          setCurrentUser(null);
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!token) {
+      setCurrentUser(null);
+      setActiveTab('search');
+      return;
+    }
+
+    fetch(`${ERP_API_BASE_URL}/auth/me`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }
+    })
+      .then(res => (res.ok ? res.json() : Promise.reject()))
+      .then(json => {
+        const serverUser = json?.data?.teacher || json?.data?.user || json?.data;
+        if (serverUser) {
+          localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(serverUser));
+          const mapped = getSessionUser();
+          setCurrentUser(mapped);
+          const isClassEffective = ONLY_ADMIN ? false : mapped?.role === 'Class';
+          setActiveTab((mapped?.role === 'Admin' || isClassEffective) ? 'dashboard' : 'search');
         }
-      } else {
+      })
+      .catch(() => {
+        localStorage.removeItem(TOKEN_STORAGE_KEY);
+        localStorage.removeItem(USER_STORAGE_KEY);
         setCurrentUser(null);
-        setActiveTab('search'); 
-      }
-      setAuthLoading(false);
-    });
-    return () => unsubscribe();
+        setActiveTab('search');
+      });
   }, []);
 
  
@@ -893,7 +839,7 @@ useEffect(() => {
 
   
 useEffect(() => {
-  if (secureRoleData) {
+  if (currentUser) {
     if (isClassAdminRaw) {
       setClassName(userFormattedClass);
     }
@@ -903,7 +849,7 @@ useEffect(() => {
   // Everyone needs sheet list for search
 fetchAllExams();
 
-}, [secureRoleData, isClassAdminRaw, userFormattedClass, isAdmin, isClassAdmin]);
+}, [currentUser, isClassAdminRaw, userFormattedClass, isAdmin, isClassAdmin]);
 
   // Handle auto-search when published exams are loaded
   useEffect(() => {
@@ -951,7 +897,7 @@ if (sorted.length > 0) {
           setSearchExam(prev => prev || latestInfo.examName);
           setExamName(prev => prev || latestInfo.examName);
           
-          // সালটিও রিসেন্ট ডাটা অনুযায়ী ডায়নামিক হবে (ডিফল্ট 2026 এর জায়গায়)
+          // সালটিও রিসেন্ট ডাটা অনুযায়ী ডায়নামিক হবে (ডিফল্ট 2026 এর জায়গায়)
           setSearchYear(prev => (prev === '2026' || !prev) ? latestInfo.year : prev);
           setYear(prev => (prev === '2026' || !prev) ? latestInfo.year : prev);
         }
@@ -1017,8 +963,8 @@ setShowUploadValidation(true);
     'Nursery': 'নার্সারি',
     'KG': 'কেজি',
     'Class One': '১ম',
-    'Class Two': '২য়',
-    'Class Three': '৩য়',
+    'Class Two': '২য়',
+    'Class Three': '৩য়',
     'Class Four': '৪র্থ',
     'Class Five': '৫ম',
     'Class Six': '৬ষ্ঠ',
@@ -1035,7 +981,7 @@ setShowUploadValidation(true);
     // HARD SECURITY GUARD
     const finalClassName = isClassAdmin ? userFormattedClass : className;
     if (!csvData || csvData.length === 0) {
-  setErrorMessage('CSV ডাটা পাওয়া যায়নি');
+  setErrorMessage('CSV ডাটা পাওয়া যায়নি');
   setUploadStatus('error');
   return;
 }
@@ -1048,7 +994,7 @@ const classIndex = headers.findIndex(h =>
 );
 
 if (classIndex === -1) {
-  setErrorMessage('CSV ফাইলে Class কলাম পাওয়া যায়নি');
+  setErrorMessage('CSV ফাইলে Class কলাম পাওয়া যায়নি');
   setUploadStatus('error');
   return;
 }
@@ -1082,14 +1028,14 @@ if (!uniqueClasses.includes(selectedClassBn)) {
     // --- ফাইলের নাম থেকে ব্র্যাকেটের ভেতরের পারসেন্টেজ (%) বের করার ম্যাজিক লজিক ---
     let extraTag = "";
     if (examName === 'Final Result' && file) {
-        // ఇది ফাইলের নামের ভেতর থেকে (গড় ২০% + ২০% + ৬০%) অংশটুকু খুঁজে বের করবে
+        // ఇది ফাইলের নামের ভেতর থেকে (গড় ২০% + ২০% + ৬০%) অংশটুকু খুঁজে বের করবে
         const match = file.name.match(/\(([^)]*%[^)]*)\)/); 
         if (match) {
             extraTag = `[${match[1].substring(0, 30)}]`; // শিটের নামের লিমিট ঠিক রাখতে ম্যাক্সিমাম ৩০ ক্যারেক্টার
         }
     }
     
-    // extraTag টিকে sheetName এর সাথে যুক্ত করে দেওয়া হলো
+    // extraTag টিকে sheetName এর সাথে যুক্ত করে দেওয়া হলো
     const sheetName = `[${finalClassName}][${examName}][${year}][${formatDateTime(publishDate)}][${timestamp}]${extraTag}`;
 
     const payload = {
@@ -1124,7 +1070,7 @@ if (!uniqueClasses.includes(selectedClassBn)) {
   // ==========================================
   const handleDownloadCSV = () => {
     if (!selectedExam || !selectedExam.data) {
-        showToast('কোনো ডাটা পাওয়া যায়নি', 'error');
+        showToast('কোনো ডাটা পাওয়া যায়নি', 'error');
         return;
     }
 
@@ -1156,7 +1102,7 @@ const handleDelete = async (sheetName) => {
   const sheetInfo = parseSheetName(sheetName);
 
   if (sheetInfo.timestamp && Date.now() > sheetInfo.timestamp) {
-    showToast("পাবলিশ হওয়ার পর রেজাল্ট ডিলিট করা যাবে না!", "error");
+    showToast("পাবলিশ হওয়ার পর রেজাল্ট ডিলিট করা যাবে না!", "error");
     return;
   }
 
@@ -1217,7 +1163,7 @@ setIsResultVisible(false);
   );
 
   if (!targetSheet) {
-    setSearchError(`রেজাল্ট এখনো পাবলিশ হয়নি। দয়া করে অপেক্ষা করুন।।`);
+    setSearchError(`রেজাল্ট এখনো পাবলিশ হয়নি। দয়া করে অপেক্ষা করুন।।`);
     setIsSearching(false);
     setIsAutoSearching(false);
     return;
@@ -1225,10 +1171,10 @@ setIsResultVisible(false);
   // এখানে নতুন লজিকটি যোগ করতে হবে (টাইম লক)
   const targetSheetInfo = parseSheetName(targetSheet.sheetName);
   
-  // যদি ইউজার এডমিন না হয় এবং বর্তমান সময় পাবলিশ টাইমের চেয়ে কম হয়
+  // যদি ইউজার এডমিন না হয় এবং বর্তমান সময় পাবলিশ টাইমের চেয়ে কম হয়
   if (!canManage && targetSheetInfo.timestamp && Date.now() < targetSheetInfo.timestamp) {
     const publishDateStr = new Date(targetSheetInfo.timestamp).toLocaleString('bn-BD');
-    setSearchError(`রেজাল্ট এখনো পাবলিশ হয়নি। দয়া করে অপেক্ষা করুন।`);
+    setSearchError(`রেজাল্ট এখনো পাবলিশ হয়নি। দয়া করে অপেক্ষা করুন।`);
     setIsSearching(false);
     setIsAutoSearching(false);
     return;
@@ -1240,7 +1186,7 @@ setIsResultVisible(false);
     // 👇 ক্যাশ (Cache) মেমোরি চেক করা হচ্ছে 👇
     if (cachedSheets && cachedSheets[targetSheet.sheetName]) {
       await new Promise(resolve => setTimeout(resolve, 1000));
-        // মেমোরিতে থাকলে সরাসরি সেখান থেকে ডাটা নিয়ে নিবে (সার্ভারে রিকোয়েস্ট যাবে না)
+        // মেমোরিতে থাকলে সরাসরি সেখান থেকে ডাটা নিয়ে নিবে (সার্ভারে রিকোয়েস্ট যাবে না)
         sheetData = cachedSheets[targetSheet.sheetName];
     } else {
         // মেমোরিতে না থাকলে সার্ভার থেকে আনবে
@@ -1292,21 +1238,21 @@ setIsResultVisible(false);
     });
 
     if (!studentRow) {
-      setSearchError('রেজাল্ট পাওয়া যায়নি।');
+      setSearchError('রেজাল্ট পাওয়া যায়নি।');
       return;
     }
-      // --- ব্যাকগ্রাউন্ড লগিং লজিক শুরু (একচুল পরিবর্তন ছাড়া) ---
+      // --- ব্যাকগ্রাউন্ড লগিং লজিক শুরু (একচুল পরিবর্তন ছাড়া) ---
     const targetId = getVal(headers, studentRow, 'id');
     const targetRoll = getVal(headers, studentRow, 'roll');
     const targetName = getVal(headers, studentRow, 'namebn') !== '-' 
                        ? getVal(headers, studentRow, 'namebn') 
                        : getVal(headers, studentRow, 'name');
 
-    // ব্রাউজার থেকে সার্চকারীর পরিচয় বের করা হচ্ছে (সেশন ট্র্যাকিং)
+    // ব্রাউজার থেকে সার্চকারীর পরিচয় বের করা হচ্ছে (সেশন ট্র্যাকিং)
     let searcherName = localStorage.getItem('ardm_searcher_name');
     let searcherId = localStorage.getItem('ardm_searcher_id');
 
-    // প্রথমবার সার্চ করলে ওই ব্যক্তিকেই সার্চকারী হিসেবে ধরে নেওয়া হবে
+    // প্রথমবার সার্চ করলে ওই ব্যক্তিকেই সার্চকারী হিসেবে ধরে নেওয়া হবে
     if (!searcherName || !searcherId) {
         const randomNum = Math.floor(100000 + Math.random() * 900000); 
         
@@ -1356,7 +1302,7 @@ window.history.pushState({ view: "marksheet" }, "", `?id=${shortId}`);
     });
 
   } catch (err) {
-    setSearchError('রেজাল্ট পাওয়া যায়নি');
+    setSearchError('রেজাল্ট পাওয়া যায়নি');
   } finally {
     setIsSearching(false);     // ✅ spinner stop
     setIsAutoSearching(false); // ✅ auto loader stop
@@ -1394,7 +1340,7 @@ window.history.pushState({ view: "marksheet" }, "", `?id=${shortId}`);
 
 
     const getVal = (headers, data, colName) => {
-    // এখানেও includes এর বদলে exact match (===) ব্যবহার করা হয়েছে
+    // এখানেও includes এর বদলে exact match (===) ব্যবহার করা হয়েছে
     const idx = headers.findIndex(h => String(h).split(' [')[0].trim().toLowerCase() === colName.toLowerCase());
     return idx !== -1 ? String(data[idx]) : '-';
   };
@@ -1403,8 +1349,8 @@ window.history.pushState({ view: "marksheet" }, "", `?id=${shortId}`);
    
   const classOptions = [
     {val: 'Play', label: 'প্লে (Play)'}, {val: 'Nursery', label: 'নার্সারি (Nursery)'},
-    {val: 'Class One', label: '১ম (One)'}, {val: 'Class Two', label: '২য় (Two)'},
-    {val: 'Class Three', label: '৩য় (Three)'}, {val: 'Class Four', label: '৪র্থ (Four)'},
+    {val: 'Class One', label: '১ম (One)'}, {val: 'Class Two', label: '২য় (Two)'},
+    {val: 'Class Three', label: '৩য় (Three)'}, {val: 'Class Four', label: '৪র্থ (Four)'},
     {val: 'Class Five', label: '৫ম (Five)'}, {val: 'Class Six', label: '৬ষ্ঠ (Six)'},
     {val: 'Class Seven', label: '৭ম (Seven)'}, {val: 'Class Eight', label: '৮ম (Eight)'},
     {val: 'Class Nine', label: '৯ম (Nine)'}, {val: 'Class Ten', label: '১০ম (Ten)'}
@@ -1415,7 +1361,7 @@ window.history.pushState({ view: "marksheet" }, "", `?id=${shortId}`);
   {val: '2nd Terminal', label: 'দ্বিতীয় সাময়িক পরিক্ষা'},
   {val: 'Half Yearly', label: 'অর্ধ-বার্ষিক পরিক্ষা'},
   {val: 'Annual', label: 'বার্ষিক পরীক্ষা'},
-{val: 'Final Result', label: 'চূড়ান্ত ফলাফল (গড়)'}
+{val: 'Final Result', label: 'চূড়ান্ত ফলাফল (গড়)'}
 ];
   const yearOptions = [
     {val: '2025', label: '2025'}, {val: '2026', label: '2026'},
@@ -1438,11 +1384,6 @@ if (!isPublished && !canBypassTimer) {
     );
   }
 
-  // If showLogin state is true, render the Login Page overlay
-  if (showLogin && !currentUser) {
-    return <LoginPage onBack={() => setShowLogin(false)} />;
-  }
-
   // Filtered exams for Dashboard display
   const displayedExams = isClassAdmin 
     ? publishedExams.filter(exam => parseSheetName(exam.sheetName).className === userFormattedClass) 
@@ -1451,7 +1392,7 @@ if (!isPublished && !canBypassTimer) {
   // Header Title Logic securely generated
   const getHeaderTitle = () => {
     if (isAdmin) return 'এডমিন ড্যাশবোর্ড';
-    if (isClassAdmin) return `${secureRoleData.classBn} শ্রেণি ড্যাশবোর্ড`;
+    if (isClassAdmin) return `${currentUser.classBn} শ্রেণি ড্যাশবোর্ড`;
     return 'স্টুডেন্ট প্যানেল';
   };
   // ==========================================

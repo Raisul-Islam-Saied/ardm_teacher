@@ -43,7 +43,7 @@ const verifySiblingExistsIfWaiver = async (feeDetails, selfStudentCode = null) =
             throw new ApiError(400, 'Sibling Waiver ক্যাটাগরির জন্য ভাই/বোনের স্টুডেন্ট আইডি আবশ্যক!', [{ field: 'feeDetails.siblingStudentCode', message: 'ভাই/বোনের ১০ ডিজিটের স্টুডেন্ট আইডি দিন' }]);
         }
         if (selfStudentCode && sibCode === selfStudentCode) {
-            throw new ApiError(400, 'নিজের আইডি ভাই/বোনের রেফারেন্স হিসেবে দেওয়া যাবে না!', [{ field: 'feeDetails.siblingStudentCode', message: 'অন্য ভাই/বোনের আইডি দিন' }]);
+            throw new ApiError(400, 'নিজের আইডি ভাই/বোনের রেফারেন্স হিসেবে দেওয়া যাবে না!', [{ field: 'feeDetails.siblingStudentCode', message: 'অন্য ভাই/বোনের আইডি দিন' }]);
         }
         const siblingDoc = await Student.findOne({
             studentCode: sibCode,
@@ -51,14 +51,14 @@ const verifySiblingExistsIfWaiver = async (feeDetails, selfStudentCode = null) =
         }).select('studentCode fullNameBng classBn').lean();
 
         if (!siblingDoc) {
-            throw new ApiError(404, `ভাই/বোনের স্টুডেন্ট আইডি (${sibCode}) পাওয়া যায়নি!`, [{ field: 'feeDetails.siblingStudentCode', message: 'সক্রিয় ভাই/বোনের সঠিক আইডি দিন' }]);
+            throw new ApiError(404, `ভাই/বোনের স্টুডেন্ট আইডি (${sibCode}) পাওয়া যায়নি!`, [{ field: 'feeDetails.siblingStudentCode', message: 'সক্রিয় ভাই/বোনের সঠিক আইডি দিন' }]);
         }
     }
 };
 
 const getStudentMetadata = asyncHandler(async (req, res) => {
     const nextBioId = await getNextAvailableStudentBiometricId();
-    res.status(200).json(new ApiResponse(200, 'স্টুডেন্ট মেটাডাটা পাওয়া গেছে', {
+    res.status(200).json(new ApiResponse(200, 'স্টুডেন্ট মেটাডাটা পাওয়া গেছে', {
         classes: STUDENT_CLASSES,
         groups: STUDENT_GROUPS.filter(Boolean),
         feeCategories: FEE_CATEGORIES,
@@ -70,6 +70,10 @@ const getStudentMetadata = asyncHandler(async (req, res) => {
 
 const lookupLegacyStudentById = asyncHandler(async (req, res) => {
     const { studentCode } = req.params;
+
+    // পূর্বে ডিলিট করা (status: 'Deleted') কোনো রেকর্ড থাকলে স্থায়ীভাবে পরিষ্কার করা
+    await Student.deleteMany({ studentCode: String(studentCode).trim(), status: 'Deleted' });
+
     const result = await fetchLegacyStudentFromSheet(studentCode);
 
     if (result.alreadyMigrated) {
@@ -82,7 +86,7 @@ const lookupLegacyStudentById = asyncHandler(async (req, res) => {
 
     return res.status(200).json(new ApiResponse(
         200,
-        'পুরনো গুগল শিট থেকে শিক্ষার্থীর তথ্য পাওয়া গেছে! এখন নতুন ফিল্ডগুলো পূরণ করে সংরক্ষণ করুন।',
+        'পুরনো গুগল শিট থেকে শিক্ষার্থীর তথ্য পাওয়া গেছে! এখন নতুন ফিল্ডগুলো পূরণ করে সংরক্ষণ করুন।',
         result
     ));
 });
@@ -108,15 +112,25 @@ const registerStudent = asyncHandler(async (req, res) => {
     if (boardRegNo) uniqueOr.push({ boardRegNo });
     if (studentCode) uniqueOr.push({ studentCode });
 
-    const duplicateIdentity = await Student.findOne({ $or: uniqueOr }).lean();
+    // আগে ডিলিট করা কোনো রেকর্ডে একই ID/BRN/BoardReg থাকলে তা স্থায়ীভাবে মুছে ফেলা
+    await Student.deleteMany({
+        status: 'Deleted',
+        $or: uniqueOr
+    });
+
+    const duplicateIdentity = await Student.findOne({
+        status: { $ne: 'Deleted' },
+        $or: uniqueOr
+    }).lean();
+
     if (duplicateIdentity) {
         if (studentCode && duplicateIdentity.studentCode === studentCode) {
-            throw new ApiError(409, `স্টুডেন্ট আইডি (${studentCode}) ইতিমধ্যে নিবন্ধিত আছে!`, [{ field: 'studentCode', message: 'এই স্টুডেন্ট আইডি ইতিমধ্যে ব্যবহৃত হয়েছে' }]);
+            throw new ApiError(409, `স্টুডেন্ট আইডি (${studentCode}) ইতিমধ্যে নিবন্ধিত আছে!`, [{ field: 'studentCode', message: 'এই স্টুডেন্ট আইডি ইতিমধ্যে ব্যবহৃত হয়েছে' }]);
         }
         if (duplicateIdentity.brnNumber === brnNumber) {
             throw new ApiError(409, `জন্ম নিবন্ধন নম্বর (${brnNumber}) ইতিমধ্যে নিবন্ধিত!`, [{ field: 'brnNumber', message: `ইতিমধ্যে '${duplicateIdentity.fullNameBng}'-এর নামে নিবন্ধিত` }]);
         }
-        throw new ApiError(409, 'বোর্ড রেজিস্ট্রেশন নম্বরটি ইতিমধ্যে ব্যবহৃত হয়েছে!', [{ field: 'boardRegNo', message: 'এই বোর্ড রেজিস্ট্রেশন নম্বর আগে ব্যবহৃত হয়েছে' }]);
+        throw new ApiError(409, 'বোর্ড রেজিস্ট্রেশন নম্বরটি ইতিমধ্যে ব্যবহৃত হয়েছে!', [{ field: 'boardRegNo', message: 'এই বোর্ড রেজিস্ট্রেশন নম্বর আগে ব্যবহৃত হয়েছে' }]);
     }
 
     const duplicateRoll = await Student.findOne({
@@ -165,8 +179,8 @@ const registerStudent = asyncHandler(async (req, res) => {
     return res.status(201).json(new ApiResponse(
         201,
         migratedFromSheet
-            ? 'পুরনো শিক্ষার্থীর তথ্য সফলভাবে নতুন ডাটাবেজে সংরক্ষিত হয়েছে!'
-            : 'নতুন শিক্ষার্থী সফলভাবে ভর্তি নিবন্ধিত হয়েছে!',
+            ? 'পুরনো শিক্ষার্থীর তথ্য সফলভাবে নতুন ডাটাবেজে সংরক্ষিত হয়েছে!'
+            : 'নতুন শিক্ষার্থী সফলভাবে ভর্তি নিবন্ধিত হয়েছে!',
         student
     ));
 });
@@ -213,7 +227,7 @@ const getAllStudents = asyncHandler(async (req, res) => {
         .sort({ classOrder: 1, roll: 1, createdAt: -1 })
         .lean();
 
-    return res.status(200).json(new ApiResponse(200, 'শিক্ষার্থীদের তালিকা পাওয়া গেছে', {
+    return res.status(200).json(new ApiResponse(200, 'শিক্ষার্থীদের তালিকা পাওয়া গেছে', {
         totalCount: students.length,
         students
     }));
@@ -227,12 +241,12 @@ const getStudentById = asyncHandler(async (req, res) => {
 
     const student = await Student.findOne(query).lean();
     if (!student || student.status === 'Deleted') {
-        throw new ApiError(404, 'শিক্ষার্থীর তথ্য খুঁজে পাওয়া যায়নি!');
+        throw new ApiError(404, 'শিক্ষার্থীর তথ্য খুঁজে পাওয়া যায়নি!');
     }
 
     const siblings = await findStudentSiblings(student);
 
-    return res.status(200).json(new ApiResponse(200, 'শিক্ষার্থীর প্রোফাইল পাওয়া গেছে', {
+    return res.status(200).json(new ApiResponse(200, 'শিক্ষার্থীর প্রোফাইল পাওয়া গেছে', {
         student,
         siblings
     }));
@@ -255,13 +269,13 @@ const getPublicStudentVerification = asyncHandler(async (req, res) => {
         throw new ApiError(404, 'এই আইডি নম্বরে কোনো বৈধ শিক্ষার্থী নিবন্ধিত নেই!');
     }
 
-    return res.status(200).json(new ApiResponse(200, 'শিক্ষার্থীর পরিচয় যাচাই সফল', student));
+    return res.status(200).json(new ApiResponse(200, 'শিক্ষার্থীর পরিচয় যাচাই সফল', student));
 });
 
 const updateStudent = asyncHandler(async (req, res) => {
     const student = await Student.findById(req.params.id);
     if (!student || student.status === 'Deleted') {
-        throw new ApiError(404, 'শিক্ষার্থী খুঁজে পাওয়া যায়নি!');
+        throw new ApiError(404, 'শিক্ষার্থী খুঁজে পাওয়া যায়নি!');
     }
 
     assertCanManageStudentClass(req.user, student.classBn);
@@ -280,7 +294,7 @@ const updateStudent = asyncHandler(async (req, res) => {
     const nextDob = req.body.dateOfBirth ? new Date(req.body.dateOfBirth) : student.dateOfBirth;
     const nextBrn = req.body.brnNumber || student.brnNumber;
 
-    // আপডেটের সময়ও BRN-এর প্রথম ৪ ডিজিট ও জন্মসালের মিল নিশ্চিত করা
+    // আপডেটের সময়ও BRN-এর প্রথম ৪ ডিজিট ও জন্মসালের মিল নিশ্চিত করা
     if (String(nextBrn).slice(0, 4) !== String(nextDob.getFullYear())) {
         throw new ApiError(400, 'জন্ম নিবন্ধন নম্বর ও জন্মসাল মিলছে না!', [{ field: 'brnNumber', message: `BRN-এর প্রথম ৪ সংখ্যা জন্মসাল (${nextDob.getFullYear()}) হতে হবে` }]);
     }
@@ -298,12 +312,14 @@ const updateStudent = asyncHandler(async (req, res) => {
     }
 
     if (req.body.brnNumber && req.body.brnNumber !== student.brnNumber) {
+        await Student.deleteMany({ status: 'Deleted', brnNumber: req.body.brnNumber });
         const brnConflict = await Student.findOne({
             _id: { $ne: student._id },
+            status: { $ne: 'Deleted' },
             brnNumber: req.body.brnNumber
         }).lean();
         if (brnConflict) {
-            throw new ApiError(409, 'এই জন্ম নিবন্ধন নম্বরটি ইতিমধ্যে ব্যবহৃত হয়েছে!', [{ field: 'brnNumber', message: 'অন্য শিক্ষার্থীর প্রোফাইলে ব্যবহৃত' }]);
+            throw new ApiError(409, 'এই জন্ম নিবন্ধন নম্বরটি ইতিমধ্যে ব্যবহৃত হয়েছে!', [{ field: 'brnNumber', message: 'অন্য শিক্ষার্থীর প্রোফাইলে ব্যবহৃত' }]);
         }
     }
 
@@ -355,32 +371,41 @@ const updateStudent = asyncHandler(async (req, res) => {
         description: `শিক্ষার্থীর তথ্য হালনাগাদ: ${student.fullNameBng} (ID: ${student.studentCode})`
     });
 
-    return res.status(200).json(new ApiResponse(200, 'শিক্ষার্থীর তথ্য সফলভাবে হালনাগাদ হয়েছে!', student));
+    return res.status(200).json(new ApiResponse(200, 'শিক্ষার্থীর তথ্য সফলভাবে হালনাগাদ হয়েছে!', student));
 });
 
 const deleteStudent = asyncHandler(async (req, res) => {
-    const student = await Student.findById(req.params.id);
+    const student = await Student.findById(req.params.id).lean();
     if (!student || student.status === 'Deleted') {
-        throw new ApiError(404, 'শিক্ষার্থী খুঁজে পাওয়া যায়নি!');
+        throw new ApiError(404, 'শিক্ষার্থী খুঁজে পাওয়া যায়নি!');
     }
 
     assertCanManageStudentClass(req.user, student.classBn);
 
-    student.status = 'Deleted';
-    student.isActive = false;
-    student.statusReason = req.body?.statusReason || 'প্রশাসনিকভাবে মুছে ফেলা হয়েছে';
-    student.updatedBy = req.user._id;
-    await student.save();
+    const reason = req.body?.statusReason || 'প্রশাসনিকভাবে মুছে ফেলা হয়েছে';
+
+    await Student.findByIdAndUpdate(
+        student._id,
+        {
+            $set: {
+                status: 'Deleted',
+                isActive: false,
+                statusReason: reason,
+                updatedBy: req.user._id
+            }
+        },
+        { runValidators: false }
+    );
 
     await AuditLog.recordLog({
         req,
         action: 'DELETE_STUDENT',
         module: 'Student',
         targetId: String(student._id),
-        description: `শিক্ষার্থী ডিলিট: ${student.fullNameBng} (ID: ${student.studentCode}) — কারণ: ${student.statusReason}`
+        description: `শিক্ষার্থী ডিলিট: ${student.fullNameBng} (ID: ${student.studentCode}) — কারণ: ${reason}`
     });
 
-    return res.status(200).json(new ApiResponse(200, 'শিক্ষার্থীর রেকর্ড সফলভাবে ডিলিট করা হয়েছে।'));
+    return res.status(200).json(new ApiResponse(200, 'শিক্ষার্থীর রেকর্ড সফলভাবে ডিলিট করা হয়েছে।'));
 });
 
 const promoteStudentsBulk = asyncHandler(async (req, res) => {
@@ -422,7 +447,7 @@ const promoteStudentsBulk = asyncHandler(async (req, res) => {
 
     return res.status(200).json(new ApiResponse(
         200,
-        `মোট ${promotedCount} জন শিক্ষার্থীকে ${targetSession} সেশনে প্রমোশন দেওয়া হয়েছে!`,
+        `মোট ${promotedCount} জন শিক্ষার্থীকে ${targetSession} সেশনে প্রমোশন দেওয়া হয়েছে!`,
         { promotedCount }
     ));
 });

@@ -5,7 +5,7 @@
 export const ONLY_ADMIN = true;
 export const MAINTAINANCE_MODE = false;  // true হলে মেইনটেন্যান্স মোডে যাবে, false হলে নরমাল মোডে থাকবে
 
-export const RESULT_PUBLISH_TIME = "2027-08-17T19:30:00+06:00";
+export const RESULT_PUBLISH_TIME = "2026-08-17T19:30:00+06:00";
 
 // ---------- Centralized ERP backend ----------
 export const API_BASE_URL =
