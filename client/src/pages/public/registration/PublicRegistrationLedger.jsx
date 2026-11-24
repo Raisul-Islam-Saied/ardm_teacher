@@ -1,48 +1,47 @@
 /**
- * ARDM Enterprise ERP — Public Teacher Registration Master Ledger Shell (Completed in Step 10)
+ * ARDM Enterprise ERP — Public Teacher Registration Master Ledger Shell
  * Complete Part 2 Integration:
  * - 4-Step Military-Validated Registration Ledger
  * - Returning User Saved Digital ID Card Recovery (localStorage)
  * - Manual UID Lookup Modal (/teachers/public/registry-card/:uid)
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import axiosClient, { extractApiErrorMessage } from '@api/axiosClient';
+import { uploadSquarePhotoToCloudinary } from '@api/cloudinaryClient';
+import { Badge, Button, ConfirmDialog, FormInput, Modal } from '@components/ui';
+import { INSTITUTION_INFO, STORAGE_KEYS } from '@constants/app.constants';
+import { useToast } from '@context/ToastContext';
+import {
+    calculateLiveRankMetrics,
+    extractPureDigits,
+    previewTenDigitTeacherId,
+    toBengaliDigits,
+    toEnglishDigits
+} from '@utils/formatters';
 import {
     ArrowLeft,
     ArrowRight,
-    RotateCcw,
-    ShieldCheck,
     CreditCard,
-    Send,
+    RotateCcw,
     Search,
-    Sparkles
+    Send,
+    ShieldCheck
 } from 'lucide-react';
-import { INSTITUTION_INFO, STORAGE_KEYS } from '@constants/app.constants';
-import { Button, Badge, Modal, FormInput, ConfirmDialog } from '@components/ui';
-import { useToast } from '@context/ToastContext';
-import axiosClient, { extractApiErrorMessage } from '@api/axiosClient';
-import { uploadSquarePhotoToCloudinary } from '@api/cloudinaryClient';
-import {
-    previewTenDigitTeacherId,
-    calculateLiveRankMetrics,
-    toBengaliDigits,
-    toEnglishDigits,
-    extractPureDigits
-} from '@utils/formatters';
+import { useEffect, useRef, useState } from 'react';
+import DigitalRegistryIdCard from './DigitalRegistryIdCard';
 import {
     REGISTRATION_STEPS,
-    createInitialRegistrationData,
-    loadRegistrationDraft,
-    saveRegistrationDraft,
     clearRegistrationDraft,
-    getSavedRegistryToken
+    createInitialRegistrationData,
+    getSavedRegistryToken,
+    loadRegistrationDraft,
+    saveRegistrationDraft
 } from './registration.schema';
 import RegistrationStepper from './RegistrationStepper';
 import Step1PersonalIdentity, { validateStep1PersonalData } from './Step1PersonalIdentity';
 import Step2ParentsAcademic, { validateStep2ParentsAcademicData } from './Step2ParentsAcademic';
 import Step3AddressContact, { validateStep3AddressContactData } from './Step3AddressContact';
 import Step4PhotoReview, { validateStep4PhotoReviewData } from './Step4PhotoReview';
-import DigitalRegistryIdCard from './DigitalRegistryIdCard';
 
 const ADDRESS_TEXT_FIELDS = [
     'houseNameBn',
@@ -51,14 +50,22 @@ const ADDRESS_TEXT_FIELDS = [
     'villageEn',
     'unionBn',
     'unionEn',
-    'wardNo',
     'upazilaBn',
     'upazilaEn',
     'districtBn',
     'districtEn',
     'divisionBn',
-    'divisionEn'
+    'divisionEn',
+    'postOffice'
 ];
+
+function normalizeEnglishName(val = '') {
+    const clean = String(val || '').replace(/\s+/g, ' ').trim();
+    if (!clean) return '';
+    return clean
+        .toLowerCase()
+        .replace(/(^|[\s.'-])([a-z])/g, (_, sep, char) => sep + char.toUpperCase());
+}
 
 function prepareAddressPayload(address = {}) {
     const preparedAddress = { ...address };
@@ -66,12 +73,15 @@ function prepareAddressPayload(address = {}) {
         preparedAddress[field] = String(address[field] || '').trim();
     });
 
+    preparedAddress.wardNo = extractPureDigits(address.wardNo).slice(0, 3);
+    preparedAddress.postCode = extractPureDigits(address.postCode).slice(0, 4);
+
     return {
         ...preparedAddress,
-        houseOrRoad: preparedAddress.houseNameBn || preparedAddress.houseNameEn || address.houseOrRoad || '',
-        village: preparedAddress.villageBn || preparedAddress.villageEn || address.village || '',
-        upazila: preparedAddress.upazilaEn || address.upazila || '',
-        district: preparedAddress.districtEn || address.district || ''
+        houseOrRoad: preparedAddress.houseNameBn || preparedAddress.houseNameEn || String(address.houseOrRoad || '').trim(),
+        village: preparedAddress.villageBn || preparedAddress.villageEn || String(address.village || '').trim(),
+        upazila: preparedAddress.upazilaEn || String(address.upazila || '').trim(),
+        district: preparedAddress.districtEn || String(address.district || '').trim()
     };
 }
 
@@ -130,7 +140,7 @@ export default function PublicRegistrationLedger() {
             .catch((error) => {
                 if (!isMounted) return;
                 setServerMetadata({ loaded: true, nextSuggestedBiometricDeviceId: null });
-                toast.error(extractApiErrorMessage(error, 'নিবন্ধন তথ্য সার্ভার থেকে লোড করা যায়নি।'));
+                toast.error(extractApiErrorMessage(error, 'নিবন্ধন মেটাডেটা সার্ভার থেকে লোড করা যায়নি।'));
             });
 
         return () => {
@@ -138,7 +148,7 @@ export default function PublicRegistrationLedger() {
         };
     }, []);
 
-    // ব্যাকএন্ড থেকে UID দিয়ে লাইভ রেজিস্ট্রি কার্ড লোড করার ফাংশন
+    // ব্যাকএন্ড থেকে UID দিয়ে লাইভ রেজিস্ট্রি কার্ড লোড করার ফাংশন
     const fetchRegistryCardByUid = async (targetUid) => {
         const cleanUid = String(targetUid || '').trim();
         if (!cleanUid) {
@@ -149,7 +159,7 @@ export default function PublicRegistrationLedger() {
         setLookupLoading(true);
         setIsRefreshingCard(true);
         try {
-            const res = await axiosClient.get(`/teachers/public/registry-card/${cleanUid}`);
+            const res = await axiosClient.get(`/teachers/public/registry-card/${encodeURIComponent(cleanUid)}`);
             const teacherDoc = res.data?.data;
             if (teacherDoc) {
                 const recordObj = {
@@ -162,10 +172,10 @@ export default function PublicRegistrationLedger() {
                 };
                 setSubmittedRegistryRecord(recordObj);
                 setIsUidModalOpen(false);
-                toast.success('ডিজিটাল রেজিস্ট্রি কার্ড সফলভাবে লোড হয়েছে!');
+                toast.success('ডিজিটাল রেজিস্ট্রি কার্ড সফলভাবে লোড হয়েছে!');
             }
         } catch (err) {
-            toast.error(extractApiErrorMessage(err, 'এই UID দিয়ে কোনো নিবন্ধিত কার্ড পাওয়া যায়নি।'));
+            toast.error(extractApiErrorMessage(err, 'এই UID দিয়ে কোনো নিবন্ধিত কার্ড পাওয়া যায়নি।'));
         } finally {
             setLookupLoading(false);
             setIsRefreshingCard(false);
@@ -215,15 +225,13 @@ export default function PublicRegistrationLedger() {
     };
 
     const handleFinalSubmit = async () => {
-        if (!serverMetadata.loaded || !serverMetadata.nextSuggestedBiometricDeviceId || !idPreview) {
-            toast.error('শিক্ষক আইডি তৈরির জন্য সার্ভারের নিবন্ধন তথ্য প্রয়োজন। পরে আবার চেষ্টা করুন।');
-            return;
-        }
+        if (submittingState.isSubmitting) return;
+
         const c1 = validateStep1PersonalData(formData);
         if (!c1.valid) {
             setStepErrors(c1.errors);
             setCurrentStep(0);
-            toast.error('ধাপ ১-এর তথ্যে ত্রুটি রয়েছে, অনুগ্রহ করে যাচাই করুন।');
+            toast.error('ধাপ ১-এর তথ্যে ত্রুটি রয়েছে, অনুগ্রহ করে যাচাই করুন।');
             return;
         }
 
@@ -231,7 +239,7 @@ export default function PublicRegistrationLedger() {
         if (!c2.valid) {
             setStepErrors(c2.errors);
             setCurrentStep(1);
-            toast.error('ধাপ ২-এর পিতা-মাতা বা শিক্ষাগত যোগ্যতায় ত্রুটি রয়েছে।');
+            toast.error('ধাপ ২-এর পিতা-মাতা বা শিক্ষাগত যোগ্যতায় ত্রুটি রয়েছে।');
             return;
         }
 
@@ -239,7 +247,7 @@ export default function PublicRegistrationLedger() {
         if (!c3.valid) {
             setStepErrors(c3.errors);
             setCurrentStep(2);
-            toast.error('ধাপ ৩-এর মোবাইল নম্বর বা ঠিকানায় ত্রুটি রয়েছে।');
+            toast.error('ধাপ ৩-এর মোবাইল নম্বর বা ঠিকানায় ত্রুটি রয়েছে।');
             return;
         }
 
@@ -247,6 +255,15 @@ export default function PublicRegistrationLedger() {
         if (!c4.valid) {
             setStepErrors(c4.errors);
             toast.error(Object.values(c4.errors)[0]);
+            return;
+        }
+
+        // ব্যাকএন্ডের সাথে মিলিয়ে পাসওয়ার্ড আবশ্যক চেক (ক্লাউডিনারি আপলোডের আগেই)
+        const trimmedPassword = String(formData.password || '').trim();
+        if (trimmedPassword.length < 6 || trimmedPassword.length > 64) {
+            const passErr = 'পোর্টাল পাসওয়ার্ড আবশ্যক এবং তা ৬ থেকে ৬৪ অক্ষরের মধ্যে হতে হবে।';
+            setStepErrors({ password: passErr });
+            toast.error(passErr);
             return;
         }
 
@@ -260,10 +277,12 @@ export default function PublicRegistrationLedger() {
         try {
             let uploadedPhotoUrl = photoData.uploadedUrl || '';
             let uploadedPublicId = photoData.uploadedPublicId || '';
+            const cleanPhone = extractPureDigits(formData.phone);
 
             if (!uploadedPhotoUrl) {
+                const photoKey = idPreview?.fullId || cleanPhone || 'staff';
                 const cloudRes = await uploadSquarePhotoToCloudinary(photoData.blob, {
-                    publicId: `teacher_${idPreview.fullId}_${Date.now()}`,
+                    publicId: `teacher_${photoKey}_${Date.now()}`,
                     onProgress: (pct) => {
                         setSubmittingState((prev) => ({
                             ...prev,
@@ -289,31 +308,31 @@ export default function PublicRegistrationLedger() {
 
             const cleanNid = extractPureDigits(formData.nidNumber);
             const cleanBirthReg = extractPureDigits(formData.birthRegNumber);
+            const normalizedFullNameEng = normalizeEnglishName(formData.fullNameEng);
 
             const payload = {
-                teacherCode: String(idPreview?.fullId || '').replace(/\D/g, '').slice(0, 10),
-                fullNameEng: formData.fullNameEng.trim(),
+                fullNameEng: normalizedFullNameEng,
                 fullNameBng: formData.fullNameBng.trim(),
-                fathersNameEng: formData.fathersNameEng.trim(),
+                fathersNameEng: normalizeEnglishName(formData.fathersNameEng),
                 fathersNameBng: formData.fathersNameBng.trim(),
-                mothersNameEng: formData.mothersNameEng.trim(),
+                mothersNameEng: normalizeEnglishName(formData.mothersNameEng),
                 mothersNameBng: formData.mothersNameBng.trim(),
                 designation: formData.designation,
-                subject: formData.subject || 'General',
-                gender: formData.gender,
-                religion: formData.religion,
-                bloodGroup: formData.bloodGroup,
-                maritalStatus: formData.maritalStatus,
+                subject: formData.subject ? formData.subject.trim() : 'General',
+                gender: formData.gender || undefined,
+                religion: formData.religion || undefined,
+                bloodGroup: formData.bloodGroup || undefined,
+                maritalStatus: formData.maritalStatus || undefined,
                 nidNumber: cleanNid || undefined,
                 birthRegNumber: cleanBirthReg || undefined,
                 indexNumber: formData.indexNumber ? formData.indexNumber.trim() : undefined,
                 dateOfBirth: formData.dateOfBirth,
                 joiningDate: formData.joiningDate,
-                phone: extractPureDigits(formData.phone),
+                phone: cleanPhone,
                 email: formData.email ? formData.email.trim().toLowerCase() : undefined,
                 emergencyContact: {
                     contactName: formData.emergencyContact.contactName.trim(),
-                    relationship: formData.emergencyContact.relationship,
+                    relationship: formData.emergencyContact.relationship || 'Guardian',
                     phone: extractPureDigits(formData.emergencyContact.phone)
                 },
                 presentAddress: prepareAddressPayload(formData.presentAddress),
@@ -322,41 +341,50 @@ export default function PublicRegistrationLedger() {
                         ? formData.presentAddress
                         : formData.permanentAddress
                 ),
-                academicQualifications: formData.academicQualifications.map((q) => ({
-                    degreeLevel: q.degreeLevel,
-                    examTitle: q.examTitle.trim(),
-                    majorOrGroup: q.majorOrGroup ? q.majorOrGroup.trim() : '',
-                    boardOrUniversity: q.boardOrUniversity.trim(),
-                    rollNumber: q.rollNumber ? q.rollNumber.trim() : '',
-                    registrationNumber: q.registrationNumber ? q.registrationNumber.trim() : '',
-                    passingYear: Number(toEnglishDigits(q.passingYear)),
-                    courseDuration: q.courseDuration || '',
-                    resultType: q.resultType || 'GPA',
-                    resultGrade: q.resultGrade || undefined,
-                    gpaOrCgpa: q.gpaOrCgpa ? Number(toEnglishDigits(q.gpaOrCgpa)) : undefined,
-                    scale: Number(q.scale) === 4 ? 4 : 5
-                })),
+                academicQualifications: formData.academicQualifications.map((q) => {
+                    const resultType = q.resultType || 'GPA';
+                    const isNumeric = ['GPA', 'CGPA'].includes(resultType);
+                    const isGrade = ['Division', 'Class'].includes(resultType);
+
+                    return {
+                        degreeLevel: q.degreeLevel,
+                        examTitle: q.examTitle.trim(),
+                        majorOrGroup: q.majorOrGroup ? q.majorOrGroup.trim() : '',
+                        boardOrUniversity: q.boardOrUniversity.trim(),
+                        rollNumber: q.rollNumber ? q.rollNumber.trim() : '',
+                        registrationNumber: q.registrationNumber ? q.registrationNumber.trim() : '',
+                        passingYear: Number(toEnglishDigits(q.passingYear)),
+                        courseDuration: q.courseDuration || '',
+                        resultType,
+                        resultGrade: isGrade ? (q.resultGrade || undefined) : undefined,
+                        gpaOrCgpa: isNumeric && q.gpaOrCgpa ? Number(toEnglishDigits(q.gpaOrCgpa)) : undefined,
+                        scale: Number(q.scale) === 4 ? 4 : 5
+                    };
+                }),
                 profilePicture: {
                     url: uploadedPhotoUrl,
                     publicId: uploadedPublicId
                 },
-                password: formData.password ? formData.password.trim() : undefined
+                password: trimmedPassword
             };
 
             const apiRes = await axiosClient.post('/teachers/public/self-register', payload);
             const resultData = apiRes.data?.data || {};
 
+            // সিকিউরিটির জন্য ফলব্যাক অবজেক্ট থেকে কখনোই password লোকাল স্টোরেজে না রাখা
+            const { password: _ignoredPassword, ...safeTeacherFallback } = payload;
+
             const registryTokenObj = {
                 uid: resultData.uid,
-                teacherId: resultData.teacherId || resultData.teacher?.teacherCode || idPreview.fullId,
+                teacherId: resultData.teacherId || resultData.teacher?.teacherCode || idPreview?.fullId || '',
                 editToken: resultData.editToken,
-                fullNameBng: formData.fullNameBng,
-                fullNameEng: formData.fullNameEng,
+                fullNameBng: formData.fullNameBng.trim(),
+                fullNameEng: normalizedFullNameEng,
                 designation: formData.designation,
                 designationBng: rankPreview.designationBng,
                 photoUrl: uploadedPhotoUrl,
                 registeredAt: new Date().toISOString(),
-                teacher: resultData.teacher || payload
+                teacher: resultData.teacher || safeTeacherFallback
             };
 
             try {
@@ -365,7 +393,7 @@ export default function PublicRegistrationLedger() {
                     JSON.stringify(registryTokenObj)
                 );
             } catch (e) {
-                // Ignore
+                // Ignore storage quota errors
             }
 
             clearRegistrationDraft();
@@ -373,14 +401,14 @@ export default function PublicRegistrationLedger() {
             setSubmittedRegistryRecord(registryTokenObj);
             setExistingRegistryToken(registryTokenObj);
 
-            toast.success('আলহামদুলিল্লাহ! আপনার নিবন্ধন ও ডিজিটাল আইডি কার্ড তৈরি হয়েছে।');
+            toast.success('আলহামদুলিল্লাহ! আপনার নিবন্ধন ও ডিজিটাল আইডি কার্ড তৈরি হয়েছে।');
             scrollToLedgerTop();
         } catch (err) {
             setSubmittingState({ isSubmitting: false, stageText: '', uploadPercent: 0 });
             if (err.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
                 setStepErrors(err.fieldErrors);
             }
-            toast.error(extractApiErrorMessage(err, 'নিবন্ধন জমা দিতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।'));
+            toast.error(extractApiErrorMessage(err, 'নিবন্ধন জমা দিতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।'));
         }
     };
 
@@ -442,7 +470,7 @@ export default function PublicRegistrationLedger() {
         setSubmittedRegistryRecord(null);
         setCurrentStep(0);
         setIsResetConfirmOpen(false);
-        toast.info('ফর্মের সকল খসড়া তথ্য রিসেট করা হয়েছে।');
+        toast.info('ফর্মের সকল খসড়া তথ্য রিসেট করা হয়েছে।');
     };
 
     const activeStepMeta = REGISTRATION_STEPS[currentStep] || REGISTRATION_STEPS[0];
@@ -478,9 +506,8 @@ export default function PublicRegistrationLedger() {
                             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-paper-panel border border-ink-faint hover:border-gold text-xs font-bengali font-medium text-emerald-deep shadow-2xs transition-all"
                         >
                             <Search className="w-3.5 h-3.5 text-gold-deep" />
-                            পূর্বে নিবন্ধিত? UID দিয়ে আইডি কার্ড খুঁজুন
+                            পূর্বে নিবন্ধিত? UID দিয়ে আইডি কার্ড খুঁজুন
                         </button>
-
                     </div>
                 </header>
 
@@ -519,7 +546,7 @@ export default function PublicRegistrationLedger() {
                     </div>
                 )}
 
-                {/* ৩. যদি রেজিস্ট্রেশন সম্পন্ন হয় বা কার্ড ওপেন করা হয় তবে DigitalRegistryIdCard দেখাবে */}
+                {/* ৩. যদি রেজিস্ট্রেশন সম্পন্ন হয় বা কার্ড ওপেন করা হয় তবে DigitalRegistryIdCard দেখাবে */}
                 {submittedRegistryRecord ? (
                     <DigitalRegistryIdCard
                         registryRecord={submittedRegistryRecord}
@@ -667,7 +694,7 @@ export default function PublicRegistrationLedger() {
                                     >
                                         <span className="font-bengali">
                                             {currentStep === REGISTRATION_STEPS.length - 1
-                                                ? 'নিবন্ধন চূড়ান্ত ও সাবমিট করুন'
+                                                ? 'নিবন্ধন চূড়ান্ত ও সাবমিট করুন'
                                                 : 'যাচাই করে পরবর্তী ধাপে যান'}
                                         </span>
                                     </Button>
@@ -683,14 +710,14 @@ export default function PublicRegistrationLedger() {
                     </p>
                 </footer>
 
-                {/* UID দিয়ে রেজিস্ট্রি কার্ড পুনরুদ্ধার মডাল */}
+                {/* UID দিয়ে রেজিস্ট্রি কার্ড পুনরুদ্ধার মডাল */}
                 <Modal
                     isOpen={isUidModalOpen}
                     onClose={() => setIsUidModalOpen(false)}
                     size="sm"
                     titleEng="Registry Card Recovery"
-                    titleBng="UID দিয়ে ডিজিটাল আইডি কার্ড খুঁজুন"
-                    subtitleBng="নিবন্ধনের সময় প্রাপ্ত রেজিস্ট্রি UID কোডটি নিচে প্রদান করুন"
+                    titleBng="UID দিয়ে ডিজিটাল আইডি কার্ড খুঁজুন"
+                    subtitleBng="নিবন্ধনের সময় প্রাপ্ত রেজিস্ট্রি UID কোডটি নিচে প্রদান করুন"
                     footer={
                         <>
                             <Button variant="ghost" size="sm" onClick={() => setIsUidModalOpen(false)}>
@@ -716,7 +743,7 @@ export default function PublicRegistrationLedger() {
                         placeholder="e.g. 550e8400-e29b-41d4-a716..."
                         isMonoText
                         required
-                        hint="আপনার পূর্বে ডাউনলোড করা সনদে এই UID নম্বরটি উল্লেখ রয়েছে।"
+                        hint="আপনার পূর্বে ডাউনলোড করা সনদে এই UID নম্বরটি উল্লেখ রয়েছে।"
                     />
                 </Modal>
 
@@ -726,7 +753,7 @@ export default function PublicRegistrationLedger() {
                     onConfirm={handleResetDraft}
                     variant="danger"
                     titleBng="আপনি কি ফর্মের সকল তথ্য মুছে নতুন করে শুরু করতে চান?"
-                    messageBng="রিসেট করলে আপনার বর্তমান টাইপ করা খসড়া তথ্য মুছে যাবে এবং ফর্মটি আবার ১ নম্বর ধাপ থেকে শুরু হবে।"
+                    messageBng="রিসেট করলে আপনার বর্তমান টাইপ করা খসড়া তথ্য মুছে যাবে এবং ফর্মটি আবার ১ নম্বর ধাপ থেকে শুরু হবে।"
                     confirmText="হ্যাঁ, রিসেট করুন"
                 />
             </div>

@@ -3,50 +3,59 @@
  * Enforces Military-Grade Validation on:
  * - Primary 11-Digit BD Mobile Number (auto-converts Bengali digits & +88)
  * - Emergency Contact Number (MUST be strictly different from Primary Mobile)
- * - Present & Permanent Address
+ * - Present & Permanent Address (BD APIs v2.0 + 4-Digit Post Code + 1-3 Digit Ward No)
  */
 
-import { useEffect, useState } from 'react';
 import {
-    Phone,
-    PhoneCall,
+    fetchDistricts,
+    fetchDivisions,
+    fetchUnions,
+    fetchUpazilas
+} from '@api/bdAddressApi';
+import { Badge, Button, FormInput, FormSelect } from '@components/ui';
+import { extractPureDigits } from '@utils/formatters';
+import {
+    sanitizeText,
+    validateAddressField,
+    validateEmergencyPhone,
+    validateMobileNumber
+} from '@utils/validators';
+import {
+    CopyCheck,
+    Home,
     Mail,
     MapPin,
-    Home,
-    CopyCheck,
+    Phone,
+    PhoneCall,
     ShieldAlert
 } from 'lucide-react';
-import { FormInput, FormSelect, Button, Badge } from '@components/ui';
-import {
-    fetchDivisions,
-    fetchDistricts,
-    fetchUpazilas,
-    fetchUnions
-} from '@api/bdAddressApi';
-import {
-    validateMobileNumber,
-    validateEmergencyPhone,
-    validateAddressField,
-    sanitizeText
-} from '@utils/validators';
-import { extractPureDigits } from '@utils/formatters';
+import { useEffect, useState } from 'react';
 
 const ADDRESS_TEXT_FIELDS = [
-    ['houseNameBn', 'বাড়ির নাম (বাংলা)'],
-    ['houseNameEn', 'বাড়ির নাম (ইংরেজি)'],
+    ['houseNameBn', 'বাড়ির নাম (বাংলা)'],
+    ['houseNameEn', 'বাড়ির নাম (ইংরেজি)'],
     ['villageBn', 'গ্রামের নাম (বাংলা)'],
     ['villageEn', 'গ্রামের নাম (ইংরেজি)'],
-    ['unionBn', 'ইউনিয়নের নাম (বাংলা)'],
-    ['unionEn', 'ইউনিয়নের নাম (ইংরেজি)'],
+    ['unionBn', 'ইউনিয়নের নাম (বাংলা)'],
+    ['unionEn', 'ইউনিয়নের নাম (ইংরেজি)'],
     ['upazilaBn', 'উপজেলার নাম (বাংলা)'],
     ['upazilaEn', 'উপজেলার নাম (ইংরেজি)'],
     ['districtBn', 'জেলার নাম (বাংলা)'],
     ['districtEn', 'জেলার নাম (ইংরেজি)'],
     ['divisionBn', 'বিভাগের নাম (বাংলা)'],
     ['divisionEn', 'বিভাগের নাম (ইংরেজি)'],
-    ['postOffice', 'ডাকঘর'],
-    ['postCode', 'পোস্ট কোড']
+    ['postOffice', 'ডাকঘর']
 ];
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function normalizeEnglishText(val = '') {
+    const clean = String(val || '').replace(/\s+/g, ' ').trim();
+    if (!clean) return '';
+    return clean
+        .toLowerCase()
+        .replace(/(^|[\s.'-])([a-z])/g, (_, sep, char) => sep + char.toUpperCase());
+}
 
 function findLocation(locations, nameEn, nameBn) {
     const englishName = String(nameEn || '').trim().toLowerCase();
@@ -62,7 +71,7 @@ const RELATIONSHIP_OPTIONS = [
     { value: 'Mother', label: 'মাতা (Mother)' },
     { value: 'Spouse', label: 'স্বামী / স্ত্রী (Spouse)' },
     { value: 'Brother', label: 'ভাই (Brother)' },
-    { value: 'Guardian', label: 'অভিভাবক / আত্মীয় (Guardian)' },
+    { value: 'Guardian', label: 'অভিভাবক / আত্মীয় (Guardian)' },
     { value: 'Other', label: 'অন্যান্য (Other)' }
 ];
 
@@ -75,9 +84,14 @@ function validateAddressData(address, prefix, errors) {
         }
     });
 
-    const wardNo = String(address?.wardNo || '').trim();
+    const wardNo = extractPureDigits(address?.wardNo || '');
     if (!/^\d{1,3}$/.test(wardNo)) {
-        errors[`${prefix}WardNo`] = 'ওয়ার্ড নম্বর ১ থেকে ৩ সংখ্যার মধ্যে হতে হবে।';
+        errors[`${prefix}WardNo`] = 'ওয়ার্ড নম্বর ১ থেকে ৩ সংখ্যার মধ্যে হতে হবে।';
+    }
+
+    const postCode = extractPureDigits(address?.postCode || '');
+    if (!/^\d{4}$/.test(postCode)) {
+        errors[`${prefix}PostCode`] = 'পোস্ট কোড অবশ্যই ৪ সংখ্যার হতে হবে।';
     }
 }
 
@@ -101,11 +115,9 @@ export function validateStep3AddressContactData(formData) {
     );
     if (!emPhoneCheck.valid) errors.emergencyPhone = emPhoneCheck.error;
 
-    if (formData.email && String(formData.email).trim().length > 0) {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(String(formData.email).trim())) {
-            errors.email = 'সঠিক ইমেইল অ্যাড্রেস প্রদান করুন (অথবা খালি রাখুন)।';
-        }
+    const trimmedEmail = String(formData.email || '').trim();
+    if (trimmedEmail.length > 0 && !EMAIL_REGEX.test(trimmedEmail)) {
+        errors.email = 'সঠিক ইমেইল অ্যাড্রেস প্রদান করুন (অথবা খালি রাখুন)।';
     }
 
     validateAddressData(formData.presentAddress, 'present', errors);
@@ -139,11 +151,13 @@ export default function Step3AddressContact({
     const [lookupError, setLookupError] = useState('');
     const [areaLookupError, setAreaLookupError] = useState('');
     const [lookupRetry, setLookupRetry] = useState(0);
+
     const presentDivision = findLocation(divisions, presentAddress.divisionEn, presentAddress.divisionBn);
     const permanentDivision = findLocation(divisions, permanentAddress.divisionEn, permanentAddress.divisionBn);
     const selectedDivisionIds = [...new Set(
         [presentDivision?.id, permanentDivision?.id].filter(Boolean)
     )];
+
     const getSelectedDistrict = (address, division) => {
         const districts = division ? districtsByDivision[division.id] || [] : [];
         return findLocation(districts, address.districtEn, address.districtBn);
@@ -153,6 +167,7 @@ export default function Step3AddressContact({
     const selectedDistrictIds = [...new Set(
         [presentDistrict?.id, permanentDistrict?.id].filter(Boolean)
     )];
+
     const getSelectedUpazila = (address, district) => {
         const upazilas = district ? upazilasByDistrict[district.id] || [] : [];
         return findLocation(upazilas, address.upazilaEn, address.upazilaBn);
@@ -269,6 +284,11 @@ export default function Step3AddressContact({
         formData.emergencyContact?.phone,
         formData.phone
     );
+    const trimmedEmail = String(formData.email || '').trim();
+    const emailLive = {
+        valid: trimmedEmail.length === 0 || EMAIL_REGEX.test(trimmedEmail),
+        error: 'সঠিক ইমেইল অ্যাড্রেস প্রদান করুন (অথবা খালি রাখুন)।'
+    };
 
     const getFieldError = (fieldKey, liveCheck, val) => {
         if (stepErrors[fieldKey]) return stepErrors[fieldKey];
@@ -298,9 +318,15 @@ export default function Step3AddressContact({
         if (!hasBeenEdited) return '';
 
         if (field === 'wardNo') {
-            return /^\d{1,3}$/.test(String(value).trim())
+            return /^\d{1,3}$/.test(extractPureDigits(value))
                 ? ''
-                : 'ওয়ার্ড নম্বর ১ থেকে ৩ সংখ্যার মধ্যে হতে হবে।';
+                : 'ওয়ার্ড নম্বর ১ থেকে ৩ সংখ্যার মধ্যে হতে হবে।';
+        }
+
+        if (field === 'postCode') {
+            return /^\d{4}$/.test(extractPureDigits(value))
+                ? ''
+                : 'পোস্ট কোড অবশ্যই ৪ সংখ্যার হতে হবে।';
         }
 
         const label = ADDRESS_TEXT_FIELDS.find(([key]) => key === field)?.[1] || 'ঠিকানা';
@@ -385,7 +411,14 @@ export default function Step3AddressContact({
                             ? extractPureDigits(event.target.value).slice(0, options.maxLength || 3)
                             : event.target.value
                     })}
-                    onBlur={() => onBlurField(fieldName)}
+                    onBlur={() => {
+                        if (options.titleCase && address[field]) {
+                            handleAddressChange(addressKey, {
+                                [field]: normalizeEnglishText(address[field])
+                            });
+                        }
+                        onBlurField(fieldName);
+                    }}
                     required
                     isBengaliText={options.isBengaliText}
                     error={getAddressError(address, prefix, field)}
@@ -459,7 +492,7 @@ export default function Step3AddressContact({
                     {renderSelect(
                         'unionEn',
                         'Union',
-                        'ইউনিয়ন',
+                        'ইউনিয়ন',
                         unionOptions,
                         isLoadingUnions || !selectedUpazila,
                         (event) => {
@@ -473,13 +506,13 @@ export default function Step3AddressContact({
                         },
                         findLocation(unionList, address.unionEn, address.unionBn)?.nameEn || ''
                     )}
-                    {renderInput('houseNameBn', 'House Name (Bangla)', 'বাড়ির নাম (বাংলা)', { leftIcon: Home, isBengaliText: true })}
-                    {renderInput('houseNameEn', 'House Name (English)', 'বাড়ির নাম (ইংরেজি)', { isBengaliText: false })}
+                    {renderInput('houseNameBn', 'House Name (Bangla)', 'বাড়ির নাম (বাংলা)', { leftIcon: Home, isBengaliText: true })}
+                    {renderInput('houseNameEn', 'House Name (English)', 'বাড়ির নাম (ইংরেজি)', { isBengaliText: false, titleCase: true })}
                     {renderInput('villageBn', 'Village (Bangla)', 'গ্রাম (বাংলা)', { isBengaliText: true })}
-                    {renderInput('villageEn', 'Village (English)', 'গ্রাম (ইংরেজি)', { isBengaliText: false })}
-                    {renderInput('wardNo', 'Ward No.', 'ওয়ার্ড নম্বর', { inputMode: 'numeric', maxLength: 3, numeric: true, isBengaliText: false })}
+                    {renderInput('villageEn', 'Village (English)', 'গ্রাম (ইংরেজি)', { isBengaliText: false, titleCase: true })}
+                    {renderInput('wardNo', 'Ward No.', 'ওয়ার্ড নম্বর', { inputMode: 'numeric', maxLength: 3, numeric: true, isBengaliText: false })}
                     {renderInput('postOffice', 'Post Office', 'ডাকঘর', { isBengaliText: true })}
-                    {renderInput('postCode', 'Post Code', 'পোস্ট কোড', { inputMode: 'numeric', maxLength: 4, numeric: true, isBengaliText: false })}
+                    {renderInput('postCode', 'Post Code', 'পোস্ট কোড (৪ সংখ্যা)', { inputMode: 'numeric', maxLength: 4, numeric: true, isBengaliText: false })}
                 </div>
             </div>
         );
@@ -536,7 +569,7 @@ export default function Step3AddressContact({
                         showValidIcon
                         isValid={phoneLive.valid}
                         error={getFieldError('phone', phoneLive, formData.phone)}
-                        hint="১১ সংখ্যার বাংলাদেশী নম্বর (বাংলা বা ইংরেজি যেকোনো সংখ্যায় লিখুন)।"
+                        hint="১১ সংখ্যার বাংলাদেশী নম্বর (বাংলা বা ইংরেজি যেকোনো সংখ্যায় লিখুন)।"
                     />
 
                     <FormInput
@@ -547,10 +580,17 @@ export default function Step3AddressContact({
                         leftIcon={Mail}
                         value={formData.email}
                         onChange={(e) => onUpdateField('email', e.target.value)}
-                        onBlur={() => onBlurField('email')}
+                        onBlur={() => {
+                            if (formData.email) {
+                                onUpdateField('email', String(formData.email).trim().toLowerCase());
+                            }
+                            onBlurField('email');
+                        }}
                         placeholder="teacher@example.com"
-                        error={stepErrors.email || ''}
-                        hint="পাসওয়ার্ড রিকভারি ও নোটিফিকেশনের জন্য (না থাকলে খালি রাখুন)।"
+                        showValidIcon={trimmedEmail.length > 0}
+                        isValid={trimmedEmail.length > 0 && emailLive.valid}
+                        error={getFieldError('email', emailLive, formData.email)}
+                        hint="পাসওয়ার্ড রিকভারি ও নোটিফিকেশনের জন্য (না থাকলে খালি রাখুন)।"
                     />
                 </div>
 
@@ -559,7 +599,7 @@ export default function Step3AddressContact({
                     <div className="flex items-center gap-2 mb-3">
                         <PhoneCall className="w-4 h-4 text-gold-deep" />
                         <h4 className="font-bengali text-xs sm:text-sm font-bold text-emerald-deep">
-                            জরুরি প্রয়োজনে পরিবারের যার সাথে যোগাযোগ করা যাবে (Emergency Contact)
+                            জরুরি প্রয়োজনে পরিবারের যার সাথে যোগাযোগ করা যাবে (Emergency Contact)
                         </h4>
                     </div>
 
@@ -568,8 +608,10 @@ export default function Step3AddressContact({
                             labelEng="Contact Person"
                             labelBng="অভিভাবক / ব্যক্তির নাম"
                             variant="erp"
+                            maxLength={80}
                             value={formData.emergencyContact?.contactName || ''}
                             onChange={(e) => handleEmergencyChange('contactName', e.target.value)}
+                            onBlur={() => onBlurField('emergencyContactName')}
                             placeholder="যেমনঃ মোঃ রফিকুল ইসলাম"
                             required
                             isBengaliText
@@ -613,7 +655,7 @@ export default function Step3AddressContact({
                     <p className="font-bengali text-[11px] text-ink-soft flex items-center gap-1.5 mt-1">
                         <ShieldAlert className="w-3.5 h-3.5 text-gold-deep shrink-0" />
                         <span>
-                            নিরাপত্তা নীতিমালা অনুযায়ী শিক্ষকের নিজের মোবাইল নম্বর এবং জরুরি যোগাযোগের নম্বর কখনোই এক হতে পারবে না।
+                            নিরাপত্তা নীতিমালা অনুযায়ী শিক্ষকের নিজের মোবাইল নম্বর এবং জরুরি যোগাযোগের নম্বর কখনোই এক হতে পারবে না।
                         </span>
                     </p>
                 </div>
@@ -627,13 +669,13 @@ export default function Step3AddressContact({
                     <div className="flex items-center gap-2">
                         <MapPin className="w-4 h-4 text-emerald" />
                         <h3 className="font-bengali text-sm font-bold text-emerald-deep">
-                            ২. বর্তমান ও স্থায়ী ঠিকানা
+                            ২. বর্তমান ও স্থায়ী ঠিকানা
                         </h3>
                     </div>
                 </div>
 
                 {(lookupError || areaLookupError) && (
-                    <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-danger/20 bg-danger-bg px-3 py-2">
+                    <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-danger/20 bg-danger-bg px-3 py-2 mb-3">
                         <p className="font-bengali text-xs text-danger">{lookupError || areaLookupError}</p>
                         <Button variant="outline" size="xs" onClick={() => setLookupRetry((attempt) => attempt + 1)}>
                             আবার চেষ্টা করুন
@@ -641,17 +683,17 @@ export default function Step3AddressContact({
                     </div>
                 )}
                 {isLoadingLookups && (
-                    <p className="font-bengali text-xs text-ink-soft">BD APIs v2.0 থেকে বিভাগের তালিকা লোড হচ্ছে...</p>
+                    <p className="font-bengali text-xs text-ink-soft mb-2">BD APIs v2.0 থেকে বিভাগের তালিকা লোড হচ্ছে...</p>
                 )}
                 {(isLoadingDistricts || isLoadingUpazilas || isLoadingUnions) && (
-                    <p className="font-bengali text-xs text-ink-soft">এলাকার তালিকা লোড হচ্ছে...</p>
+                    <p className="font-bengali text-xs text-ink-soft mb-2">এলাকার তালিকা লোড হচ্ছে...</p>
                 )}
 
                 <div className="space-y-4">
                     {renderAddressFields('presentAddress', 'বর্তমান ঠিকানা')}
                 </div>
 
-                {/* স্থায়ী ঠিকানা ও বর্তমান ঠিকানা একই কি না তার চেকবক্স */}
+                {/* স্থায়ী ঠিকানা ও বর্তমান ঠিকানা একই কি না তার চেকবক্স */}
                 <div className="mt-3 pt-3 border-t border-ink-faint flex items-center justify-between flex-wrap gap-2">
                     <label className="inline-flex items-center gap-2.5 cursor-pointer select-none">
                         <input
@@ -669,22 +711,22 @@ export default function Step3AddressContact({
                         />
                         <span className="font-bengali text-xs sm:text-sm font-medium text-emerald-deep flex items-center gap-1.5">
                             <CopyCheck className="w-4 h-4 text-gold-deep" />
-                            আমার স্থায়ী ঠিকানা এবং বর্তমান ঠিকানা একই
+                            আমার স্থায়ী ঠিকানা এবং বর্তমান ঠিকানা একই
                         </span>
                     </label>
                     <span className="font-bengali text-xs text-ink-soft">
-                        আলাদা স্থায়ী ঠিকানা দিতে টিক তুলে দিন—নিচে ফর্মটি দেখাবে।
+                        আলাদা স্থায়ী ঠিকানা দিতে টিক তুলে দিন—নিচে ফর্মটি দেখাবে।
                     </span>
                 </div>
 
                 {!formData.sameAsPresentAddress && (
                     <div id="permanent-address-fields" className="mt-4">
-                        {renderAddressFields('permanentAddress', 'স্থায়ী ঠিকানা')}
+                        {renderAddressFields('permanentAddress', 'স্থায়ী ঠিকানা')}
                     </div>
                 )}
 
                 <p className="mt-3 rounded-lg border border-emerald/15 bg-emerald-subtle/40 px-3 py-2 font-bengali text-xs leading-5 text-ink-soft">
-                    বিভাগ, জেলা, উপজেলা ও ইউনিয়নের বাংলা-ইংরেজি তালিকা BD APIs v2.0 থেকে আসে। বাড়ি, গ্রাম, ওয়ার্ড, ডাকঘর ও পোস্ট কোডের তথ্য নিজে পূরণ করুন।
+                    বিভাগ, জেলা, উপজেলা ও ইউনিয়নের বাংলা-ইংরেজি তালিকা BD APIs v2.0 থেকে আসে। বাড়ি, গ্রাম, ওয়ার্ড, ডাকঘর ও পোস্ট কোডের তথ্য নিজে পূরণ করুন।
                 </p>
             </section>
         </div>

@@ -1,48 +1,45 @@
 /**
  * ARDM Enterprise ERP — Registration Step 1: Personal & Identity Information
  * Enforces Military-Grade Validation on:
- * - Bilingual Teacher Names (English & Unicode Bengali)
- * - 15 Official Designations (with Base Rank #1-#15 & Teaching/Non-Teaching auto-detection)
+ * - Bilingual Teacher Names (English with Auto Title Case & Unicode Bengali)
+ * - 15 Official Designations (with Teaching/Non-Teaching auto-detection)
  * - Blood Group (including "N/A"), Gender, Religion, Marital Status
  * - Flexible Identity Document (10/13/17-digit NID OR 17-digit Birth Registration)
  * - Date of Birth (Age 15–70) & Joining Date (Minimum 15y gap from DOB)
  */
 
-import React from 'react';
+import { Badge, FormInput, FormSelect } from '@components/ui';
 import {
-    User,
-    Award,
-    CreditCard,
-    FileText,
-    Calendar,
-    CheckCircle2,
-    AlertCircle,
-    Sparkles,
-    BookOpen,
-    Hash
-} from 'lucide-react';
-import {
-    DESIGNATION_LIST,
-    BLOOD_GROUPS
+    BLOOD_GROUPS,
+    DESIGNATION_LIST
 } from '@constants/app.constants';
-import { FormInput, FormSelect, Badge } from '@components/ui';
+import { cn } from '@utils/cn';
 import {
-    validateEnglishName,
+    calculateExactAge,
+    extractPureDigits
+} from '@utils/formatters';
+import {
     validateBengaliName,
-    validateDesignation,
-    validateBloodGroup,
-    validateNidNumber,
     validateBirthRegNumber,
-    validateIdentityDocuments,
+    validateBloodGroup,
     validateDateOfBirth,
-    validateJoiningDate
+    validateDesignation,
+    validateEnglishName,
+    validateIdentityDocuments,
+    validateJoiningDate,
+    validateNidNumber
 } from '@utils/validators';
 import {
-    extractPureDigits,
-    toBengaliDigits,
-    calculateExactAge
-} from '@utils/formatters';
-import { cn } from '@utils/cn';
+    AlertCircle,
+    Award,
+    BookOpen,
+    Calendar,
+    CheckCircle2,
+    CreditCard,
+    Hash,
+    Sparkles,
+    User
+} from 'lucide-react';
 
 const GENDER_OPTIONS = [
     { value: 'Male', label: 'পুরুষ (Male)' },
@@ -68,7 +65,7 @@ const MARITAL_STATUS_OPTIONS = [
 const IDENTITY_MODES = [
     {
         key: 'NID',
-        labelBng: 'জাতীয় পরিচয়পত্র (NID আছে)',
+        labelBng: 'জাতীয় পরিচয়পত্র (NID আছে)',
         labelEng: 'National ID Card',
         descBng: '১০, ১৩ অথবা ১৭ সংখ্যার স্মার্ট/পুরাতন এনআইডি নম্বর'
     },
@@ -80,11 +77,19 @@ const IDENTITY_MODES = [
     },
     {
         key: 'BOTH',
-        labelBng: 'উভয়ই আছে (NID + জন্ম নিবন্ধন)',
+        labelBng: 'উভয়ই আছে (NID + জন্ম নিবন্ধন)',
         labelEng: 'Both Documents',
-        descBng: 'এনআইডি এবং জন্ম নিবন্ধন উভয় নম্বরই সংরক্ষণ করুন'
+        descBng: 'এনআইডি এবং জন্ম নিবন্ধন উভয় নম্বরই সংরক্ষণ করুন'
     }
 ];
+
+function normalizeEnglishName(val = '') {
+    const clean = String(val || '').replace(/\s+/g, ' ').trim();
+    if (!clean) return '';
+    return clean
+        .toLowerCase()
+        .replace(/(^|[\s.'-])([a-z])/g, (_, sep, char) => sep + char.toUpperCase());
+}
 
 /**
  * পুরো Step 1-এর সকল ফিল্ড একসাথে ভ্যালিডেট করার এক্সপোর্টেড ফাংশন (Next বাটনে ক্লিক করলে কল হবে)
@@ -104,7 +109,17 @@ export function validateStep1PersonalData(formData) {
     const bloodCheck = validateBloodGroup(formData.bloodGroup);
     if (!bloodCheck.valid) errors.bloodGroup = bloodCheck.error;
 
-    // পরিচয়পত্র মোড অনুযায়ী যাচাই (NID অথবা জন্ম নিবন্ধন — কমপক্ষে একটি বাধ্যতামূলক)
+    if (!formData.gender) {
+        errors.gender = 'লিঙ্গ নির্বাচন করা আবশ্যক।';
+    }
+    if (!formData.religion) {
+        errors.religion = 'ধর্ম নির্বাচন করা আবশ্যক।';
+    }
+    if (!formData.maritalStatus) {
+        errors.maritalStatus = 'বৈবাহিক অবস্থা নির্বাচন করা আবশ্যক।';
+    }
+
+    // পরিচয়পত্র মোড অনুযায়ী যাচাই (NID অথবা জন্ম নিবন্ধন — কমপক্ষে একটি বাধ্যতামূলক)
     const mode = formData.identityType || 'NID';
     if (mode === 'NID') {
         const nidRes = validateNidNumber(formData.nidNumber, true);
@@ -141,8 +156,7 @@ export default function Step1PersonalIdentity({
 }) {
     // ১. সিলেক্ট করা পদবীর বিস্তারিত মেটাডেটা বের করা
     const selectedDesigObj =
-        DESIGNATION_LIST.find((d) => d.titleEng === formData.designation) ||
-        DESIGNATION_LIST[2];
+        DESIGNATION_LIST.find((d) => d.titleEng === formData.designation) || null;
 
     const designationOptions = DESIGNATION_LIST.map((d) => ({
         value: d.titleEng,
@@ -154,7 +168,7 @@ export default function Step1PersonalIdentity({
         label: bg === 'N/A' ? 'N/A (জানা নেই)' : `${bg} (ব্লাড গ্রুপ)`
     }));
 
-    // ২. লাইভ ফিল্ড ভ্যালিডেশন স্ট্যাটাস (টাইপ করার সাথে সাথে ফিডব্যাক দেওয়ার জন্য)
+    // ২. লাইভ ফিল্ড ভ্যালিডেশন স্ট্যাটাস
     const nameEngLive = validateEnglishName(formData.fullNameEng, 'শিক্ষকের ইংরেজি নাম');
     const nameBngLive = validateBengaliName(formData.fullNameBng, 'শিক্ষকের বাংলা নাম');
     const dobLive = validateDateOfBirth(formData.dateOfBirth);
@@ -172,13 +186,11 @@ export default function Step1PersonalIdentity({
         formData.identityType === 'BIRTH_REG' || formData.identityType === 'BOTH'
     );
 
-    // চাকরিতে যোগদানের সময় বয়স কত ছিল তা হিসাব করা
     const ageAtJoiningInfo =
         formData.dateOfBirth && formData.joiningDate
             ? calculateExactAge(formData.dateOfBirth, formData.joiningDate)
             : null;
 
-    // কোন ফিল্ডের এরর কখন দেখানো হবে (ব্লার করলে বা সাবমিট চাপলে অথবা অবৈধ অক্ষর টাইপ করলে)
     const getFieldError = (fieldName, liveResult, currentVal) => {
         if (stepErrors[fieldName]) return stepErrors[fieldName];
         if ((touchedFields[fieldName] || String(currentVal || '').length > 0) && !liveResult.valid) {
@@ -187,7 +199,6 @@ export default function Step1PersonalIdentity({
         return '';
     };
 
-    // পরিচয়পত্রের ট্যাব পরিবর্তন হ্যান্ডলার
     const handleIdentityModeSwitch = (newMode) => {
         onUpdateField('identityType', newMode);
         if (newMode === 'NID') {
@@ -207,19 +218,24 @@ export default function Step1PersonalIdentity({
                 <div className="flex items-center gap-2 mb-4 pb-2 border-b border-ink-faint">
                     <User className="w-4 h-4 text-emerald" />
                     <h3 className="font-bengali text-sm font-bold text-emerald-deep">
-                        ১. শিক্ষকের পূর্ণ নাম (সনদপত্র ও পরিচয়পত্র অনুযায়ী)
+                        ১. শিক্ষকের পূর্ণ নাম (সনদপত্র ও পরিচয়পত্র অনুযায়ী)
                     </h3>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-7 gap-y-1">
                     <FormInput
                         labelEng="Full Name (English)"
-                        labelBng="নাম (ইংরেজি বড়/ছোট হাতের অক্ষর)"
+                        labelBng="নাম (ইংরেজি অক্ষরে — স্বয়ংক্রিয় Title Case)"
                         name="fullNameEng"
                         value={formData.fullNameEng}
                         onChange={(e) => onUpdateField('fullNameEng', e.target.value)}
-                        onBlur={() => onBlurField('fullNameEng')}
-                        placeholder="e.g. Mohmmad Raisul Islam Saied"
+                        onBlur={() => {
+                            if (formData.fullNameEng) {
+                                onUpdateField('fullNameEng', normalizeEnglishName(formData.fullNameEng));
+                            }
+                            onBlurField('fullNameEng');
+                        }}
+                        placeholder="e.g. Mohammad Raisul Islam Saied"
                         required
                         showValidIcon
                         isValid={nameEngLive.valid}
@@ -229,7 +245,7 @@ export default function Step1PersonalIdentity({
 
                     <FormInput
                         labelEng="Full Name (Bengali)"
-                        labelBng="নাম (ইউনিকোড বাংলায়)"
+                        labelBng="নাম (ইউনিকোড বাংলায়)"
                         name="fullNameBng"
                         value={formData.fullNameBng}
                         onChange={(e) => onUpdateField('fullNameBng', e.target.value)}
@@ -257,23 +273,24 @@ export default function Step1PersonalIdentity({
                         </h3>
                     </div>
 
-                    {/* সিলেক্ট করা পদবীর ক্যাটাগরি ব্যাজ */}
-                    <div className="flex items-center gap-2">
-                        <Badge
-                            variant={selectedDesigObj.staffCategory === 'Teaching' ? 'gold' : 'info'}
-                            size="sm"
-                        >
-                            {selectedDesigObj.staffCategory === 'Teaching'
-                                ? 'Teaching Staff'
-                                : 'Non-Teaching Staff'}
-                        </Badge>
-                    </div>
+                    {selectedDesigObj && (
+                        <div className="flex items-center gap-2">
+                            <Badge
+                                variant={selectedDesigObj.staffCategory === 'Teaching' ? 'gold' : 'info'}
+                                size="sm"
+                            >
+                                {selectedDesigObj.staffCategory === 'Teaching'
+                                    ? 'Teaching Staff'
+                                    : 'Non-Teaching Staff'}
+                            </Badge>
+                        </div>
+                    )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-7 gap-y-1">
                     <FormSelect
                         labelEng="Designation"
-                        labelBng=""
+                        labelBng="পদবী"
                         name="designation"
                         value={formData.designation}
                         onChange={(e) => {
@@ -286,19 +303,22 @@ export default function Step1PersonalIdentity({
                                 onUpdateField('subject', 'General');
                             }
                         }}
+                        onBlur={() => onBlurField('designation')}
                         options={designationOptions}
                         placeholder="Select"
                         required
+                        error={stepErrors.designation || ''}
                     />
 
                     <FormInput
                         labelEng="Subject / Department"
                         labelBng={
-                            selectedDesigObj.staffCategory === 'Teaching'
-                                ? 'পাঠদানের মূল বিষয় (Subject)'
-                                : 'দায়িত্বের বিভাগ (Department)'
+                            selectedDesigObj?.staffCategory === 'Non-Teaching'
+                                ? 'দায়িত্বের বিভাগ (Department)'
+                                : 'পাঠদানের মূল বিষয় (Subject)'
                         }
                         name="subject"
+                        maxLength={100}
                         value={formData.subject}
                         onChange={(e) => onUpdateField('subject', e.target.value)}
                         placeholder="যেমনঃ আরবি / ইংরেজি / গণিত / আইসিটি"
@@ -315,9 +335,12 @@ export default function Step1PersonalIdentity({
                         name="bloodGroup"
                         value={formData.bloodGroup}
                         onChange={(e) => onUpdateField('bloodGroup', e.target.value)}
+                        onBlur={() => onBlurField('bloodGroup')}
                         options={bloodGroupOptions}
+                        placeholder="Select"
                         required
                         isBengaliText={false}
+                        error={stepErrors.bloodGroup || ''}
                     />
 
                     <FormSelect
@@ -326,8 +349,11 @@ export default function Step1PersonalIdentity({
                         name="gender"
                         value={formData.gender}
                         onChange={(e) => onUpdateField('gender', e.target.value)}
+                        onBlur={() => onBlurField('gender')}
                         options={GENDER_OPTIONS}
+                        placeholder="Select"
                         required
+                        error={stepErrors.gender || ''}
                     />
 
                     <FormSelect
@@ -336,8 +362,11 @@ export default function Step1PersonalIdentity({
                         name="religion"
                         value={formData.religion}
                         onChange={(e) => onUpdateField('religion', e.target.value)}
+                        onBlur={() => onBlurField('religion')}
                         options={RELIGION_OPTIONS}
+                        placeholder="Select"
                         required
+                        error={stepErrors.religion || ''}
                     />
 
                     <FormSelect
@@ -346,8 +375,11 @@ export default function Step1PersonalIdentity({
                         name="maritalStatus"
                         value={formData.maritalStatus}
                         onChange={(e) => onUpdateField('maritalStatus', e.target.value)}
+                        onBlur={() => onBlurField('maritalStatus')}
                         options={MARITAL_STATUS_OPTIONS}
+                        placeholder="Select"
                         required
+                        error={stepErrors.maritalStatus || ''}
                     />
                 </div>
             </section>
@@ -360,15 +392,15 @@ export default function Step1PersonalIdentity({
                     <div className="flex items-center gap-2">
                         <CreditCard className="w-4 h-4 text-emerald" />
                         <h3 className="font-bengali text-sm font-bold text-emerald-deep">
-                            ৩. পরিচয়পত্র নম্বর (NID অথবা জন্ম নিবন্ধন — যেকোনো একটি বাধ্যতামূলক)
+                            ৩. পরিচয়পত্র নম্বর (NID অথবা জন্ম নিবন্ধন — যেকোনো একটি বাধ্যতামূলক)
                         </h3>
                     </div>
                     <span className="font-bengali text-[11px] text-gold-deep font-semibold">
-                        * বাংলা বা ইংরেজি যেকোনো সংখ্যায় টাইপ করতে পারেন
+                        বাংলা বা ইংরেজি যেকোনো সংখ্যায় টাইপ করতে পারেন
                     </span>
                 </div>
 
-                {/* ৩টি পরিচয়পত্র মোড ট্যাব (NID | Birth Reg | Both) */}
+                {/* ৩টি পরিচয়পত্র মোড ট্যাব (NID | Birth Reg | Both) */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mb-5">
                     {IDENTITY_MODES.map((tab) => {
                         const isSelected = (formData.identityType || 'NID') === tab.key;
@@ -410,7 +442,7 @@ export default function Step1PersonalIdentity({
                     {(formData.identityType === 'NID' || formData.identityType === 'BOTH' || !formData.identityType) && (
                         <FormInput
                             labelEng="National ID (NID)"
-                            labelBng="জাতীয় পরিচয়পত্র নম্বর (১০ / ১৩ / ১৭ ডিজিট)"
+                            labelBng="জাতীয় পরিচয়পত্র নম্বর (১০ / ১৩ / ১৭ ডিজিট)"
                             name="nidNumber"
                             inputMode="numeric"
                             value={formData.nidNumber}
@@ -475,11 +507,12 @@ export default function Step1PersonalIdentity({
                         />
                     )}
 
-                    {/* ইনডেক্স নম্বর (যদি কারো থাকে - সম্পূর্ণ ঐচ্ছিক) */}
+                    {/* ইনডেক্স নম্বর (সম্পূর্ণ ঐচ্ছিক) */}
                     <FormInput
                         labelEng="Index Number (Optional)"
                         labelBng="ইনডেক্স নম্বর (যদি থাকে — ঐচ্ছিক)"
                         name="indexNumber"
+                        maxLength={50}
                         value={formData.indexNumber}
                         onChange={(e) => onUpdateField('indexNumber', e.target.value)}
                         placeholder="যেমনঃ N2104589 (না থাকলে খালি রাখুন)"
@@ -497,14 +530,14 @@ export default function Step1PersonalIdentity({
                 <div className="flex items-center gap-2 mb-4 pb-2 border-b border-ink-faint">
                     <Calendar className="w-4 h-4 text-emerald" />
                     <h3 className="font-bengali text-sm font-bold text-emerald-deep">
-                        ৪. জন্ম তারিখ ও মাদ্রাসায় যোগদানের তারিখ (১০-ডিজিট আইডি নির্ধারক)
+                        ৪. জন্ম তারিখ ও মাদ্রাসায় যোগদানের তারিখ (১০-ডিজিট আইডি নির্ধারক)
                     </h3>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-7 gap-y-1">
                     <FormInput
                         labelEng="Date of Birth"
-                        labelBng="জন্ম তারিখ (বয়স ১৫ – ৭০ বছর)"
+                        labelBng="জন্ম তারিখ (বয়স ১৫ – ৭০ বছর)"
                         name="dateOfBirth"
                         type="date"
                         value={formData.dateOfBirth}
@@ -514,12 +547,12 @@ export default function Step1PersonalIdentity({
                         isMonoText
                         isValid={dobLive.valid}
                         error={getFieldError('dateOfBirth', dobLive, formData.dateOfBirth)}
-                        hint="সনদপত্র অনুযায়ী সঠিক জন্ম তারিখ নির্বাচন করুন।"
+                        hint="সনদপত্র অনুযায়ী সঠিক জন্ম তারিখ নির্বাচন করুন।"
                     />
 
                     <FormInput
                         labelEng="Date of Joining"
-                        labelBng="মাদ্রাসায় যোগদানের তারিখ"
+                        labelBng="মাদ্রাসায় যোগদানের তারিখ"
                         name="joiningDate"
                         type="date"
                         value={formData.joiningDate}
@@ -533,7 +566,7 @@ export default function Step1PersonalIdentity({
                     />
                 </div>
 
-                {/* বয়স ও চাকরির যোগদান যাচাই স্ট্যাটাস কার্ড */}
+                {/* বয়স ও চাকরির যোগদান যাচাই স্ট্যাটাস কার্ড */}
                 {formData.dateOfBirth && (
                     <div
                         className={cn(
@@ -550,11 +583,11 @@ export default function Step1PersonalIdentity({
                                 <AlertCircle className="w-4 h-4 text-danger shrink-0" />
                             )}
                             <span>
-                                বর্তমান বয়স:{' '}
+                                বর্তমান বয়স:{' '}
                                 <b>{dobLive.ageInfo ? dobLive.ageInfo.formattedBng : '—'}</b>
                                 {ageAtJoiningInfo && (
                                     <>
-                                        {' '}· যোগদানের সময় বয়স:{' '}
+                                        {' '}· যোগদানের সময় বয়স:{' '}
                                         <b>{ageAtJoiningInfo.formattedBng}</b>
                                     </>
                                 )}

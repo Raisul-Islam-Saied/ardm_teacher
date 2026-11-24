@@ -11,16 +11,27 @@ const {
     VALID_CLASS_BN
 } = require('../constants/system.constants');
 
+const emptyToUndefined = (value) => (
+    value == null || (typeof value === 'string' && value.trim() === '')
+        ? undefined
+        : value
+);
+
+const normalizeEnglishName = (value) => {
+    if (typeof value !== 'string') return value;
+    const clean = value.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+    if (!clean) return clean;
+    return clean
+        .toLowerCase()
+        .replace(/(^|[\s.'-])([a-z])/g, (_, sep, char) => sep + char.toUpperCase());
+};
+
 const optionalUniqueString = () => ({
     type: String,
     unique: true,
     sparse: true,
     trim: true,
-    set: (value) => (
-        value == null || (typeof value === 'string' && value.trim() === '')
-            ? undefined
-            : value
-    )
+    set: emptyToUndefined
 });
 
 const academicQualificationSchema = new mongoose.Schema({
@@ -29,9 +40,9 @@ const academicQualificationSchema = new mongoose.Schema({
         enum: Object.keys(DEGREE_LEVEL_WEIGHTS),
         required: [true, 'ডিগ্রির স্তর (যেমন: Kamil, Fazil, Masters, Honours, Alim, Dakhil) উল্লেখ করা আবশ্যক']
     },
-    examTitle: { type: String, required: true, trim: true }, // যেমন: কামিল (হাদিস), বি.এসসি (অনার্স)
-    majorOrGroup: { type: String, trim: true, default: '' },
-    boardOrUniversity: { type: String, required: true, trim: true },
+    examTitle: { type: String, required: true, trim: true, maxlength: 100 },
+    majorOrGroup: { type: String, trim: true, default: '', maxlength: 100 },
+    boardOrUniversity: { type: String, required: true, trim: true, maxlength: 100 },
     rollNumber: { type: String, trim: true, default: '', maxlength: 50 },
     registrationNumber: { type: String, trim: true, default: '', maxlength: 50 },
     passingYear: { type: Number, required: true, min: 1960, max: 2050 },
@@ -45,6 +56,7 @@ const academicQualificationSchema = new mongoose.Schema({
     resultGrade: {
         type: String,
         enum: ['First', 'Second', 'Third'],
+        set: emptyToUndefined,
         required: function () {
             return ['Division', 'Class'].includes(this.resultType);
         }
@@ -78,7 +90,7 @@ const employmentPeriodSchema = new mongoose.Schema({
 }, { _id: false });
 
 const teacherSchema = new mongoose.Schema({
-    // ১. ১০ সংখ্যার স্বয়ংক্রিয় ইউনিক টিচার আইডি (যেমন: 1026030301) ও বায়োমেট্রিক আইডি
+    // ১. ১০ সংখ্যার স্বয়ংক্রিয় ইউনিক টিচার আইডি ও বায়োমেট্রিক আইডি
     teacherCode: {
         type: String,
         required: [true, '১০ সংখ্যার টিচার আইডি আবশ্যক'],
@@ -93,13 +105,13 @@ const teacherSchema = new mongoose.Schema({
     },
     biometricDeviceId: {
         type: Number,
-        required: [true, 'বায়োমেট্রিক মেশিন আইডি (Device User ID) আবশ্যক'],
+        required: [true, 'বায়োমেট্রিক মেশিন আইডি (Device User ID) আবশ্যক'],
         unique: true,
-        min: [1, 'বায়োমেট্রিক আইডি কমপক্ষে ১ হতে হবে']
+        min: [1, 'বায়োমেট্রিক আইডি কমপক্ষে ১ হতে হবে']
     },
     indexNumber: optionalUniqueString(),
 
-    // ২. ব্যক্তিগত তথ্য (বাংলা ও ইংরেজি উভয় ভাষায়)
+    // ২. ব্যক্তিগত তথ্য (বাংলা ও ইংরেজি উভয় ভাষায়)
     fullNameBng: {
         type: String,
         required: [true, 'শিক্ষকের বাংলা নাম আবশ্যক'],
@@ -108,7 +120,8 @@ const teacherSchema = new mongoose.Schema({
     fullNameEng: {
         type: String,
         required: [true, 'শিক্ষকের ইংরেজি নাম আবশ্যক'],
-        trim: true
+        trim: true,
+        set: normalizeEnglishName
     },
     fathersNameBng: {
         type: String,
@@ -118,7 +131,8 @@ const teacherSchema = new mongoose.Schema({
     fathersNameEng: {
         type: String,
         required: [true, 'পিতার ইংরেজি নাম আবশ্যক'],
-        trim: true
+        trim: true,
+        set: normalizeEnglishName
     },
     mothersNameBng: {
         type: String,
@@ -128,7 +142,8 @@ const teacherSchema = new mongoose.Schema({
     mothersNameEng: {
         type: String,
         required: [true, 'মাতার ইংরেজি নাম আবশ্যক'],
-        trim: true
+        trim: true,
+        set: normalizeEnglishName
     },
     dateOfBirth: {
         type: Date,
@@ -136,22 +151,26 @@ const teacherSchema = new mongoose.Schema({
     },
     gender: {
         type: String,
-        enum: ['Male', 'Female', 'Other']
+        enum: ['Male', 'Female', 'Other'],
+        set: emptyToUndefined
     },
     religion: {
         type: String,
-        enum: ['Islam', 'Hinduism', 'Buddhism', 'Christianity', 'Other']
+        enum: ['Islam', 'Hinduism', 'Buddhism', 'Christianity', 'Other'],
+        set: emptyToUndefined
     },
     bloodGroup: {
         type: String,
-        enum: BLOOD_GROUPS
+        enum: BLOOD_GROUPS,
+        set: emptyToUndefined
     },
     maritalStatus: {
         type: String,
-        enum: ['Single', 'Married', 'Widowed', 'Divorced']
+        enum: ['Single', 'Married', 'Widowed', 'Divorced'],
+        set: emptyToUndefined
     },
 
-    // ৩. পরিচয়পত্র (NID অথবা জন্ম নিবন্ধন - যেকোনো একটি বাধ্যতামূলক)
+    // ৩. পরিচয়পত্র (NID অথবা জন্ম নিবন্ধন)
     nidNumber: optionalUniqueString(),
     birthRegNumber: optionalUniqueString(),
 
@@ -191,7 +210,7 @@ const teacherSchema = new mongoose.Schema({
         districtEn: { type: String, trim: true, default: '', maxlength: 80 },
         divisionBn: { type: String, trim: true, default: '', maxlength: 80 },
         divisionEn: { type: String, trim: true, default: '', maxlength: 80 },
-        houseOrRoad: { type: String, required: [true, 'বাড়ি বা রাস্তার নাম আবশ্যক'], trim: true },
+        houseOrRoad: { type: String, required: [true, 'বাড়ি বা রাস্তার নাম আবশ্যক'], trim: true },
         village: { type: String, required: [true, 'গ্রামের নাম আবশ্যক'], trim: true },
         postOffice: { type: String, trim: true, default: '' },
         postCode: { type: String, trim: true, default: '' },
@@ -252,11 +271,11 @@ const teacherSchema = new mongoose.Schema({
     employmentType: {
         type: String,
         enum: Object.values(EMPLOYMENT_TYPES),
-        default: EMPLOYMENT_TYPES.NON_MPO // যেহেতু মাদ্রাসা বর্তমানে বেসরকারি
+        default: EMPLOYMENT_TYPES.NON_MPO
     },
     joiningDate: {
         type: Date,
-        required: [true, 'মাদ্রাসায় যোগদানের তারিখ আবশ্যক']
+        required: [true, 'মাদ্রাসায় যোগদানের তারিখ আবশ্যক']
     },
     resignationDate: {
         type: Date,
@@ -273,12 +292,12 @@ const teacherSchema = new mongoose.Schema({
         default: []
     },
     rankingMetrics: {
-        designationPriority: { type: Number, default: 15 }, // 1 = Super, 2 = Asst Super...
-        highestDegreeWeight: { type: Number, default: 0 },  // 5 = Kamil/Masters, 4 = Fazil/Honours...
-        highestDegreeNormalizedGpa: { type: Number, default: 0 }, // 5.00 স্কেলে কনভার্টেড পয়েন্ট
+        designationPriority: { type: Number, default: 15 },
+        highestDegreeWeight: { type: Number, default: 0 },
+        highestDegreeNormalizedGpa: { type: Number, default: 0 },
         averageNormalizedGpa: { type: Number, default: 0 },
         compositeRankScore: { type: Number, default: 0 },
-        overallMadrasahRank: { type: Number, default: null } // সমগ্র মাদ্রাসায় তার সিরিয়াল র‍্যাংক (1, 2, 3...)
+        overallMadrasahRank: { type: Number, default: null }
     },
 
     // ৮. বেতন ও পেমেন্ট পদ্ধতি (ডিফল্ট: Cash)
@@ -303,7 +322,8 @@ const teacherSchema = new mongoose.Schema({
     customLeaveQuota: {
         type: Number,
         default: 2.0,
-        min: 0
+        min: [0, 'ছুটির কোটা ০ এর কম হতে পারবে না'],
+        max: [15, 'ছুটির কোটা ১৫ এর বেশি হতে পারবে না']
     },
 
     // ৯. প্রোফাইল ছবি (500x500 Square in Cloudinary ardm/teachers)
@@ -312,11 +332,11 @@ const teacherSchema = new mongoose.Schema({
         publicId: { type: String, default: '' }
     },
 
-    // ১০. সিকিউরিটি, রোল ও অ্যাকাউন্ট স্ট্যাটাস (Pending Approval সাপোর্টসহ)
+    // ১০. সিকিউরিটি, রোল ও অ্যাকাউন্ট স্ট্যাটাস
     password: {
         type: String,
-        required: [true, 'পাসওয়ার্ড আবশ্যক'],
-        minlength: [6, 'পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে'],
+        required: [true, 'পাসওয়ার্ড আবশ্যক'],
+        minlength: [6, 'পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে'],
         select: false
     },
     passwordChangedAt: {
@@ -349,11 +369,39 @@ const teacherSchema = new mongoose.Schema({
     }
 }, {
     timestamps: true,
-    versionKey: false
+    versionKey: false,
+    toJSON: {
+        transform: (_, ret) => {
+            delete ret.password;
+            delete ret.editToken;
+            delete ret.passwordChangedAt;
+            delete ret.failedLoginAttempts;
+            delete ret.lockUntil;
+            return ret;
+        }
+    },
+    toObject: {
+        transform: (_, ret) => {
+            delete ret.password;
+            delete ret.editToken;
+            delete ret.passwordChangedAt;
+            delete ret.failedLoginAttempts;
+            delete ret.lockUntil;
+            return ret;
+        }
+    }
 });
 
-// সেভ হওয়ার আগে বাংলা পদবী, স্টাফ ক্যাটাগরি এবং র‍্যাংকিং মেট্রিক্স স্বয়ংক্রিয়ভাবে হিসাব করা
-teacherSchema.pre('validate', async function (next) {
+// দ্রুত সর্টিং ও ফিল্টারিংয়ের জন্য কম্পাউন্ড ইনডেক্স
+teacherSchema.index({
+    'rankingMetrics.overallMadrasahRank': 1,
+    'rankingMetrics.designationPriority': 1,
+    biometricDeviceId: 1
+});
+teacherSchema.index({ isActive: 1, registrationStatus: 1 });
+
+// ভ্যালিডেশনের আগে বাংলা পদবী, স্টাফ ক্যাটাগরি ও র‍্যাংকিং মেট্রিক্স হিসাব করা
+teacherSchema.pre('validate', function (next) {
     if (
         this.registrationStatus === 'Approved'
         && this.isActive !== false
@@ -363,14 +411,12 @@ teacherSchema.pre('validate', async function (next) {
         this.employmentHistory.push({ startDate: this.joiningDate, endDate: null });
     }
 
-    // ১. পদবীর বাংলা নাম ও বেস র‍্যাংক সেট করা
-    const desigInfo = DESIGNATION_DETAILS.find(d => d.titleEng === this.designation)
+    const desigInfo = DESIGNATION_DETAILS.find((d) => d.titleEng === this.designation)
         || DESIGNATION_DETAILS[DESIGNATION_DETAILS.length - 1];
 
     this.designationBng = desigInfo.titleBng;
     this.staffCategory = desigInfo.staffCategory;
 
-    // ২. শিক্ষাগত যোগ্যতা ও GPA/CGPA বিশ্লেষণ করে র‍্যাংকিং স্কোর তৈরি করা
     let maxWeight = 0;
     let bestGpaNormalized = 0;
     let totalNormalizedGpa = 0;
@@ -383,7 +429,6 @@ teacherSchema.pre('validate', async function (next) {
             }
 
             const weight = DEGREE_LEVEL_WEIGHTS[q.degreeLevel] || 0;
-            // ৪ স্কেলের CGPA হলে সেটিকে ৫ স্কেলের সমমান করে তুলনা করা যেন GPA ও CGPA-এর মধ্যে নিখুঁত বিচার হয়
             const normalizedGpa = q.scale === 4
                 ? Number(((q.gpaOrCgpa / 4) * 5).toFixed(3))
                 : Number(q.gpaOrCgpa.toFixed(3));
@@ -402,19 +447,29 @@ teacherSchema.pre('validate', async function (next) {
         ? Number((totalNormalizedGpa / rankedQualificationCount).toFixed(3))
         : 0;
 
-    this.rankingMetrics = {
-        ...this.rankingMetrics,
-        designationPriority: desigInfo.rankPriority,
-        highestDegreeWeight: maxWeight,
-        highestDegreeNormalizedGpa: bestGpaNormalized,
-        averageNormalizedGpa: avgGpa,
-        compositeRankScore: Number(((16 - desigInfo.rankPriority) * 1000 + (maxWeight * 50) + (bestGpaNormalized * 10) + avgGpa).toFixed(3))
-    };
+    if (!this.rankingMetrics) {
+        this.rankingMetrics = {};
+    }
+    this.rankingMetrics.designationPriority = desigInfo.rankPriority;
+    this.rankingMetrics.highestDegreeWeight = maxWeight;
+    this.rankingMetrics.highestDegreeNormalizedGpa = bestGpaNormalized;
+    this.rankingMetrics.averageNormalizedGpa = avgGpa;
+    this.rankingMetrics.compositeRankScore = Number(
+        ((16 - desigInfo.rankPriority) * 1000 + (maxWeight * 50) + (bestGpaNormalized * 10) + avgGpa).toFixed(3)
+    );
 
-    // ৩. পাসওয়ার্ড হ্যাশিং
-    if (this.isModified('password')) {
-        const salt = await bcrypt.genSalt(10);
-        this.password = await bcrypt.hash(this.password, salt);
+    next();
+});
+
+// সেভ হওয়ার আগে পাসওয়ার্ড হ্যাশিং ও passwordChangedAt আপডেট (ভ্যালিডেশনের পর)
+teacherSchema.pre('save', async function (next) {
+    if (!this.isModified('password')) return next();
+
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+
+    if (!this.isNew) {
+        this.passwordChangedAt = new Date(Date.now() - 1000);
     }
 
     next();
@@ -428,12 +483,5 @@ teacherSchema.methods.isPasswordChangedAfterTokenIssued = function (tokenIssuedA
     if (!this.passwordChangedAt) return false;
     return Math.floor(this.passwordChangedAt.getTime() / 1000) > tokenIssuedAt;
 };
-
-teacherSchema.pre('validate', function (next) {
-    if (!this.isNew && this.isModified('password')) {
-        this.passwordChangedAt = new Date(Date.now() - 1000);
-    }
-    next();
-});
 
 module.exports = mongoose.model('Teacher', teacherSchema);

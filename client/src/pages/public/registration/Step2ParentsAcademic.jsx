@@ -1,35 +1,33 @@
 /**
  * ARDM Enterprise ERP — Registration Step 2: Bilingual Parents & Academic Qualifications
  * Enforces Military-Grade Validation on:
- * - Father's Name (English & Unicode Bengali)
- * - Mother's Name (English & Unicode Bengali)
+ * - Father's Name (English with Auto Title Case & Unicode Bengali)
+ * - Mother's Name (English with Auto Title Case & Unicode Bengali)
  * - Dynamic Academic Qualifications List (Degree Level Weight, GPA/CGPA on 4.00 or 5.00 scale, Passing Year vs DOB)
  */
 
-import React from 'react';
+import academicQualificationOptions from '@/data/academicQualificationOptions.json';
+import { Badge, Button, FormInput, FormSelect } from '@components/ui';
+import { DEGREE_LEVELS } from '@constants/app.constants';
 import {
-    Users,
+    calculateLiveRankMetrics,
+    toBengaliDigits,
+    toEnglishDigits
+} from '@utils/formatters';
+import {
+    validateAcademicEntry,
+    validateBengaliName,
+    validateEnglishName
+} from '@utils/validators';
+import {
+    AlertCircle,
+    Award,
+    BookOpen,
     GraduationCap,
     Plus,
     Trash2,
-    Award,
-    AlertCircle,
-    BookOpen
+    Users
 } from 'lucide-react';
-import { DEGREE_LEVELS } from '@constants/app.constants';
-import { FormInput, FormSelect, Button, Badge } from '@components/ui';
-import academicQualificationOptions from '@/data/academicQualificationOptions.json';
-import {
-    validateEnglishName,
-    validateBengaliName,
-    validateAcademicEntry
-} from '@utils/validators';
-import {
-    toEnglishDigits,
-    toBengaliDigits,
-    calculateLiveRankMetrics
-} from '@utils/formatters';
-import { cn } from '@utils/cn';
 
 const ACADEMIC_QUALIFICATION_GROUPS = [
     { id: 'secondary', titleEng: 'SSC / Equivalent Level', titleBng: 'এসএসসি / দাখিল ও সমমান', levels: ['JDC', 'Dakhil', 'SSC'], defaultLevel: 'Dakhil', optionKey: 'secondary' },
@@ -91,6 +89,21 @@ const HSC_SUBJECT_CATEGORIES_BY_EXAM = {
     '10': ['T', 'Z']
 };
 
+function normalizeEnglishName(val = '') {
+    const clean = String(val || '').replace(/\s+/g, ' ').trim();
+    if (!clean) return '';
+    return clean
+        .toLowerCase()
+        .replace(/(^|[\s.'-])([a-z])/g, (_, sep, char) => sep + char.toUpperCase());
+}
+
+function sanitizeGpaInput(rawVal = '') {
+    const clean = toEnglishDigits(String(rawVal || '')).replace(/[^0-9.]/g, '');
+    const parts = clean.split('.');
+    if (parts.length === 1) return parts[0].slice(0, 1);
+    return `${parts[0].slice(0, 1)}.${parts.slice(1).join('').slice(0, 2)}`;
+}
+
 function getGroupDropdownOptions(group) {
     if (group.id === 'unassigned') {
         return {
@@ -145,13 +158,14 @@ export function validateStep2ParentsAcademicData(formData) {
         const birthYear = formData.dateOfBirth ? Number(formData.dateOfBirth.slice(0, 4)) : null;
 
         quals.forEach((row, index) => {
+            if (!row || typeof row !== 'object') return;
             const check = validateAcademicEntry(row);
             const rowErr = { ...check.errors };
 
             // জন্মসালের সাথে পাসের সনের সামঞ্জস্যতা চেক (জন্মের কমপক্ষে ১০ বছর পর পাসের সন হতে হবে)
             const passYear = Number(toEnglishDigits(row.passingYear));
             if (birthYear && passYear && passYear - birthYear < 10) {
-                rowErr.passingYear = `জন্মসাল (${birthYear})-এর সাথে পাসের সন (${passYear}) সামঞ্জস্যপূর্ণ নয়।`;
+                rowErr.passingYear = `জন্মসাল (${birthYear})-এর সাথে পাসের সন (${passYear}) সামঞ্জস্যপূর্ণ নয়।`;
             }
 
             if (Object.keys(rowErr).length > 0) {
@@ -196,7 +210,7 @@ export default function Step2ParentsAcademic({
             {
                 id: 'unassigned',
                 titleEng: 'Unassigned Qualification',
-                titleBng: 'স্তর নির্বাচন করা হয়নি',
+                titleBng: 'স্তর নির্বাচন করা হয়নি',
                 levels: [],
                 defaultLevel: 'Other'
             }
@@ -211,7 +225,6 @@ export default function Step2ParentsAcademic({
         return '';
     };
 
-    // নতুন শিক্ষাগত যোগ্যতার রো (Row) যোগ করা
     const handleAddQualification = (degreeLevel) => {
         if (qualifications.length >= 6) return;
         const newId = `acad_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
@@ -235,27 +248,29 @@ export default function Step2ParentsAcademic({
         onUpdateField('academicQualifications', nextList);
     };
 
-    // নির্দিষ্ট রো ডিলিট করা
     const handleRemoveQualification = (targetId) => {
         const nextList = qualifications.filter((item) => item.id !== targetId);
         onUpdateField('academicQualifications', nextList);
     };
 
-    // নির্দিষ্ট রো-এর ফিল্ড আপডেট করা
     const handleUpdateQualificationRow = (targetId, key, val) => {
-        const nextList = qualifications.map((item) => {
-            if (item.id !== targetId) return item;
-
-            return {
-                ...item,
-                [key]: val
-            };
-        });
-
+        const nextList = qualifications.map((item) => (
+            item.id !== targetId ? item : { ...item, [key]: val }
+        ));
         onUpdateField('academicQualifications', nextList);
     };
 
     const handleUpdateExamination = (targetId, group, examLabel) => {
+        if (!examLabel) {
+            const nextList = qualifications.map((item) => (
+                item.id !== targetId
+                    ? item
+                    : { ...item, examTitle: '', majorOrGroup: '' }
+            ));
+            onUpdateField('academicQualifications', nextList);
+            return;
+        }
+
         const examination = getGroupDropdownOptions(group).examinations
             .find((option) => option.label === examLabel);
         if (!examination) return;
@@ -276,6 +291,16 @@ export default function Step2ParentsAcademic({
     };
 
     const handleUpdateResult = (targetId, group, resultValue) => {
+        if (!resultValue) {
+            const nextList = qualifications.map((item) => (
+                item.id !== targetId
+                    ? item
+                    : { ...item, resultType: '', resultGrade: '', scale: '', gpaOrCgpa: '' }
+            ));
+            onUpdateField('academicQualifications', nextList);
+            return;
+        }
+
         const result = getGroupDropdownOptions(group).results
             .find((option) => option.value === resultValue);
         if (!result) return;
@@ -308,7 +333,7 @@ export default function Step2ParentsAcademic({
                     <div className="flex items-center gap-2">
                         <Users className="w-4 h-4 text-emerald" />
                         <h3 className="font-bengali text-sm font-bold text-emerald-deep">
-                            ১. পিতা ও মাতার তথ্য (বাংলা ও ইংরেজি উভয় ভাষায় বাধ্যতামূলক)
+                            ১. পিতা ও মাতার তথ্য (বাংলা ও ইংরেজি উভয় ভাষায় বাধ্যতামূলক)
                         </h3>
                     </div>
                     <Badge variant="emerald-subtle" size="sm">
@@ -320,11 +345,16 @@ export default function Step2ParentsAcademic({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-7 gap-y-1">
                     <FormInput
                         labelEng="Father's Name (English)"
-                        labelBng="পিতার নাম (ইংরেজিতে)"
+                        labelBng="পিতার নাম (ইংরেজিতে — স্বয়ংক্রিয় Title Case)"
                         name="fathersNameEng"
                         value={formData.fathersNameEng}
                         onChange={(e) => onUpdateField('fathersNameEng', e.target.value)}
-                        onBlur={() => onBlurField('fathersNameEng')}
+                        onBlur={() => {
+                            if (formData.fathersNameEng) {
+                                onUpdateField('fathersNameEng', normalizeEnglishName(formData.fathersNameEng));
+                            }
+                            onBlurField('fathersNameEng');
+                        }}
                         placeholder="e.g. Md. Rafiqul Islam"
                         required
                         showValidIcon
@@ -335,7 +365,7 @@ export default function Step2ParentsAcademic({
 
                     <FormInput
                         labelEng="Father's Name (Bengali)"
-                        labelBng="পিতার নাম (ইউনিকোড বাংলায়)"
+                        labelBng="পিতার নাম (ইউনিকোড বাংলায়)"
                         name="fathersNameBng"
                         value={formData.fathersNameBng}
                         onChange={(e) => onUpdateField('fathersNameBng', e.target.value)}
@@ -352,11 +382,16 @@ export default function Step2ParentsAcademic({
                     {/* মাতার নাম (ইংরেজি ও বাংলা) */}
                     <FormInput
                         labelEng="Mother's Name (English)"
-                        labelBng="মাতার নাম (ইংরেজিতে)"
+                        labelBng="মাতার নাম (ইংরেজিতে — স্বয়ংক্রিয় Title Case)"
                         name="mothersNameEng"
                         value={formData.mothersNameEng}
                         onChange={(e) => onUpdateField('mothersNameEng', e.target.value)}
-                        onBlur={() => onBlurField('mothersNameEng')}
+                        onBlur={() => {
+                            if (formData.mothersNameEng) {
+                                onUpdateField('mothersNameEng', normalizeEnglishName(formData.mothersNameEng));
+                            }
+                            onBlurField('mothersNameEng');
+                        }}
                         placeholder="e.g. Nesha Begum"
                         required
                         showValidIcon
@@ -367,7 +402,7 @@ export default function Step2ParentsAcademic({
 
                     <FormInput
                         labelEng="Mother's Name (Bengali)"
-                        labelBng="মাতার নাম (ইউনিকোড বাংলায়)"
+                        labelBng="মাতার নাম (ইউনিকোড বাংলায়)"
                         name="mothersNameBng"
                         value={formData.mothersNameBng}
                         onChange={(e) => onUpdateField('mothersNameBng', e.target.value)}
@@ -383,6 +418,9 @@ export default function Step2ParentsAcademic({
                 </div>
             </section>
 
+            {/* =================================================================
+                SECTION 2: ACADEMIC QUALIFICATIONS
+               ================================================================= */}
             <section className="space-y-4">
                 <div className="flex flex-wrap items-end justify-between gap-3 border-b border-ink-faint pb-3">
                     <div>
@@ -405,7 +443,7 @@ export default function Step2ParentsAcademic({
                 <div className="flex items-start gap-2.5 rounded-lg border border-emerald/15 bg-emerald-subtle/40 px-3.5 py-3">
                     <BookOpen className="mt-0.5 h-4 w-4 shrink-0 text-emerald-deep" />
                     <p className="font-bengali text-xs leading-6 text-ink-soft">
-                        SSC/দাখিল থেকে উচ্চতর পর্যায় পর্যন্ত প্রযোজ্য প্রতিটি সনদের তথ্য যোগ করুন। GPA/CGPA ফলাফল মেধাক্রমে ব্যবহৃত হবে; বিভাগ, শ্রেণি বা “উত্তীর্ণ” ফলাফল সংরক্ষিত হবে, তবে GPA-ভিত্তিক মেধাক্রমে গণনা হবে না।
+                        SSC/দাখিল থেকে উচ্চতর পর্যায় পর্যন্ত প্রযোজ্য প্রতিটি সনদের তথ্য যোগ করুন। GPA/CGPA ফলাফল মেধাক্রমে ব্যবহৃত হবে; বিভাগ, শ্রেণি বা “উত্তীর্ণ” ফলাফল সংরক্ষিত হবে, তবে GPA-ভিত্তিক মেধাক্রমে গণনা হবে না।
                     </p>
                 </div>
 
@@ -454,7 +492,7 @@ export default function Step2ParentsAcademic({
                                 <div className="space-y-3 p-3 sm:p-4">
                                     {groupItems.length === 0 && (
                                         <p className="px-1 py-2 font-bengali text-xs text-ink-muted">
-                                            এই স্তরের কোনো সনদ যোগ করা হয়নি।
+                                            এই স্তরের কোনো সনদ যোগ করা হয়নি।
                                         </p>
                                     )}
 
@@ -468,7 +506,7 @@ export default function Step2ParentsAcademic({
                                         const isNumericResult = resultType === 'GPA' || resultType === 'CGPA';
                                         const rawGpa = Number(toEnglishDigits(item.gpaOrCgpa));
                                         const normalizedPreview =
-                                            isNumericResult && !isNaN(rawGpa) && rawGpa > 0 && rawGpa <= scaleNum
+                                            isNumericResult && Number.isFinite(rawGpa) && rawGpa >= 1 && rawGpa <= scaleNum
                                                 ? (scaleNum === 4 ? (rawGpa / 4) * 5 : rawGpa).toFixed(2)
                                                 : '';
                                         const selectedDegree = DEGREE_LEVELS.find((degree) => degree.key === item.degreeLevel);
@@ -522,7 +560,7 @@ export default function Step2ParentsAcademic({
                                             <FormSelect
                                                 key="institution"
                                                 labelEng={isSchoolLevel ? 'Board' : 'University / Institute'}
-                                                labelBng={isSchoolLevel ? 'বোর্ড' : 'বিশ্ববিদ্যালয় / প্রতিষ্ঠান'}
+                                                labelBng={isSchoolLevel ? 'বোর্ড' : 'বিশ্ববিদ্যালয় / প্রতিষ্ঠান'}
                                                 variant="erp"
                                                 value={item.boardOrUniversity}
                                                 onChange={(e) => handleUpdateQualificationRow(item.id, 'boardOrUniversity', e.target.value)}
@@ -537,7 +575,7 @@ export default function Step2ParentsAcademic({
                                             <FormSelect
                                                 key="subject"
                                                 labelEng={isSchoolLevel ? 'Group / Subject' : 'Subject / Degree'}
-                                                labelBng={isSchoolLevel ? 'বিভাগ / বিষয়' : 'বিষয় / ডিগ্রি'}
+                                                labelBng={isSchoolLevel ? 'বিভাগ / বিষয়' : 'বিষয় / ডিগ্রি'}
                                                 variant="erp"
                                                 value={item.majorOrGroup}
                                                 onChange={(e) => handleUpdateQualificationRow(item.id, 'majorOrGroup', e.target.value)}
@@ -587,8 +625,7 @@ export default function Step2ParentsAcademic({
                                                 inputMode="decimal"
                                                 value={item.gpaOrCgpa}
                                                 onChange={(e) => {
-                                                    const result = toEnglishDigits(e.target.value).replace(/[^0-9.]/g, '');
-                                                    handleUpdateQualificationRow(item.id, 'gpaOrCgpa', result);
+                                                    handleUpdateQualificationRow(item.id, 'gpaOrCgpa', sanitizeGpaInput(e.target.value));
                                                 }}
                                                 placeholder={scaleNum === 4 ? '3.75' : '5.00'}
                                                 required
@@ -602,7 +639,7 @@ export default function Step2ParentsAcademic({
                                             <FormSelect
                                                 key="course-duration"
                                                 labelEng="Course Duration"
-                                                labelBng="কোর্সের মেয়াদ"
+                                                labelBng="কোর্সের মেয়াদ"
                                                 variant="erp"
                                                 value={item.courseDuration || ''}
                                                 onChange={(e) => handleUpdateQualificationRow(item.id, 'courseDuration', e.target.value)}
@@ -669,7 +706,7 @@ export default function Step2ParentsAcademic({
                     <div className="flex items-center gap-2">
                         <Award className="h-4 w-4 shrink-0 text-emerald-deep" />
                         <div>
-                            <p className="font-bengali text-xs font-semibold text-ink">স্বয়ংক্রিয় মেধাক্রম</p>
+                            <p className="font-bengali text-xs font-semibold text-ink">স্বয়ংক্রিয় মেধাক্রম</p>
                             <p className="font-bengali text-[11px] text-ink-soft">
                                 যোগ্যতা ও GPA/CGPA-এর ভিত্তিতে হিসাব করা হবে
                             </p>

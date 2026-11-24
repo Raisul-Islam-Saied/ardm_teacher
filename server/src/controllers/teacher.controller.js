@@ -11,6 +11,7 @@ const {
     ATTENDANCE_STATUS,
     DESIGNATION_DETAILS,
     BLOOD_GROUPS,
+    PAYMENT_METHODS,
     ROLES
 } = require('../constants/system.constants');
 const {
@@ -23,10 +24,75 @@ const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const ApiResponse = require('../utils/ApiResponse');
 
-// ০. পদবীর তালিকা (বাংলা ও ইংরেজি সহ) এবং মেটাডেটা পাওয়ার এন্ডপয়েন্ট
+// =========================================================================
+// সিকিউরিটি ও ডাটা স্যানিটাইজেশন হেল্পারসমূহ
+// =========================================================================
+
+const OPTIONAL_ENUM_FIELDS = new Set(['gender', 'religion', 'bloodGroup', 'maritalStatus']);
+
+const ADDRESS_ALLOWED_FIELDS = [
+    'houseNameBn', 'houseNameEn', 'villageBn', 'villageEn', 'unionBn', 'unionEn', 'wardNo',
+    'upazilaBn', 'upazilaEn', 'districtBn', 'districtEn', 'divisionBn', 'divisionEn',
+    'houseOrRoad', 'village', 'postOffice', 'postCode', 'upazila', 'district'
+];
+
+const PUBLIC_REGISTER_ALLOWED_FIELDS = [
+    'fullNameBng', 'fullNameEng',
+    'fathersNameBng', 'fathersNameEng',
+    'mothersNameBng', 'mothersNameEng',
+    'dateOfBirth', 'gender', 'religion', 'bloodGroup', 'maritalStatus',
+    'nidNumber', 'birthRegNumber', 'indexNumber',
+    'phone', 'email', 'designation', 'subject', 'joiningDate',
+    'academicQualifications'
+];
+
+const ADMIN_REGISTER_ALLOWED_FIELDS = [
+    ...PUBLIC_REGISTER_ALLOWED_FIELDS,
+    'assignedClass', 'canEditAssignedClass', 'employmentType',
+    'basicSalary', 'paymentMethod', 'customLeaveQuota'
+];
+
+const escapeRegex = (str) => String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const sanitizeFieldValue = (field, value) => {
+    if (OPTIONAL_ENUM_FIELDS.has(field) && (value === '' || value === null)) {
+        return undefined;
+    }
+    return value;
+};
+
+const pickAllowed = (source = {}, allowedKeys = []) => {
+    const result = {};
+    for (const key of allowedKeys) {
+        if (Object.prototype.hasOwnProperty.call(source, key) && source[key] !== undefined) {
+            const cleanVal = sanitizeFieldValue(key, source[key]);
+            if (cleanVal !== undefined) {
+                result[key] = cleanVal;
+            }
+        }
+    }
+    return result;
+};
+
+const pickNested = (source, allowedKeys) => {
+    if (!source || typeof source !== 'object') return undefined;
+    return pickAllowed(source, allowedKeys);
+};
+
+const stripSensitiveFields = (teacherDoc) => {
+    const obj = teacherDoc?.toObject ? teacherDoc.toObject() : { ...teacherDoc };
+    delete obj.password;
+    delete obj.editToken;
+    delete obj.passwordChangedAt;
+    delete obj.failedLoginAttempts;
+    delete obj.lockUntil;
+    return obj;
+};
+
+// ০. পদবীর তালিকা (বাংলা ও ইংরেজি সহ) এবং মেটাডেটা পাওয়ার এন্ডপয়েন্ট
 const getRegistrationMetadata = asyncHandler(async (req, res) => {
     const nextBioId = await getNextAvailableBiometricId();
-    res.status(200).json(new ApiResponse(200, 'রেজিস্ট্রেশন মেটাডেটা সফলভাবে পাওয়া গেছে', {
+    res.status(200).json(new ApiResponse(200, 'রেজিস্ট্রেশন মেটাডেটা সফলভাবে পাওয়া গেছে', {
         designations: DESIGNATION_DETAILS,
         bloodGroups: BLOOD_GROUPS,
         nextSuggestedBiometricDeviceId: nextBioId
@@ -45,11 +111,12 @@ const registerTeacher = asyncHandler(async (req, res) => {
         indexNumber,
         dateOfBirth,
         joiningDate,
-        designation
+        designation,
+        password
     } = req.body;
 
     if (req.body.role === ROLES.SUPER_ADMIN && req.user.role !== ROLES.SUPER_ADMIN) {
-        throw new ApiError(403, 'সুপার অ্যাডমিন অ্যাকাউন্ট তৈরির অনুমতি শুধু বর্তমান সুপার অ্যাডমিনের রয়েছে।');
+        throw new ApiError(403, 'সুপার অ্যাডমিন অ্যাকাউন্ট তৈরির অনুমতি শুধু বর্তমান সুপার অ্যাডমিনের রয়েছে।');
     }
 
     // ডুপ্লিকেট চেক (ফোন, এনআইডি, জন্ম নিবন্ধন, ইমেইল, ইনডেক্স নম্বর)
@@ -59,26 +126,33 @@ const registerTeacher = asyncHandler(async (req, res) => {
     if (email) orConditions.push({ email });
     if (indexNumber) orConditions.push({ indexNumber });
 
-    const existingDuplicate = await Teacher.findOne({ $or: orConditions });
+    const existingDuplicate = await Teacher.findOne({ $or: orConditions }).lean();
     if (existingDuplicate) {
-        throw new ApiError(409, 'প্রদত্ত মোবাইল নম্বর, NID, জন্ম নিবন্ধন অথবা ইনডেক্স নম্বর দিয়ে ইতিমধ্যে একজন শিক্ষক নিবন্ধিত আছেন!');
+        throw new ApiError(409, 'প্রদত্ত মোবাইল নম্বর, NID, জন্ম নিবন্ধন, ইমেইল অথবা ইনডেক্স নম্বর দিয়ে ইতিমধ্যে একজন শিক্ষক নিবন্ধিত আছেন!');
     }
 
-    // ১০ সংখ্যার টিচার আইডি ও বায়োমেট্রিক ডিভাইস আইডি অটো-জেনারেশন (যদি না দেওয়া থাকে)
+    // ১০ সংখ্যার টিচার আইডি ও বায়োমেট্রিক ডিভাইস আইডি অটো-জেনারেশন (যদি না দেওয়া থাকে)
     const finalTeacherCode = teacherCode || await generateTenDigitTeacherId(joiningDate, dateOfBirth, designation);
     const finalBiometricId = biometricDeviceId ? Number(biometricDeviceId) : await getNextAvailableBiometricId();
 
     const bioConflict = await Teacher.findOne({
         $or: [{ teacherCode: finalTeacherCode }, { biometricDeviceId: finalBiometricId }]
-    });
+    }).lean();
     if (bioConflict) {
-        throw new ApiError(409, `টিচার আইডি (${finalTeacherCode}) অথবা বায়োমেট্রিক আইডি (${finalBiometricId}) ইতিমধ্যে ব্যবহৃত হয়েছে!`);
+        throw new ApiError(409, `টিচার আইডি (${finalTeacherCode}) অথবা বায়োমেট্রিক আইডি (${finalBiometricId}) ইতিমধ্যে ব্যবহৃত হয়েছে!`);
     }
 
     const { uid, editToken } = generateRegistryTokens();
 
-    const teacher = await Teacher.create({
-        ...req.body,
+    // শুধুমাত্র অনুমোদিত ফিল্ড গ্রহণ (Mass-Assignment প্রোটেকশন)
+    const safePayload = {
+        ...pickAllowed(req.body, ADMIN_REGISTER_ALLOWED_FIELDS),
+        emergencyContact: pickNested(req.body.emergencyContact, ['contactName', 'relationship', 'phone']),
+        presentAddress: pickNested(req.body.presentAddress, ADDRESS_ALLOWED_FIELDS),
+        permanentAddress: pickNested(req.body.permanentAddress, ADDRESS_ALLOWED_FIELDS),
+        bankDetails: pickNested(req.body.bankDetails, ['bankName', 'branchName', 'accountHolderName', 'accountNumber', 'routingNumber']),
+        profilePicture: pickNested(req.body.profilePicture, ['url', 'publicId']),
+        password: String(password).trim(),
         teacherCode: finalTeacherCode,
         biometricDeviceId: finalBiometricId,
         uid,
@@ -86,9 +160,11 @@ const registerTeacher = asyncHandler(async (req, res) => {
         role: req.body.role || ROLES.TEACHER,
         registrationStatus: 'Approved',
         isActive: true
-    });
+    };
 
-    // সমগ্র মাদ্রাসার র‍্যাংকিং (1, 2, 3...) পুনরায় সাজানো
+    const teacher = await Teacher.create(safePayload);
+
+    // সমগ্র মাদ্রাসার র‍্যাংকিং (1, 2, 3...) পুনরায় সাজানো
     await recalculateAllTeachersRank();
     const updatedTeacher = await Teacher.findById(teacher._id);
 
@@ -97,67 +173,78 @@ const registerTeacher = asyncHandler(async (req, res) => {
         action: 'REGISTER_TEACHER',
         module: 'Teacher',
         targetId: String(teacher._id),
-        description: `নতুন শিক্ষক নিবন্ধিত হয়েছেন: ${teacher.fullNameBng} (ID: ${finalTeacherCode}, Rank: #${updatedTeacher.rankingMetrics.overallMadrasahRank})`
+        description: `নতুন শিক্ষক নিবন্ধিত হয়েছেন: ${teacher.fullNameBng} (ID: ${finalTeacherCode}, Rank: #${updatedTeacher.rankingMetrics.overallMadrasahRank})`
     });
 
-    res.status(201).json(new ApiResponse(201, 'শিক্ষক সফলভাবে নিবন্ধিত হয়েছেন এবং র‍্যাংক নির্ধারিত হয়েছে!', updatedTeacher));
+    res.status(201).json(new ApiResponse(201, 'শিক্ষক সফলভাবে নিবন্ধিত হয়েছেন এবং র‍্যাংক নির্ধারিত হয়েছে!', updatedTeacher));
 });
 
-// ২. পাবলিক সেল্ফ-রেজিস্ট্রেশন (লিংক থেকে শিক্ষক নিজে ফর্ম পূরণ করলে Pending মোডে থাকবে এবং ডিজিটাল আইডি কার্ড পাবে)
+// ২. পাবলিক সেল্ফ-রেজিস্ট্রেশন (Pending মোডে থাকবে এবং ডিজিটাল আইডি কার্ড পাবে)
 const publicSelfRegisterTeacher = asyncHandler(async (req, res) => {
     const {
         phone,
         nidNumber,
         birthRegNumber,
         email,
+        indexNumber,
         dateOfBirth,
         joiningDate,
-        designation
+        designation,
+        password
     } = req.body;
 
     const orConditions = [{ phone }];
     if (nidNumber) orConditions.push({ nidNumber });
     if (birthRegNumber) orConditions.push({ birthRegNumber });
     if (email) orConditions.push({ email });
+    if (indexNumber) orConditions.push({ indexNumber });
 
-    const existingDuplicate = await Teacher.findOne({ $or: orConditions });
+    const existingDuplicate = await Teacher.findOne({ $or: orConditions }).lean();
     if (existingDuplicate) {
-        throw new ApiError(409, 'প্রদত্ত মোবাইল নম্বর, NID অথবা জন্ম নিবন্ধন নম্বর দিয়ে ইতিমধ্যে নিবন্ধন করা হয়েছে!');
+        throw new ApiError(409, 'প্রদত্ত মোবাইল নম্বর, NID, জন্ম নিবন্ধন অথবা ইমেইল দিয়ে ইতিমধ্যে নিবন্ধন করা হয়েছে!');
     }
 
     const finalTeacherCode = await generateTenDigitTeacherId(joiningDate, dateOfBirth, designation);
     const finalBiometricId = await getNextAvailableBiometricId();
     const { uid, editToken } = generateRegistryTokens();
 
-    const teacher = await Teacher.create({
-        ...req.body,
+    // পাবলিক রিকোয়েস্টে কঠোর হোয়াইটলিস্টিং (রোল, বেতন, কোটা ইত্যাদি ইনজেকশন ব্লক)
+    const safePayload = {
+        ...pickAllowed(req.body, PUBLIC_REGISTER_ALLOWED_FIELDS),
+        emergencyContact: pickNested(req.body.emergencyContact, ['contactName', 'relationship', 'phone']),
+        presentAddress: pickNested(req.body.presentAddress, ADDRESS_ALLOWED_FIELDS),
+        permanentAddress: pickNested(req.body.permanentAddress, ADDRESS_ALLOWED_FIELDS),
+        profilePicture: pickNested(req.body.profilePicture, ['url', 'publicId']),
+        password: String(password).trim(),
         teacherCode: finalTeacherCode,
         biometricDeviceId: finalBiometricId,
         uid,
         editToken,
         role: ROLES.TEACHER,
-        basicSalary: 0, // অ্যাডমিন অ্যাপ্রুভ করার সময় মূল বেতন বসাবেন
+        basicSalary: 0, // অ্যাডমিন অ্যাপ্রুভ করার সময় মূল বেতন বসাবেন
         registrationStatus: 'Pending',
         isActive: false
-    });
+    };
 
-    res.status(201).json(new ApiResponse(201, 'আপনার নিবন্ধন সফলভাবে জমা হয়েছে এবং ডিজিটাল রেজিস্ট্রি কার্ড তৈরি হয়েছে!', {
+    const teacher = await Teacher.create(safePayload);
+
+    res.status(201).json(new ApiResponse(201, 'আপনার নিবন্ধন সফলভাবে জমা হয়েছে এবং ডিজিটাল রেজিস্ট্রি কার্ড তৈরি হয়েছে!', {
         teacherId: teacher.teacherCode,
         uid: teacher.uid,
         editToken,
         registrationStatus: teacher.registrationStatus,
-        teacher
+        teacher: stripSensitiveFields(teacher)
     }));
 });
 
-// ৩. UID দিয়ে পাবলিক রেজিস্ট্রি কার্ড দেখা (আপনার আগের HTML ফর্মের Returning-user check এর জন্য)
+// ৩. UID দিয়ে পাবলিক রেজিস্ট্রি কার্ড দেখা
 const getPublicRegistryCardByUid = asyncHandler(async (req, res) => {
     const { uid } = req.params;
     const teacher = await Teacher.findOne({ uid }).lean();
     if (!teacher) {
-        throw new ApiError(404, 'এই UID দিয়ে কোনো নিবন্ধিত রেকর্ড পাওয়া যায়নি!');
+        throw new ApiError(404, 'এই UID দিয়ে কোনো নিবন্ধিত রেকর্ড পাওয়া যায়নি!');
     }
-    res.status(200).json(new ApiResponse(200, 'রেজিস্ট্রি কার্ড সফলভাবে লোড হয়েছে', teacher));
+    res.status(200).json(new ApiResponse(200, 'রেজিস্ট্রি কার্ড সফলভাবে লোড হয়েছে', teacher));
 });
 
 // ৪. অ্যাডমিন কর্তৃক Pending শিক্ষকের রেজিস্ট্রেশন অনুমোদন ও মূল বেতন নির্ধারণ
@@ -165,19 +252,47 @@ const approvePendingTeacher = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { basicSalary, biometricDeviceId, customLeaveQuota, paymentMethod } = req.body;
 
-    if (basicSalary === undefined || Number(basicSalary) < 0) {
-        throw new ApiError(400, 'অনুমোদনের সময় শিক্ষকের মূল বেতন (basicSalary) প্রদান করা আবশ্যক!');
+    const parsedSalary = Number(basicSalary);
+    if (basicSalary === undefined || !Number.isFinite(parsedSalary) || parsedSalary < 0) {
+        throw new ApiError(400, 'অনুমোদনের সময় শিক্ষকের সঠিক মূল বেতন (basicSalary) প্রদান করা আবশ্যক!');
     }
 
     const teacher = await Teacher.findById(id);
     if (!teacher) {
-        throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
+        throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
     }
 
-    teacher.basicSalary = Number(basicSalary);
-    if (biometricDeviceId) teacher.biometricDeviceId = Number(biometricDeviceId);
-    if (customLeaveQuota !== undefined) teacher.customLeaveQuota = Number(customLeaveQuota);
-    if (paymentMethod) teacher.paymentMethod = paymentMethod;
+    if (biometricDeviceId !== undefined && biometricDeviceId !== '') {
+        const parsedBioId = Number(biometricDeviceId);
+        if (!Number.isInteger(parsedBioId) || parsedBioId < 1) {
+            throw new ApiError(400, 'বায়োমেট্রিক ডিভাইস আইডি অবশ্যই ১ বা তার বেশি পূর্ণসংখ্যা হতে হবে।');
+        }
+        const conflict = await Teacher.findOne({
+            _id: { $ne: teacher._id },
+            biometricDeviceId: parsedBioId
+        }).lean();
+        if (conflict) {
+            throw new ApiError(409, `বায়োমেট্রিক আইডি (${parsedBioId}) ইতিমধ্যে অন্য শিক্ষকের জন্য ব্যবহৃত হয়েছে!`);
+        }
+        teacher.biometricDeviceId = parsedBioId;
+    }
+
+    if (customLeaveQuota !== undefined && customLeaveQuota !== '') {
+        const parsedQuota = Number(customLeaveQuota);
+        if (!Number.isFinite(parsedQuota) || parsedQuota < 0 || parsedQuota > 15) {
+            throw new ApiError(400, 'ছুটির কোটা ০ থেকে ১৫ এর মধ্যে হতে হবে।');
+        }
+        teacher.customLeaveQuota = parsedQuota;
+    }
+
+    if (paymentMethod) {
+        if (!Object.values(PAYMENT_METHODS).includes(paymentMethod)) {
+            throw new ApiError(400, 'পেমেন্ট মেথড সঠিক নয়।');
+        }
+        teacher.paymentMethod = paymentMethod;
+    }
+
+    teacher.basicSalary = parsedSalary;
     teacher.registrationStatus = 'Approved';
     teacher.isActive = true;
 
@@ -191,13 +306,13 @@ const approvePendingTeacher = asyncHandler(async (req, res) => {
         action: 'APPROVE_TEACHER_REGISTRATION',
         module: 'Teacher',
         targetId: String(teacher._id),
-        description: `${teacher.fullNameBng}-এর নিবন্ধন অনুমোদন করা হয়েছে (বেতন: ${basicSalary} টাকা, Rank: #${updated.rankingMetrics.overallMadrasahRank})`
+        description: `${teacher.fullNameBng}-এর নিবন্ধন অনুমোদন করা হয়েছে (বেতন: ${parsedSalary} টাকা, Rank: #${updated.rankingMetrics.overallMadrasahRank})`
     });
 
-    res.status(200).json(new ApiResponse(200, 'শিক্ষকের নিবন্ধন অনুমোদিত হয়েছে এবং র‍্যাংক নির্ধারিত হয়েছে!', updated));
+    res.status(200).json(new ApiResponse(200, 'শিক্ষকের নিবন্ধন অনুমোদিত হয়েছে এবং র‍্যাংক নির্ধারিত হয়েছে!', updated));
 });
 
-// ৫. সকল শিক্ষক/স্টাফের তালিকা (র‍্যাংক অনুযায়ী সাজানো: সুপার ১, সহ-সুপার ২...)
+// ৫. সকল শিক্ষক/স্টাফের তালিকা (র‍্যাংক অনুযায়ী সাজানো)
 const getAllTeachers = asyncHandler(async (req, res) => {
     const { isActive, designation, staffCategory, registrationStatus, search } = req.query;
     const filter = {};
@@ -207,12 +322,13 @@ const getAllTeachers = asyncHandler(async (req, res) => {
     if (staffCategory) filter.staffCategory = staffCategory;
     if (registrationStatus) filter.registrationStatus = registrationStatus;
 
-    if (search) {
+    if (search && String(search).trim()) {
+        const safeRegex = escapeRegex(String(search).trim());
         filter.$or = [
-            { fullNameBng: { $regex: search, $options: 'i' } },
-            { fullNameEng: { $regex: search, $options: 'i' } },
-            { teacherCode: { $regex: search, $options: 'i' } },
-            { phone: { $regex: search, $options: 'i' } }
+            { fullNameBng: { $regex: safeRegex, $options: 'i' } },
+            { fullNameEng: { $regex: safeRegex, $options: 'i' } },
+            { teacherCode: { $regex: safeRegex, $options: 'i' } },
+            { phone: { $regex: safeRegex, $options: 'i' } }
         ];
     }
 
@@ -224,16 +340,16 @@ const getAllTeachers = asyncHandler(async (req, res) => {
         })
         .lean();
 
-    res.status(200).json(new ApiResponse(200, 'র‍্যাংক অনুযায়ী শিক্ষকদের তালিকা সফলভাবে পাওয়া গেছে', {
+    res.status(200).json(new ApiResponse(200, 'র‍্যাংক অনুযায়ী শিক্ষকদের তালিকা সফলভাবে পাওয়া গেছে', {
         totalCount: teachers.length,
         teachers
     }));
 });
 
-// ৬. এক ক্লিকে সবার র‍্যাংকিং পুনরায় ক্যালকুলেট করার এন্ডপয়েন্ট
+// ৬. এক ক্লিকে সবার র‍্যাংকিং পুনরায় ক্যালকুলেট করার এন্ডপয়েন্ট
 const triggerRankRecalculation = asyncHandler(async (req, res) => {
     const totalRanked = await recalculateAllTeachersRank();
-    res.status(200).json(new ApiResponse(200, 'সকল শিক্ষকের পদবী, শিক্ষাগত যোগ্যতা ও GPA অনুযায়ী র‍্যাংকিং সফলভাবে আপডেট করা হয়েছে!', { totalRanked }));
+    res.status(200).json(new ApiResponse(200, 'সকল শিক্ষকের পদবী, শিক্ষাগত যোগ্যতা ও GPA অনুযায়ী র‍্যাংকিং সফলভাবে আপডেট করা হয়েছে!', { totalRanked }));
 });
 
 // ৭. একক শিক্ষকের বিস্তারিত প্রোফাইল
@@ -243,38 +359,39 @@ const getTeacherById = asyncHandler(async (req, res) => {
     }
     const teacher = await Teacher.findById(req.params.id).lean();
     if (!teacher) {
-        throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
+        throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
     }
-    res.status(200).json(new ApiResponse(200, 'শিক্ষকের তথ্য পাওয়া গেছে', teacher));
+    res.status(200).json(new ApiResponse(200, 'শিক্ষকের তথ্য পাওয়া গেছে', teacher));
 });
 
 const resetTeacherPassword = asyncHandler(async (req, res) => {
     const { newPassword } = req.body;
-    if (typeof newPassword !== 'string' || newPassword.trim().length < 6) {
-        throw new ApiError(400, 'নতুন পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।');
+    const trimmedPassword = typeof newPassword === 'string' ? newPassword.trim() : '';
+    if (trimmedPassword.length < 6 || trimmedPassword.length > 64) {
+        throw new ApiError(400, 'নতুন পাসওয়ার্ড ৬ থেকে ৬৪ অক্ষরের মধ্যে হতে হবে।');
     }
 
     const teacher = await Teacher.findById(req.params.id).select('+password');
-    if (!teacher) throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
+    if (!teacher) throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
     if (
         [ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(teacher.role) &&
         req.user.role !== ROLES.SUPER_ADMIN
     ) {
-        throw new ApiError(403, 'অ্যাডমিন অ্যাকাউন্টের পাসওয়ার্ড শুধু সুপার অ্যাডমিন পরিবর্তন করতে পারবেন।');
+        throw new ApiError(403, 'অ্যাডমিন অ্যাকাউন্টের পাসওয়ার্ড শুধু সুপার অ্যাডমিন পরিবর্তন করতে পারবেন।');
     }
 
-    teacher.password = newPassword.trim();
+    teacher.password = trimmedPassword;
     await teacher.save();
     await AuditLog.create({
         action: 'TEACHER_PASSWORD_RESET',
         module: 'Security',
-        description: `${teacher.teacherCode} শিক্ষকের পোর্টাল পাসওয়ার্ড রিসেট করা হয়েছে`,
+        description: `${teacher.teacherCode} শিক্ষকের পোর্টাল পাসওয়ার্ড রিসেট করা হয়েছে`,
         performedBy: req.user._id,
         targetTeacherId: teacher._id,
         ipAddress: req.ip
     });
 
-    return res.status(200).json(new ApiResponse(200, 'শিক্ষকের পাসওয়ার্ড সফলভাবে রিসেট করা হয়েছে!'));
+    return res.status(200).json(new ApiResponse(200, 'শিক্ষকের পাসওয়ার্ড সফলভাবে রিসেট করা হয়েছে!'));
 });
 
 function getEmploymentHistory(teacher) {
@@ -298,13 +415,13 @@ function closeEmploymentPeriod(teacher, fallbackStartDate, endDate) {
 
     if (openIndex >= 0) {
         if (new Date(history[openIndex].startDate) > end) {
-            throw new ApiError(400, 'চাকরি ছাড়ার তারিখ যোগদানের তারিখের আগে হতে পারবে না।');
+            throw new ApiError(400, 'চাকরি ছাড়ার তারিখ যোগদানের তারিখের আগে হতে পারবে না।');
         }
         history[openIndex].endDate = end;
     } else {
         const startDate = fallbackStartDate ? new Date(fallbackStartDate) : null;
         if (!startDate || Number.isNaN(startDate.getTime()) || startDate > end) {
-            throw new ApiError(400, 'চাকরির মেয়াদের যোগদান ও ছাড়ার তারিখ সঠিক নয়।');
+            throw new ApiError(400, 'চাকরির মেয়াদের যোগদান ও ছাড়ার তারিখ সঠিক নয়।');
         }
         history.push({ startDate, endDate: end });
     }
@@ -319,11 +436,11 @@ function startEmploymentPeriod(
     fallbackPreviousEndDate = teacher.resignationDate
 ) {
     if (!startDate) {
-        throw new ApiError(400, 'পুনরায় সক্রিয় করার আগে নতুন যোগদানের তারিখ দিন।');
+        throw new ApiError(400, 'পুনরায় সক্রিয় করার আগে নতুন যোগদানের তারিখ দিন।');
     }
     const start = new Date(startDate);
     if (Number.isNaN(start.getTime())) {
-        throw new ApiError(400, 'পুনরায় যোগদানের তারিখ সঠিক নয়।');
+        throw new ApiError(400, 'পুনরায় যোগদানের তারিখ সঠিক নয়।');
     }
 
     const history = getEmploymentHistory(teacher);
@@ -336,7 +453,7 @@ function startEmploymentPeriod(
     const lastPeriod = history[history.length - 1];
     const previousEnd = lastPeriod?.endDate || fallbackPreviousEndDate;
     if (previousEnd && start <= new Date(previousEnd)) {
-        throw new ApiError(400, 'পুনরায় যোগদানের তারিখ আগের চাকরির শেষ তারিখের পরের দিন বা তার পরে হতে হবে।');
+        throw new ApiError(400, 'পুনরায় যোগদানের তারিখ আগের চাকরির শেষ তারিখের পরের দিন বা তার পরে হতে হবে।');
     }
 
     history.push({ startDate: start, endDate: null });
@@ -345,91 +462,93 @@ function startEmploymentPeriod(
     teacher.resignationDate = null;
 }
 
-// ৮. শিক্ষকের তথ্য আপডেট এবং স্বয়ংক্রিয় র‍্যাংক পুনর্বিন্যাস
+// ৮. শিক্ষকের তথ্য আপডেট এবং স্বয়ংক্রিয় র‍্যাংক পুনর্বিন্যাস
 const updateTeacher = asyncHandler(async (req, res) => {
     const teacher = await Teacher.findById(req.params.id);
     if (!teacher) {
-        throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
+        throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
     }
     if (
         req.user.role !== ROLES.SUPER_ADMIN &&
         (teacher.role === ROLES.SUPER_ADMIN || req.body.role === ROLES.SUPER_ADMIN)
     ) {
-        throw new ApiError(403, 'সুপার অ্যাডমিন অ্যাকাউন্ট পরিবর্তন বা নির্ধারণের অনুমতি শুধু সুপার অ্যাডমিনের রয়েছে।');
+        throw new ApiError(403, 'সুপার অ্যাডমিন অ্যাকাউন্ট পরিবর্তন বা নির্ধারণের অনুমতি শুধু সুপার অ্যাডমিনের রয়েছে।');
+    }
+
+    // ইউনিক ফিল্ডের ডুপ্লিকেট চেক (নিজেকে বাদ দিয়ে)
+    const uniqueOrConditions = [];
+    if (req.body.phone && req.body.phone !== teacher.phone) uniqueOrConditions.push({ phone: req.body.phone });
+    if (req.body.nidNumber && req.body.nidNumber !== teacher.nidNumber) uniqueOrConditions.push({ nidNumber: req.body.nidNumber });
+    if (req.body.birthRegNumber && req.body.birthRegNumber !== teacher.birthRegNumber) uniqueOrConditions.push({ birthRegNumber: req.body.birthRegNumber });
+    if (req.body.email && req.body.email !== teacher.email) uniqueOrConditions.push({ email: req.body.email });
+    if (req.body.indexNumber && req.body.indexNumber !== teacher.indexNumber) uniqueOrConditions.push({ indexNumber: req.body.indexNumber });
+    if (req.body.biometricDeviceId && Number(req.body.biometricDeviceId) !== teacher.biometricDeviceId) {
+        uniqueOrConditions.push({ biometricDeviceId: Number(req.body.biometricDeviceId) });
+    }
+
+    if (uniqueOrConditions.length > 0) {
+        const duplicate = await Teacher.findOne({
+            _id: { $ne: teacher._id },
+            $or: uniqueOrConditions
+        }).lean();
+        if (duplicate) {
+            throw new ApiError(409, 'প্রদত্ত মোবাইল নম্বর, NID, জন্ম নিবন্ধন, ইমেইল, ইনডেক্স অথবা বায়োমেট্রিক আইডি ইতিমধ্যে অন্য শিক্ষকের জন্য ব্যবহৃত হয়েছে!');
+        }
     }
 
     const wasActive = teacher.isActive !== false;
     const previousJoiningDate = teacher.joiningDate;
     const previousResignationDate = teacher.resignationDate;
+
     const editableFields = [
-        'fullNameBng',
-        'fullNameEng',
-        'fathersNameBng',
-        'fathersNameEng',
-        'mothersNameBng',
-        'mothersNameEng',
-        'dateOfBirth',
-        'gender',
-        'religion',
-        'bloodGroup',
-        'maritalStatus',
-        'nidNumber',
-        'birthRegNumber',
-        'indexNumber',
-        'phone',
-        'email',
-        'designation',
-        'subject',
-        'assignedClass',
-        'canEditAssignedClass',
-        'employmentType',
-        'joiningDate',
-        'resignationDate',
-        'academicQualifications',
-        'basicSalary',
-        'paymentMethod',
-        'customLeaveQuota',
-        'biometricDeviceId',
-        'role',
-        'registrationStatus',
-        'isActive'
+        'fullNameBng', 'fullNameEng',
+        'fathersNameBng', 'fathersNameEng',
+        'mothersNameBng', 'mothersNameEng',
+        'dateOfBirth', 'gender', 'religion', 'bloodGroup', 'maritalStatus',
+        'nidNumber', 'birthRegNumber', 'indexNumber',
+        'phone', 'email', 'designation', 'subject',
+        'assignedClass', 'canEditAssignedClass', 'employmentType',
+        'joiningDate', 'resignationDate', 'academicQualifications',
+        'basicSalary', 'paymentMethod', 'customLeaveQuota',
+        'biometricDeviceId', 'role', 'registrationStatus', 'isActive'
     ];
 
     editableFields.forEach((field) => {
         if (Object.prototype.hasOwnProperty.call(req.body, field)) {
-            teacher.set(field, req.body[field]);
+            teacher.set(field, sanitizeFieldValue(field, req.body[field]));
         }
     });
 
     const editableNestedFields = {
         emergencyContact: ['contactName', 'relationship', 'phone'],
-        presentAddress: [
-            'houseNameBn', 'houseNameEn', 'villageBn', 'villageEn', 'unionBn', 'unionEn', 'wardNo',
-            'upazilaBn', 'upazilaEn', 'districtBn', 'districtEn', 'divisionBn', 'divisionEn',
-            'houseOrRoad', 'village', 'postOffice', 'postCode', 'upazila', 'district'
-        ],
-        permanentAddress: [
-            'houseNameBn', 'houseNameEn', 'villageBn', 'villageEn', 'unionBn', 'unionEn', 'wardNo',
-            'upazilaBn', 'upazilaEn', 'districtBn', 'districtEn', 'divisionBn', 'divisionEn',
-            'houseOrRoad', 'village', 'postOffice', 'postCode', 'upazila', 'district'
-        ],
+        presentAddress: ADDRESS_ALLOWED_FIELDS,
+        permanentAddress: ADDRESS_ALLOWED_FIELDS,
         bankDetails: ['bankName', 'branchName', 'accountHolderName', 'accountNumber', 'routingNumber']
     };
 
     Object.entries(editableNestedFields).forEach(([field, allowedFields]) => {
-        if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+        if (Object.prototype.hasOwnProperty.call(req.body, field) && req.body[field] && typeof req.body[field] === 'object') {
             const existingValue = teacher[field];
             const existing = existingValue?.toObject
                 ? existingValue.toObject()
                 : existingValue || {};
             const changes = Object.fromEntries(
                 allowedFields
-                    .filter((key) => Object.prototype.hasOwnProperty.call(req.body[field] || {}, key))
+                    .filter((key) => Object.prototype.hasOwnProperty.call(req.body[field], key))
                     .map((key) => [key, req.body[field][key]])
             );
             teacher.set(field, { ...existing, ...changes });
         }
     });
+
+    // পার্শিয়াল আপডেটের পরও নিজস্ব নম্বর ও জরুরি নম্বর ভিন্ন থাকা নিশ্চিত করা
+    if (
+        teacher.phone
+        && teacher.emergencyContact?.phone
+        && String(teacher.phone).trim() === String(teacher.emergencyContact.phone).trim()
+    ) {
+        throw new ApiError(400, 'জরুরি যোগাযোগের নম্বরটি শিক্ষকের নিজের মোবাইল নম্বরের থেকে অবশ্যই আলাদা হতে হবে!');
+    }
 
     if (req.body.isActive === false && wasActive) {
         if (!teacher.resignationDate) teacher.resignationDate = new Date();
@@ -462,16 +581,16 @@ const updateTeacher = asyncHandler(async (req, res) => {
         action: 'UPDATE_TEACHER_PROFILE',
         module: 'Teacher',
         targetId: String(teacher._id),
-        description: `${teacher.fullNameBng}-এর পূর্ণ প্রোফাইল ও অ্যাকাউন্ট কন্ট্রোল হালনাগাদ করা হয়েছে`
+        description: `${teacher.fullNameBng}-এর পূর্ণ প্রোফাইল ও অ্যাকাউন্ট কন্ট্রোল হালনাগাদ করা হয়েছে`
     });
-    res.status(200).json(new ApiResponse(200, 'শিক্ষকের তথ্য ও র‍্যাংক সফলভাবে আপডেট করা হয়েছে', updated));
+    res.status(200).json(new ApiResponse(200, 'শিক্ষকের তথ্য ও র‍্যাংক সফলভাবে আপডেট করা হয়েছে', updated));
 });
 
-// ৯. শিক্ষককে নিষ্ক্রিয়/সক্রিয় করা (Soft Deactivate)
+// ৯. শিক্ষককে নিষ্ক্রিয়/সক্রিয় করা (Soft Deactivate)
 const toggleTeacherActiveStatus = asyncHandler(async (req, res) => {
     const teacher = await Teacher.findById(req.params.id);
     if (!teacher) {
-        throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
+        throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
     }
 
     if (teacher.isActive !== false) {
@@ -486,15 +605,21 @@ const toggleTeacherActiveStatus = asyncHandler(async (req, res) => {
     await teacher.save();
     await recalculateAllTeachersRank();
 
-    res.status(200).json(new ApiResponse(200, `শিক্ষকের অ্যাকাউন্ট এখন ${teacher.isActive ? 'সক্রিয় (Active)' : 'নিষ্ক্রিয় (Inactive)'} করা হয়েছে`, teacher));
+    res.status(200).json(new ApiResponse(200, `শিক্ষকের অ্যাকাউন্ট এখন ${teacher.isActive ? 'সক্রিয় (Active)' : 'নিষ্ক্রিয় (Inactive)'} করা হয়েছে`, teacher));
 });
 
-// ১০. শিক্ষক পোর্টাল (Self-Service): নিজের পূর্ণাঙ্গ ড্যাশবোর্ড এবং মাসের কোটা কতদিন খেয়েছে ও কতদিন বাকি আছে তার নিখুঁত হিসাব
+// ১০. শিক্ষক পোর্টাল (Self-Service): নিজের পূর্ণাঙ্গ ড্যাশবোর্ড
 const getMyPortalDashboard = asyncHandler(async (req, res) => {
     const teacherId = req.user._id;
     const now = moment.tz('Asia/Dhaka');
-    const month = Number(req.query.month || (now.month() + 1));
-    const year = Number(req.query.year || now.year());
+    const parsedMonth = Number(req.query.month || (now.month() + 1));
+    const parsedYear = Number(req.query.year || now.year());
+    const month = Number.isInteger(parsedMonth) && parsedMonth >= 1 && parsedMonth <= 12
+        ? parsedMonth
+        : (now.month() + 1);
+    const year = Number.isInteger(parsedYear) && parsedYear >= 2000 && parsedYear <= 2100
+        ? parsedYear
+        : now.year();
     const todayStr = now.format('YYYY-MM-DD');
 
     const startDate = moment.tz(`${year}-${String(month).padStart(2, '0')}-01`, 'Asia/Dhaka').startOf('month').format('YYYY-MM-DD');
@@ -519,6 +644,10 @@ const getMyPortalDashboard = asyncHandler(async (req, res) => {
         LeaveRequest.find({ teacherId }).sort({ createdAt: -1 }).limit(15).lean(),
         LoanAdvance.find({ teacherId, status: 'Active' }).lean()
     ]);
+
+    if (!teacherProfile) {
+        throw new ApiError(404, 'শিক্ষকের প্রোফাইল খুঁজে পাওয়া যায়নি!');
+    }
 
     let presentDays = 0;
     let lateDays = 0;
@@ -576,7 +705,7 @@ const getMyPortalDashboard = asyncHandler(async (req, res) => {
         }
     }
 
-    res.status(200).json(new ApiResponse(200, 'শিক্ষকের সেল্ফ-সার্ভিস পোর্টাল ড্যাশবোর্ড সফলভাবে লোড হয়েছে', {
+    res.status(200).json(new ApiResponse(200, 'শিক্ষকের সেল্ফ-সার্ভিস পোর্টাল ড্যাশবোর্ড সফলভাবে লোড হয়েছে', {
         profile: teacherProfile,
         todayStatus: todayAttendance || {
             date: todayStr,
@@ -592,9 +721,9 @@ const getMyPortalDashboard = asyncHandler(async (req, res) => {
             leaveDays,
             absentDays,
             allowedQuota,
-            quotaUsed: Number(quotaUsed.toFixed(2)),       // মাসের কোটা থেকে কতদিন খেয়েছে
-            quotaRemaining,                                // মাসের কোটা থেকে আর কতদিন বাকি আছে
-            excessQuotaCutDays,                            // কোটা শেষ হয়ে অতিরিক্ত কতদিন কেটেছে
+            quotaUsed: Number(quotaUsed.toFixed(2)),
+            quotaRemaining,
+            excessQuotaCutDays,
             directPenaltyDays,
             totalDaysForSalaryCut,
             currentMonthEstimatedCut,
