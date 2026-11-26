@@ -6,6 +6,7 @@ const salarySchema = new mongoose.Schema({
     month: { type: Number, required: true, min: 1, max: 12 },
     year: { type: Number, required: true, min: 2020, max: 2100 },
     basicSalarySnapshot: { type: Number, required: true },
+    originalBasicSalarySnapshot: { type: Number, default: null },
     // মাসের মাঝখানে জয়েন বা রিজাইন করলে আনুপাতিক (Pro-Rata) বেতনের হিসাব
     proRataInfo: {
         isProRated: { type: Boolean, default: false },
@@ -23,12 +24,15 @@ const salarySchema = new mongoose.Schema({
         totalIgnoredDays: { type: Number, default: 0 },
         totalQuotaUsed: { type: Number, default: 0 },
         allowedPaidQuota: { type: Number, default: 2.0 },
-        remainingPaidQuota: { type: Number, default: 2.0 }, // মাসের কোটা থেকে কতদিন বাকি আছে
+        carryForwardQuota: { type: Number, default: 0 },
+        remainingPaidQuota: { type: Number, default: 2.0 },
         excessQuotaDays: { type: Number, default: 0 },
         directAbsentPenaltyDays: { type: Number, default: 0 },
         totalDeductibleDays: { type: Number, default: 0 }
     },
     leaveAndAbsentDeductionAmount: { type: Number, default: 0 },
+    manualDeductibleDays: { type: Number, min: 0, default: null },
+    preparedOn: { type: String, trim: true, maxlength: 100, default: '' },
     // অটোমেটিক লোন বা অগ্রিম বেতন কর্তন (EMI)
     loanDeduction: {
         loanId: { type: mongoose.Schema.Types.ObjectId, ref: 'LoanAdvance', default: null },
@@ -55,6 +59,7 @@ const salarySchema = new mongoose.Schema({
         default: PAYMENT_STATUS.PENDING,
         index: true
     },
+    generatedAt: { type: Date, default: null, index: true },
     paymentMethod: {
         type: String,
         enum: ['Bank_Transfer', 'Cash', 'bKash_Nagad'],

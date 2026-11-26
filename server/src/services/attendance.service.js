@@ -1,6 +1,7 @@
 const moment = require('moment-timezone');
 const Teacher = require('../models/Teacher');
 const Attendance = require('../models/Attendance');
+const AttendanceDay = require('../models/AttendanceDay');
 const SpecialDate = require('../models/SpecialDate');
 const SystemSettings = require('../models/SystemSettings');
 const { ATTENDANCE_STATUS } = require('../constants/system.constants');
@@ -11,15 +12,30 @@ const timeStringToMinutes = (timeStr) => {
     return (hours * 60) + minutes;
 };
 
+const isProtectedManualAttendance = (record) => Boolean(
+    record?.isManuallyEdited
+    && [
+        ATTENDANCE_STATUS.ABSENT,
+        ATTENDANCE_STATUS.OFFICIAL_DUTY
+    ].includes(record.status)
+);
+
 // ১. ডায়নামিক সেটিংস ও স্পেশাল ডেট অনুযায়ী পাঞ্চ মূল্যায়ন
-const evaluatePunchStatus = async (punchMoment, isLateExcused = false, excuseNote = null) => {
+const evaluatePunchStatus = async (
+    punchMoment,
+    isLateExcused = false,
+    excuseNote = null,
+    attendanceContext = null
+) => {
     const dateStr = punchMoment.format('YYYY-MM-DD');
     const dayOfWeek = punchMoment.day();
 
-    const [specialConfig, settings] = await Promise.all([
-        SpecialDate.findOne({ date: dateStr }).lean(),
-        SystemSettings.getSettings()
-    ]);
+    const [specialConfig, settings] = attendanceContext
+        ? [attendanceContext.specialConfig, attendanceContext.settings]
+        : await Promise.all([
+            SpecialDate.findOne({ date: dateStr }).lean(),
+            SystemSettings.getSettings()
+        ]);
 
     const policy = settings.attendancePolicy;
 
@@ -110,6 +126,18 @@ const processBiometricPunch = async ({ biometricDeviceId, teacherId, punchTime, 
     const dateStr = punchMoment.format('YYYY-MM-DD');
     const existingRecord = await Attendance.findOne({ teacherId: teacher._id, date: dateStr });
 
+    // Absent and Official Duty are protected manual exceptions.
+    // Manual Present/Late may be reconciled by a real USB/device punch.
+    if (isProtectedManualAttendance(existingRecord)) {
+        if (source === 'USB_Pendrive_Upload' || source === 'ZKTeco_Device') {
+            return {
+                alreadyPunched: true,
+                attendance: existingRecord,
+                message: `${teacher.fullNameBng} (${dateStr})-এর রেকর্ড অ্যাডমিন এডিট; বায়োমেট্রিক পাঞ্চ দিয়ে পরিবর্তন করা হয়নি।`
+            };
+        }
+    }
+
     if (existingRecord && existingRecord.punchTime) {
         const existingMoment = moment.tz(existingRecord.punchTime, 'Asia/Dhaka');
         if (punchMoment.isSameOrAfter(existingMoment)) {
@@ -156,9 +184,16 @@ const processBiometricPunch = async ({ biometricDeviceId, teacherId, punchTime, 
                 appliedInTime: evaluation.appliedInTime,
                 status: evaluation.status,
                 deductionWeight: evaluation.deductionWeight,
+                quotaDeduction: evaluation.status === ATTENDANCE_STATUS.LATE
+                    || evaluation.status === ATTENDANCE_STATUS.LEAVE
+                    ? evaluation.deductionWeight
+                    : 0,
+                salaryDeduction: 0,
                 directSalaryPenaltyDays: 0,
                 isLateExcused,
                 excuseNote,
+                isAutoMarked: false,
+                isManuallyEdited: false,
                 source,
                 remarks: evaluation.remarks
             }
@@ -182,11 +217,15 @@ const parseAndSyncRawZKTecoLogs = async (rawTextContent, source = 'ZKTeco_Device
 
     for (const line of lines) {
         const trimmed = line.trim();
-        const match = trimmed.match(/^(\d+)\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})/);
+        const whitespaceMatch = trimmed.match(/^(\d+)\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?)/);
+        const separatorMatch = trimmed.match(/^(\d+)[,\t;]\s*(\d{4}[-/.]\d{2}[-/.]\d{2})[,\t;\s]+\s*(\d{2}:\d{2}(?::\d{2})?)/);
+        const match = whitespaceMatch || separatorMatch;
 
         if (match) {
             const pin = parseInt(match[1], 10);
-            const timeStr = match[2];
+            const timeStr = separatorMatch
+                ? `${match[2].replace(/[/.]/g, '-')} ${match[3]}`
+                : match[2];
             const datePart = timeStr.split(/\s+/)[0];
 
             try {
@@ -212,7 +251,7 @@ const parseAndSyncRawZKTecoLogs = async (rawTextContent, source = 'ZKTeco_Device
     const todayStr = moment.tz('Asia/Dhaka').format('YYYY-MM-DD');
     for (const dateStr of affectedDates) {
         if (dateStr < todayStr) {
-            await recalculatePastDateIgnoreStatus(dateStr);
+            await runDailyEndOfDayAudit(dateStr);
         }
     }
 
@@ -256,66 +295,108 @@ const runDailyEndOfDayAudit = async (targetDateStr = null) => {
 
     const policy = settings.attendancePolicy;
 
-    // লাস্ট অডিট তারিখ আপডেট করা (যাতে রিস্টার্টের সময় মিসড ডেট ট্র্যাক থাকে)
     await SystemSettings.updateOne(
         { key: 'GLOBAL_SETTINGS' },
         { $set: { lastCronAuditDate: dateStr } }
     );
 
     if (specialConfig && specialConfig.isHoliday) {
+        await AttendanceDay.findOneAndUpdate(
+            { date: dateStr },
+            { $set: { date: dateStr, dayType: 'HOLIDAY', reason: specialConfig.title, isAutoResolved: true } },
+            { upsert: true, new: true }
+        );
         return { date: dateStr, action: 'SKIPPED_HOLIDAY', message: `${dateStr} ছুটি ঘোষণা করা হয়েছে।` };
     }
+
     if (policy.weekendDays.includes(dayOfWeek) && !specialConfig) {
+        await AttendanceDay.findOneAndUpdate(
+            { date: dateStr },
+            { $set: { date: dateStr, dayType: 'HOLIDAY', reason: 'সাপ্তাহিক ছুটি', isAutoResolved: true } },
+            { upsert: true, new: true }
+        );
         return { date: dateStr, action: 'SKIPPED_WEEKEND', message: `${dateStr} সাপ্তাহিক ছুটি হওয়ায় অটো-অডিট স্কিপ করা হলো।` };
     }
 
-    // ওই তারিখে যেসব শিক্ষক চাকরিতে বহাল ছিলেন কেবল তাদেরই চেক করা হবে
     const targetDateEnd = targetMoment.clone().endOf('day').toDate();
     const activeTeachers = await Teacher.find({
         isActive: true,
-        joiningDate: { $lte: targetDateEnd }
+        joiningDate: { $lte: targetDateEnd },
+        $or: [
+            { resignationDate: null },
+            { resignationDate: { $exists: false } },
+            { resignationDate: { $gt: targetDateEnd } }
+        ]
     }).select('_id biometricDeviceId fullNameBng').lean();
 
     const totalActiveCount = activeTeachers.length;
     if (totalActiveCount === 0) return { date: dateStr, action: 'NO_ACTIVE_TEACHERS', message: 'কোনো সক্রিয় শিক্ষক নেই।' };
 
     const todayRecords = await Attendance.find({ date: dateStr });
-    const presentOrOfficialCount = todayRecords.filter(
-        (r) => r.punchTime !== null || r.status === ATTENDANCE_STATUS.OFFICIAL_DUTY
+    const activeTeacherIds = new Set(activeTeachers.map((teacher) => String(teacher._id)));
+    const punchedCount = todayRecords.filter(
+        (record) => record.punchTime !== null && activeTeacherIds.has(String(record.teacherId))
     ).length;
+    const attendancePercentage = totalActiveCount > 0
+        ? (punchedCount / totalActiveCount) * 100
+        : 0;
+    const threshold = settings.attendancePolicy?.autoIgnoreThresholdPercent ?? 30;
 
-    const attendancePercentage = (presentOrOfficialCount / totalActiveCount) * 100;
-
-    const shouldIgnore =
-        attendancePercentage < policy.autoIgnoreThresholdPercent &&
-        !(specialConfig && specialConfig.ignoreThirtyPercentRule);
-
-    if (shouldIgnore) {
-        await Attendance.updateMany(
+    if (attendancePercentage < threshold) {
+        await Attendance.deleteMany({
+            date: dateStr,
+            status: ATTENDANCE_STATUS.LEAVE,
+            punchTime: null,
+            source: 'Auto_Cron_Job',
+            isManuallyEdited: { $ne: true }
+        });
+        await AttendanceDay.findOneAndUpdate(
             { date: dateStr },
             {
                 $set: {
-                    isIgnored: true,
-                    deductionWeight: 0,
-                    directSalaryPenaltyDays: 0,
-                    ignoreReason: `মোট উপস্থিতির হার মাত্র ${attendancePercentage.toFixed(1)}% (${policy.autoIgnoreThresholdPercent}% এর নিচে) হওয়ায় দিনটি স্বয়ংক্রিয়ভাবে বাদ দেওয়া হয়েছে।`
+                    date: dateStr,
+                    dayType: 'MACHINE_OFF',
+                    reason: `পাঞ্চের হার ${attendancePercentage.toFixed(1)}% (${threshold}% এর নিচে); মেশিন বা নেট সমস্যা হতে পারে`,
+                    isAutoResolved: true,
+                    attendancePercentage: Number(attendancePercentage.toFixed(2)),
+                    activeTeacherCount: totalActiveCount,
+                    punchedTeacherCount: punchedCount
                 }
-            }
+            },
+            { upsert: true, new: true }
         );
         return {
             date: dateStr,
-            action: 'AUTO_IGNORED_UNDER_THRESHOLD',
+            action: 'MACHINE_OFF_UNDER_THRESHOLD',
             attendancePercentage: Number(attendancePercentage.toFixed(2)),
-            message: `উপস্থিতি ${policy.autoIgnoreThresholdPercent}% এর কম (${attendancePercentage.toFixed(1)}%) হওয়ায় দিনটি অটো-ইগনোর করা হয়েছে।`
+            punchedCount,
+            activeTeacherCount: totalActiveCount,
+            message: `(${dateStr}) উপস্থিতির হার ${attendancePercentage.toFixed(1)}%, threshold ${threshold}% এর নিচে। কোনো Leave মার্ক করা হয়নি; দিনটি Machine Off হিসেবে ফ্ল্যাগ করা হয়েছে।`
         };
     }
+
+    await AttendanceDay.findOneAndUpdate(
+        { date: dateStr },
+        {
+            $set: {
+                date: dateStr,
+                dayType: 'WORKDAY',
+                reason: 'স্বাভাবিক কর্মদিবস',
+                isAutoResolved: true,
+                attendancePercentage: Number(attendancePercentage.toFixed(2)),
+                activeTeacherCount: totalActiveCount,
+                punchedTeacherCount: punchedCount
+            }
+        },
+        { upsert: true, new: true }
+    );
 
     const recordedTeacherIds = new Set(todayRecords.map((r) => r.teacherId.toString()));
     const unrecordedTeachers = activeTeachers.filter((t) => !recordedTeacherIds.has(t._id.toString()));
     const appliedInTime = specialConfig ? specialConfig.customInTime : policy.defaultInTime;
 
     if (unrecordedTeachers.length > 0) {
-        const bulkAbsentOps = unrecordedTeachers.map((teacher) => ({
+        const bulkLeaveOps = unrecordedTeachers.map((teacher) => ({
             updateOne: {
                 filter: { teacherId: teacher._id, date: dateStr },
                 update: {
@@ -325,26 +406,33 @@ const runDailyEndOfDayAudit = async (targetDateStr = null) => {
                         date: dateStr,
                         punchTime: null,
                         appliedInTime,
-                        status: ATTENDANCE_STATUS.ABSENT,
-                        deductionWeight: 0,
-                        directSalaryPenaltyDays: policy.absentPenaltyDays,
+                        status: ATTENDANCE_STATUS.LEAVE,
+                        deductionWeight: policy.leaveDeductionWeight,
+                        quotaDeduction: policy.leaveDeductionWeight,
+                        salaryDeduction: 0,
+                        directSalaryPenaltyDays: 0,
                         isIgnored: false,
+                        isAutoMarked: true,
+                        isManuallyEdited: false,
                         source: 'Auto_Cron_Job',
-                        remarks: 'বিনা অনুমতিতে অনুপস্থিত (Absent) — ছুটির কোটা প্রযোজ্য নয়, সরাসরি বেতন কর্তনযোগ্য'
+                        remarks: 'পাঞ্চ না পাওয়া গেছে; স্বয়ংক্রিয় Leave'
                     }
                 },
                 upsert: true
             }
         }));
-        await Attendance.bulkWrite(bulkAbsentOps);
+        await Attendance.bulkWrite(bulkLeaveOps);
     }
 
     return {
         date: dateStr,
         action: 'AUDIT_COMPLETED_NORMALLY',
-        punchedCount: presentOrOfficialCount,
-        unexcusedAbsentMarked: unrecordedTeachers.length,
-        message: `(${dateStr}) অডিট সম্পন্ন! উপস্থিত: ${presentOrOfficialCount} জন, বিনা অনুমতিতে অনুপস্থিত (Absent): ${unrecordedTeachers.length} জন।`
+        punchedCount,
+        activeTeacherCount: totalActiveCount,
+        attendancePercentage: Number(attendancePercentage.toFixed(2)),
+        autoLeaveMarked: unrecordedTeachers.length,
+        unexcusedAbsentMarked: 0,
+        message: `(${dateStr}) অডিট সম্পন্ন! পাঞ্চ: ${punchedCount}/${totalActiveCount} (${attendancePercentage.toFixed(1)}%), স্বয়ংক্রিয় Leave: ${unrecordedTeachers.length} জন।`
     };
 };
 
@@ -370,6 +458,7 @@ const recoverMissedDailyAuditsOnBoot = async () => {
 
 module.exports = {
     timeStringToMinutes,
+    isProtectedManualAttendance,
     evaluatePunchStatus,
     processBiometricPunch,
     parseAndSyncRawZKTecoLogs,

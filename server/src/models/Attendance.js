@@ -17,6 +17,13 @@ const attendanceSchema = new mongoose.Schema({
     deductionWeight: { type: Number, default: 0, min: 0, max: 1 },
     // বিনা অনুমতিতে Absent থাকলে সরাসরি কত দিনের বেতন কাটা যাবে (কোটা থাকলেও মাফ নেই)
     directSalaryPenaltyDays: { type: Number, default: 0, min: 0, max: 1 },
+    // Payroll engine-এর নতুন স্পষ্ট পৃথক হিসাব
+    quotaDeduction: { type: Number, default: 0, min: 0 },
+    salaryDeduction: { type: Number, default: 0, min: 0, max: 1 },
+    // Admin বা bulk entry USB/Auto-Cron দ্বারা ওভাররাইট হবে না
+    isManuallyEdited: { type: Boolean, default: false, index: true },
+    isAutoMarked: { type: Boolean, default: false, index: true },
+    lastImportedAt: { type: Date, default: null },
     // কেউ ফোন করে দেরির অনুমতি নিলে বা সকালে কাজে গেলে এটি true থাকবে
     isLateExcused: { type: Boolean, default: false },
     excuseNote: { type: String, trim: true, default: null },
@@ -24,7 +31,14 @@ const attendanceSchema = new mongoose.Schema({
     ignoreReason: { type: String, default: null },
     source: {
         type: String,
-        enum: ['ZKTeco_Device', 'USB_Pendrive_Upload', 'Admin_Manual', 'Auto_Cron_Job', 'Leave_Approval'],
+        enum: [
+            'ZKTeco_Device',
+            'USB_Pendrive_Upload',
+            'Admin_Manual',
+            'Admin_Bulk_Manual',
+            'Auto_Cron_Job',
+            'Leave_Approval'
+        ],
         default: 'ZKTeco_Device'
     },
     modifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Teacher', default: null },
@@ -32,5 +46,30 @@ const attendanceSchema = new mongoose.Schema({
 }, { timestamps: true, versionKey: false });
 
 attendanceSchema.index({ teacherId: 1, date: 1 }, { unique: true });
+
+attendanceSchema.pre('validate', function normalizePayrollDeductions(next) {
+    if (this.status === 'Absent') {
+        this.quotaDeduction = 0;
+        this.deductionWeight = 0;
+        this.salaryDeduction = 1;
+        this.directSalaryPenaltyDays = 1;
+    } else if (this.status === 'Present' || this.status === 'Holiday Duty' || this.status === 'Official Duty') {
+        this.salaryDeduction = 0;
+        if (this.status === 'Present') {
+            this.quotaDeduction = this.deductionWeight || 0;
+        } else {
+            this.quotaDeduction = 0;
+            this.deductionWeight = 0;
+            this.directSalaryPenaltyDays = 0;
+        }
+    } else if (this.status === 'Late') {
+        this.salaryDeduction = 0;
+        this.quotaDeduction = this.deductionWeight || 0.5;
+    } else if (this.status === 'Leave') {
+        this.salaryDeduction = 0;
+        this.quotaDeduction = this.deductionWeight || 1;
+    }
+    next();
+});
 
 module.exports = mongoose.model('Attendance', attendanceSchema);

@@ -9,6 +9,8 @@ const {
     uploadUsbAttendanceLogs,
     excuseTeacherLateOrDuty,
     adminOverrideAttendance,
+    getBulkAttendanceForDate,
+    saveBulkAttendanceForDate,
     getTeacherMonthlySummary,
     deleteSpecialDate,
     triggerEndOfDayAuditManually
@@ -29,6 +31,8 @@ router.post('/punch', manualPunchValidationRules, validateRequest, recordPunch);
 
 router.use(protect);
 router.get('/daily', restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN), getDailyAttendance);
+router.get('/bulk', restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN), getBulkAttendanceForDate);
+router.put('/bulk', restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN), saveBulkAttendanceForDate);
 router.get('/my-summary', getTeacherMonthlySummary);
 
 // পেনড্রাইভে এক্সপোর্ট করা ফাইল (.dat/.txt) ফ্রন্টএন্ড থেকে আপলোড করার রাউট

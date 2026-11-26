@@ -3,6 +3,8 @@
  * Synchronized with Backend Military-Grade Validation Rules
  */
 
+import React from 'react';
+import { Check } from 'lucide-react';
 import { STORAGE_KEYS } from '@constants/app.constants';
 
 export const REGISTRATION_DRAFT_KEY = 'ardm_teacher_registration_draft_v1';
@@ -226,4 +228,60 @@ export function getSavedRegistryToken() {
     } catch (e) {
         return null;
     }
+}
+
+export default function RegistrationStepper({
+    steps = [],
+    currentStep = 0,
+    completedSteps = {},
+    onStepSelect,
+    idPreview,
+    rankPreview
+}) {
+    return (
+        <aside className="border-b border-ink-faint bg-emerald-deep p-5 text-white md:border-b-0 md:border-r md:border-gold/20">
+            <div className="mb-6">
+                <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-gold-soft">ARDM Registry</p>
+                <h2 className="mt-1 font-bengali text-lg font-bold">শিক্ষক নিবন্ধন</h2>
+            </div>
+
+            <nav className="space-y-2">
+                {steps.map((step, index) => {
+                    const isActive = index === currentStep;
+                    const isCompleted = Boolean(completedSteps[index]);
+                    return (
+                        <button
+                            key={step.id || index}
+                            type="button"
+                            onClick={() => onStepSelect?.(index)}
+                            className={`flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left transition ${
+                                isActive
+                                    ? 'border-gold/60 bg-white/10'
+                                    : 'border-transparent hover:border-white/10 hover:bg-white/5'
+                            }`}
+                        >
+                            <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                                isCompleted ? 'bg-gold text-emerald-deep' : isActive ? 'bg-white text-emerald-deep' : 'bg-white/10 text-gold-soft'
+                            }`}>
+                                {isCompleted ? <Check className="h-4 w-4" /> : step.stepNumber || index + 1}
+                            </span>
+                            <span className="min-w-0">
+                                <span className="block font-bengali text-xs font-bold">{step.titleBng}</span>
+                                <span className="mt-0.5 block truncate text-[10px] text-white/60">{step.titleEng}</span>
+                            </span>
+                        </button>
+                    );
+                })}
+            </nav>
+
+            {(idPreview || rankPreview) && (
+                <div className="mt-6 rounded-xl border border-gold/20 bg-black/10 p-3 text-xs">
+                    {idPreview && <p className="font-mono text-gold-soft">ID: {idPreview}</p>}
+                    {rankPreview?.designationBng && (
+                        <p className="mt-1 font-bengali text-white/70">{rankPreview.designationBng}</p>
+                    )}
+                </div>
+            )}
+        </aside>
+    );
 }

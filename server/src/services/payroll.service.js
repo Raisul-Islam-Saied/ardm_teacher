@@ -9,6 +9,16 @@ const {
 } = require('../constants/system.constants');
 const ApiError = require('../utils/ApiError');
 
+const PAYROLL_EDIT_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+
+const isPayrollEditable = (salary, now = new Date()) => {
+    const generatedAt = salary?.generatedAt || salary?.createdAt;
+    if (!generatedAt) return false;
+    const generatedTime = new Date(generatedAt).getTime();
+    const age = now.getTime() - generatedTime;
+    return Number.isFinite(generatedTime) && age >= 0 && age <= PAYROLL_EDIT_WINDOW_MS;
+};
+
 // নির্দিষ্ট মাস ও বছরে ক্যালেন্ডার অনুযায়ী মোট কত দিন (২৮, ২৯, ৩০ নাকি ৩১) তা বের করার হেল্পার
 const getEffectiveDaysInMonth = (month, year, payrollPolicy = {}) => {
     const calendarDays = moment.tz(`${year}-${String(month).padStart(2, '0')}-01`, 'Asia/Dhaka').daysInMonth();
@@ -118,16 +128,22 @@ const calculateTeacherMonthlyPayroll = async ({
     teacher,
     month,
     year,
+    basicSalaryOverride = null,
+    manualDeductibleDays = null,
     includeBonus = false,
     bonusPercentage = null,
     bonusTitle = null,
+    bonusAmountOverride = null,
     adjustmentMode = null,
     adjustmentValue = 0,
     adjustmentReason = null,
     extraAllowance = 0,
     extraDeduction = 0,
     adjustmentNote = null,
-    generatedBy = null
+    preparedOn = '',
+    generatedBy = null,
+    adjustmentAmountOverride = null,
+    persist = true
 }) => {
     const settings = await SystemSettings.getSettings();
     const attPolicy = settings.attendancePolicy;
@@ -135,6 +151,7 @@ const calculateTeacherMonthlyPayroll = async ({
 
     const startDate = moment.tz(`${year}-${String(month).padStart(2, '0')}-01`, 'Asia/Dhaka').startOf('month').format('YYYY-MM-DD');
     const endDate = moment.tz(`${year}-${String(month).padStart(2, '0')}-01`, 'Asia/Dhaka').endOf('month').format('YYYY-MM-DD');
+    const yearStartDate = `${year}-01-01`;
 
     // ওই মাসে ক্যালেন্ডার অনুযায়ী মোট কত দিন (২৮, ২৯, ৩০ বা ৩১ দিন)
     const daysDivisor = getEffectiveDaysInMonth(month, year, payPolicy);
@@ -167,13 +184,13 @@ const calculateTeacherMonthlyPayroll = async ({
             totalExcusedLateOrDuty++;
         } else if (log.status === ATTENDANCE_STATUS.LATE) {
             totalLateCount++;
-            totalQuotaUsed += log.deductionWeight;
+            totalQuotaUsed += Number(log.quotaDeduction ?? log.deductionWeight) || 0;
         } else if (log.status === ATTENDANCE_STATUS.LEAVE) {
             totalLeaveCount++;
-            totalQuotaUsed += log.deductionWeight;
+            totalQuotaUsed += Number(log.quotaDeduction ?? log.deductionWeight) || 0;
         } else if (log.status === ATTENDANCE_STATUS.ABSENT) {
             totalUnexcusedAbsentCount++;
-            directAbsentPenaltyDays += (log.directSalaryPenaltyDays || attPolicy.absentPenaltyDays);
+            directAbsentPenaltyDays += (Number(log.salaryDeduction ?? log.directSalaryPenaltyDays) || attPolicy.absentPenaltyDays);
         } else if (
             log.status === ATTENDANCE_STATUS.APPROVED_SICK_LEAVE ||
             log.status === ATTENDANCE_STATUS.APPROVED_CASUAL_LEAVE
@@ -182,32 +199,115 @@ const calculateTeacherMonthlyPayroll = async ({
         }
     }
 
-    const allowedPaidQuota = teacher.customLeaveQuota ?? attPolicy.monthlyPaidLeaveQuota;
+    const monthlyPaidLeaveQuota = Math.max(
+        0,
+        Number(teacher.customLeaveQuota ?? attPolicy.monthlyPaidLeaveQuota) || 0
+    );
+    const joiningMoment = teacher.joiningDate
+        ? moment.tz(teacher.joiningDate, 'Asia/Dhaka')
+        : null;
+    const resignationMoment = teacher.resignationDate
+        ? moment.tz(teacher.resignationDate, 'Asia/Dhaka')
+        : null;
+    const joiningYear = joiningMoment?.isValid() ? joiningMoment.year() : Number(year) - 1;
+    const resignationYear = resignationMoment?.isValid() ? resignationMoment.year() : Number(year) + 1;
+    const firstQuotaMonth = joiningYear < Number(year)
+        ? 1
+        : joiningYear === Number(year)
+            ? joiningMoment.month() + 1
+            : 13;
+    const lastQuotaMonth = resignationYear < Number(year)
+        ? 0
+        : resignationYear === Number(year)
+            ? resignationMoment.month() + 1
+            : 12;
+    const accruedMonthsBefore = Math.max(
+        0,
+        Math.min(Number(month) - 1, lastQuotaMonth) - firstQuotaMonth + 1
+    );
+    const currentMonthQuota = Number(month) >= firstQuotaMonth && Number(month) <= lastQuotaMonth
+        ? monthlyPaidLeaveQuota
+        : 0;
+    let quotaUsedBeforeMonth = 0;
+    if (accruedMonthsBefore > 0) {
+        const previousLogs = await Attendance.find({
+            teacherId: teacher._id,
+            date: { $gte: yearStartDate, $lt: startDate },
+            status: { $in: [ATTENDANCE_STATUS.LATE, ATTENDANCE_STATUS.LEAVE] },
+            isIgnored: { $ne: true }
+        }).select('quotaDeduction deductionWeight').lean();
+        quotaUsedBeforeMonth = previousLogs.reduce(
+            (total, log) => total + (Number(log.quotaDeduction ?? log.deductionWeight) || 0),
+            0
+        );
+    }
+    const accruedQuotaBeforeMonth = monthlyPaidLeaveQuota * accruedMonthsBefore;
+    const carryForwardQuota = Math.max(
+        0,
+        Number((accruedQuotaBeforeMonth - quotaUsedBeforeMonth).toFixed(2))
+    );
+    const allowedPaidQuota = Number((currentMonthQuota + carryForwardQuota).toFixed(2));
     const remainingPaidQuota = Math.max(0, Number((allowedPaidQuota - totalQuotaUsed).toFixed(2)));
     const excessQuotaDays = Math.max(0, Number((totalQuotaUsed - allowedPaidQuota).toFixed(2)));
     const totalDeductibleDays = excessQuotaDays + directAbsentPenaltyDays;
 
-    const basicSalary = teacher.basicSalary;
+    const basicSalary = basicSalaryOverride == null
+        ? teacher.basicSalary
+        : Number(basicSalaryOverride);
+    if (!Number.isFinite(basicSalary) || basicSalary < 0) {
+        throw new ApiError(400, 'বেতনের মূল পরিমাণ শূন্য বা তার বেশি হতে হবে।');
+    }
     // ওই মাসের প্রকৃত দিন (২৮/২৯/৩০/৩১) দিয়ে ভাগ করে ১ দিনের বেতন বের করা হচ্ছে
     const perDaySalary = Number((basicSalary / daysDivisor).toFixed(2));
 
     const proRataInfo = calculateProRataBasicSalary(
-        teacher,
+        { ...teacher, basicSalary },
         month,
         year,
         daysDivisor,
         payPolicy.enableProRataForMidMonthJoin
     );
 
-    const leaveAndAbsentDeductionAmount = Math.round(totalDeductibleDays * (basicSalary / daysDivisor));
+    const effectiveDeductibleDays = manualDeductibleDays == null
+        ? totalDeductibleDays
+        : Number(manualDeductibleDays);
+    if (
+        !Number.isFinite(effectiveDeductibleDays) ||
+        effectiveDeductibleDays < 0 ||
+        effectiveDeductibleDays > daysDivisor
+    ) {
+        throw new ApiError(400, `কর্তনযোগ্য দিন ০ থেকে ${daysDivisor} দিনের মধ্যে হতে হবে।`);
+    }
+    const leaveAndAbsentDeductionAmount = Math.round(effectiveDeductibleDays * (basicSalary / daysDivisor));
 
     const finalBonusPercent = includeBonus
         ? Number(bonusPercentage ?? payPolicy.defaultBonusPercent)
         : 0;
-    const bonusAmount = includeBonus ? Math.round((basicSalary * finalBonusPercent) / 100) : 0;
+    const calculatedBonusAmount = includeBonus ? Math.round((basicSalary * finalBonusPercent) / 100) : 0;
+    const bonusAmount = bonusAmountOverride == null
+        ? calculatedBonusAmount
+        : Number(bonusAmountOverride);
+    if (!Number.isFinite(bonusAmount) || bonusAmount < 0) {
+        throw new ApiError(400, 'বোনাসের পরিমাণ শূন্য বা তার বেশি হতে হবে।');
+    }
 
     let customAdjustmentObj = { mode: null, value: 0, amount: 0, reason: null };
-    if (adjustmentMode && Number(adjustmentValue) > 0) {
+    if (adjustmentAmountOverride != null) {
+        const amount = Number(adjustmentAmountOverride);
+        if (!Number.isFinite(amount) || Math.abs(amount) > 1000000000) {
+            throw new ApiError(400, 'সমন্বয়ের পরিমাণ সঠিক নয়।');
+        }
+        customAdjustmentObj = {
+            mode: amount > 0
+                ? SALARY_ADJUSTMENT_MODES.INCREASE_AMOUNT
+                : amount < 0
+                    ? SALARY_ADJUSTMENT_MODES.DECREASE_AMOUNT
+                    : null,
+            value: Math.abs(amount),
+            amount,
+            reason: amount === 0 ? null : (adjustmentReason || 'মাসিক বিশেষ সমন্বয়')
+        };
+    } else if (adjustmentMode && Number(adjustmentValue) > 0) {
         const adj = calculateAdjustmentByMode(basicSalary, adjustmentMode, adjustmentValue, daysDivisor);
         customAdjustmentObj = {
             mode: adjustmentMode,
@@ -239,55 +339,70 @@ const calculateTeacherMonthlyPayroll = async ({
         proRataInfo.effectiveBasicSalary -
         leaveAndAbsentDeductionAmount -
         loanDeductionObj.installmentAmount +
-        bonusAmount +
+        (includeBonus ? bonusAmount : 0) +
         customAdjustmentObj.amount +
         Number(extraAllowance) -
         Number(extraDeduction);
 
     const netPayableSalary = Math.max(0, Math.round(rawNetPayable));
 
-    const existingSalary = await Salary.findOne({ teacherId: teacher._id, month, year });
-    if (existingSalary && existingSalary.paymentStatus === 'Paid') {
-        return { skipped: true, salary: existingSalary };
+    const salaryValues = {
+        teacherId: teacher._id,
+        month,
+        year,
+        basicSalarySnapshot: basicSalary,
+        proRataInfo,
+        perDaySalary,
+        attendanceBreakdown: {
+            totalPresent,
+            totalExcusedLateOrDuty,
+            totalLateCount,
+            totalLeaveCount,
+            totalUnexcusedAbsentCount,
+            totalApprovedLeaveCount,
+            totalIgnoredDays,
+            totalQuotaUsed,
+            allowedPaidQuota,
+            carryForwardQuota,
+            remainingPaidQuota,
+            excessQuotaDays,
+            directAbsentPenaltyDays,
+            totalDeductibleDays
+        },
+        leaveAndAbsentDeductionAmount,
+        manualDeductibleDays: manualDeductibleDays == null ? null : effectiveDeductibleDays,
+        preparedOn,
+        loanDeduction: loanDeductionObj,
+        includeBonus,
+        bonusPercentage: finalBonusPercent,
+        bonusTitle: includeBonus ? (bonusTitle || 'উৎসব বোনাস') : null,
+        bonusAmount,
+        customAdjustment: customAdjustmentObj,
+        extraAllowance: Number(extraAllowance),
+        extraDeduction: Number(extraDeduction),
+        adjustmentNote,
+        netPayableSalary,
+        generatedBy
+    };
+
+    if (!persist) {
+        return {
+            skipped: false,
+            salary: {
+                ...salaryValues,
+                originalBasicSalarySnapshot: teacher.basicSalary,
+                generatedAt: null
+            }
+        };
     }
 
     const salaryRecord = await Salary.findOneAndUpdate(
         { teacherId: teacher._id, month, year },
         {
-            $set: {
-                teacherId: teacher._id,
-                month,
-                year,
-                basicSalarySnapshot: basicSalary,
-                proRataInfo,
-                perDaySalary,
-                attendanceBreakdown: {
-                    totalPresent,
-                    totalExcusedLateOrDuty,
-                    totalLateCount,
-                    totalLeaveCount,
-                    totalUnexcusedAbsentCount,
-                    totalApprovedLeaveCount,
-                    totalIgnoredDays,
-                    totalQuotaUsed,
-                    allowedPaidQuota,
-                    remainingPaidQuota,
-                    excessQuotaDays,
-                    directAbsentPenaltyDays,
-                    totalDeductibleDays
-                },
-                leaveAndAbsentDeductionAmount,
-                loanDeduction: loanDeductionObj,
-                includeBonus,
-                bonusPercentage: finalBonusPercent,
-                bonusTitle: includeBonus ? (bonusTitle || 'উৎসব বোনাস') : null,
-                bonusAmount,
-                customAdjustment: customAdjustmentObj,
-                extraAllowance: Number(extraAllowance),
-                extraDeduction: Number(extraDeduction),
-                adjustmentNote,
-                netPayableSalary,
-                generatedBy
+            $set: salaryValues,
+            $setOnInsert: {
+                generatedAt: new Date(),
+                originalBasicSalarySnapshot: basicSalary
             }
         },
         { upsert: true, new: true, runValidators: true }
@@ -301,5 +416,6 @@ module.exports = {
     calculateAdjustmentByMode,
     calculateRevisedSalary: calculateAdjustmentByMode,
     calculateProRataBasicSalary,
+    isPayrollEditable,
     calculateTeacherMonthlyPayroll
 };

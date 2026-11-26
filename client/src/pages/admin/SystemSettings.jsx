@@ -369,7 +369,7 @@ export default function SystemSettings() {
                             isMonoText
                             value={policy.defaultMonthlyFreeQuota}
                             onChange={(e) => updateField('defaultMonthlyFreeQuota', e.target.value)}
-                            hint="মাসে ২.০ ইউনিট পর্যন্ত বিলম্ব বা ছুটিতে কোনো বেতন কাটা হবে না।"
+                            hint="এই মাসিক কোটা বেতন হিসাবের সময় বছর শুরু থেকে জমবে; আগের মাসের অব্যবহৃত কোটা পরের মাসে বহন হবে।"
                         />
 
                         <FormInput
@@ -427,7 +427,7 @@ export default function SystemSettings() {
 
                     <div className="p-4 rounded-xl bg-emerald-subtle border border-emerald-border text-xs font-bengali text-emerald-deep">
                         <Sparkles className="w-4 h-4 inline mr-1.5 text-gold-deep" />
-                        <b>নীতিমালা:</b> কোটা ব্যবহৃত হবে <code>(Late × {policy.lateQuotaWeight}) + (Leave × {policy.leaveQuotaWeight})</code> সূত্রে। অনুমোদিত সীমা <code>{policy.defaultMonthlyFreeQuota}</code> ছাড়ালে এবং অননুমোদিত অনুপস্থিতিতে সার্ভারের বেতন গণনা কর্তন প্রয়োগ করবে। {policy.useExactCalendarDays ? 'দৈনিক বেতন সংশ্লিষ্ট মাসের প্রকৃত দিনের ভিত্তিতে গণনা হবে।' : `দৈনিক বেতন মূল বেতন ÷ ${policy.salaryMonthDivisor} হিসেবে গণনা হবে।`}
+                        <b>নীতিমালা:</b> কোটা ব্যবহৃত হবে <code>(Late × {policy.lateQuotaWeight}) + (Leave × {policy.leaveQuotaWeight})</code> সূত্রে। <code>{policy.defaultMonthlyFreeQuota}</code> মাসিক কোটা বছর শুরু থেকে জমবে; অব্যবহৃত কোটা পরের মাসে যোগ হবে। অননুমোদিত অনুপস্থিতির বেতন কর্তন quota থেকে আলাদা। {policy.useExactCalendarDays ? 'দৈনিক বেতন সংশ্লিষ্ট মাসের প্রকৃত দিনের ভিত্তিতে গণনা হবে।' : `দৈনিক বেতন মূল বেতন ÷ ${policy.salaryMonthDivisor} হিসেবে গণনা হবে।`}
                     </div>
                 </div>
             )}

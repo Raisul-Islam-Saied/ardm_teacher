@@ -3,11 +3,11 @@
  * Features:
  * - Tab 1: Complete Bilingual Personal, Family, Address & Academic Dossier
  * - Tab 2: Monthly Biometric Attendance Logs (ZKTeco K40) & Custom Leave Quota Override (Default 2.0)
- * - Tab 3: Monthly Cash Salary History & 1-Click Printable Cash Voucher Receipt
+ * - Tab 3: Saved Monthly Salary Sheet History
  * - Tab 4: Admin Security Controls (Password Reset and Account Status)
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import {
     ArrowLeft,
@@ -28,7 +28,6 @@ import {
     MapPin,
     Lock,
     Unlock,
-    Receipt,
     SlidersHorizontal,
     Sparkles
 } from 'lucide-react';
@@ -61,9 +60,30 @@ import { cn } from '@utils/cn';
 const PROFILE_TABS = [
     { key: 'DOSSIER', labelBng: 'ব্যক্তিগত ও শিক্ষাগত ডসিয়ার', labelEng: 'Personal & Academic', icon: User },
     { key: 'ATTENDANCE', labelBng: 'হাজিরা ও ছুটির কোটা', labelEng: 'Attendance & Quota', icon: Fingerprint },
-    { key: 'PAYROLL', labelBng: 'বেতন ও ক্যাশ ভাউচার', labelEng: 'Payroll & Vouchers', icon: Banknote },
+    { key: 'PAYROLL', labelBng: 'সংরক্ষিত বেতন শিট', labelEng: 'Saved Payroll Sheets', icon: Banknote },
     { key: 'SECURITY', labelBng: 'পাসওয়ার্ড ও সিকিউরিটি', labelEng: 'Security & Reset', icon: KeyRound }
 ];
+
+const normalizeAssignedClass = (val = '') =>
+    String(val || '').replace(/\u09AF\u09BC/g, '\u09DF');
+
+const isWithinPayrollEditWindow = (generatedAt) => {
+    if (!generatedAt) return false;
+    const age = Date.now() - new Date(generatedAt).getTime();
+    return Number.isFinite(age) && age >= 0 && age <= 30 * 24 * 60 * 60 * 1000;
+};
+
+function getAttendancePeriod(search) {
+    const now = new Date();
+    const params = new URLSearchParams(search);
+    const requestedMonth = Number(params.get('month'));
+    const requestedYear = Number(params.get('year'));
+
+    return {
+        month: requestedMonth >= 1 && requestedMonth <= 12 ? requestedMonth : now.getMonth() + 1,
+        year: requestedYear >= 2000 && requestedYear <= 2100 ? requestedYear : now.getFullYear()
+    };
+}
 
 export default function TeacherProfileDossier() {
     const { id } = useParams();
@@ -72,16 +92,31 @@ export default function TeacherProfileDossier() {
     const toast = useToast();
     const { isSuperAdmin } = useAuth();
 
-    const [activeTab, setActiveTab] = useState('DOSSIER');
+    const [activeTab, setActiveTab] = useState(() =>
+        location.state?.activeTab || (new URLSearchParams(location.search).has('month') ? 'ATTENDANCE' : 'DOSSIER')
+    );
     const [teacher, setTeacher] = useState(() => location.state?.teacher || null);
     const [isLoadingProfile, setIsLoadingProfile] = useState(true);
     const [attendanceSummary, setAttendanceSummary] = useState(null);
     const [attendanceLogs, setAttendanceLogs] = useState([]);
+    const [isSavingAttendanceException, setIsSavingAttendanceException] = useState(false);
     const [salaryHistory, setSalaryHistory] = useState([]);
+    const attendanceEditorRef = useRef(null);
+    const attendancePeriod = useMemo(() => getAttendancePeriod(location.search), [location.search]);
+    const payrollReturnTo = location.state?.returnTo || (
+        new URLSearchParams(location.search).has('month')
+            ? `/admin/payroll?month=${attendancePeriod.month}&year=${attendancePeriod.year}`
+            : '/admin/teachers'
+    );
+    const [exceptionDate, setExceptionDate] = useState(() => {
+        const period = getAttendancePeriod(location.search);
+        return `${period.year}-${String(period.month).padStart(2, '0')}-01`;
+    });
+    const [exceptionStatus, setExceptionStatus] = useState('Absent');
+    const [exceptionTime, setExceptionTime] = useState('08:55');
 
     const [isIdCardModalOpen, setIsIdCardModalOpen] = useState(false);
     const [isProfileEditorOpen, setIsProfileEditorOpen] = useState(false);
-    const [selectedVoucher, setSelectedVoucher] = useState(null);
 
     // কোটা ওভাররাইড স্টেট
     const [quotaInput, setQuotaInput] = useState(String(teacher?.customLeaveQuota ?? ''));
@@ -95,44 +130,58 @@ export default function TeacherProfileDossier() {
     useEffect(() => {
         if (!id) return;
         let isMounted = true;
-        const now = new Date();
+        const monthStartDate = `${attendancePeriod.year}-${String(attendancePeriod.month).padStart(2, '0')}-01`;
+        setIsLoadingProfile(true);
+        setExceptionDate(monthStartDate);
         const params = {
             teacherId: id,
-            month: now.getMonth() + 1,
-            year: now.getFullYear()
+            month: attendancePeriod.month,
+            year: attendancePeriod.year
         };
-        Promise.all([
+        Promise.allSettled([
             axiosClient.get(`/teachers/${id}`),
             axiosClient.get('/attendance/my-summary', { params }),
             axiosClient.get('/payroll/sheets', { params })
-        ]).then(([teacherRes, attendanceRes, salaryRes]) => {
+        ]).then(([teacherResult, attendanceResult, salaryResult]) => {
             if (!isMounted) return;
+            if (teacherResult.status !== 'fulfilled') {
+                throw teacherResult.reason;
+            }
+            const teacherRes = teacherResult.value;
             const fetchedTeacher = teacherRes.data?.data?.teacher || teacherRes.data?.data;
-            const summary = attendanceRes.data?.data;
-            const salaries = salaryRes.data?.data?.salaries;
             if (!fetchedTeacher || typeof fetchedTeacher !== 'object') {
                 throw new Error('শিক্ষকের তথ্য পাওয়া যায়নি।');
             }
-            if (!Array.isArray(salaries)) {
-                throw new Error('বেতন হিসাবের তথ্য পাওয়া যায়নি।');
-            }
             setTeacher(fetchedTeacher);
             setQuotaInput(String(fetchedTeacher.customLeaveQuota ?? 2));
+
+            const summary = attendanceResult.status === 'fulfilled'
+                ? attendanceResult.value.data?.data
+                : null;
             setAttendanceSummary(summary?.summary || null);
-            setAttendanceLogs(Array.isArray(summary?.logs) ? summary.logs : []);
-            setSalaryHistory(salaries.map((salary) => ({
+            setAttendanceLogs(
+                Array.isArray(summary?.dailyLogs)
+                    ? summary.dailyLogs
+                    : Array.isArray(summary?.logs)
+                        ? summary.logs
+                        : []
+            );
+
+            const salaries = salaryResult.status === 'fulfilled'
+                ? salaryResult.value.data?.data?.salaries
+                : [];
+            setSalaryHistory(Array.isArray(salaries) ? salaries.map((salary) => ({
                 id: salary._id,
-                voucherNo: salary.voucherNo || String(salary._id),
                 monthBng: `${salary.month}/${salary.year}`,
                 basicSalary: Number(salary.basicSalarySnapshot) || 0,
                 quotaUsed: Number(salary.attendanceBreakdown?.totalQuotaUsed) || 0,
                 quotaAllowed: Number(salary.attendanceBreakdown?.allowedPaidQuota) || 0,
                 deduction: Number(salary.leaveAndAbsentDeductionAmount) || 0,
-                netPaid: Number(salary.netPayableSalary) || 0,
-                paymentStatus: salary.paymentStatus,
+                netSalary: Number(salary.netPayableSalary) || 0,
+                generatedAt: salary.generatedAt || salary.createdAt || null,
                 month: salary.month,
                 year: salary.year
-            })));
+            })) : []);
         }).catch((error) => {
             if (isMounted) toast.error(extractApiErrorMessage(error, 'শিক্ষকের তথ্য লোড করা যায়নি।'));
         }).finally(() => {
@@ -142,7 +191,30 @@ export default function TeacherProfileDossier() {
         return () => {
             isMounted = false;
         };
-    }, [id, toast]);
+    }, [id, attendancePeriod.month, attendancePeriod.year, toast]);
+
+    const monthAttendanceRows = useMemo(() => {
+        const daysInMonth = new Date(attendancePeriod.year, attendancePeriod.month, 0).getDate();
+        const logsByDate = new Map(attendanceLogs.map((log) => [log.date, log]));
+
+        return Array.from({ length: daysInMonth }, (_, index) => {
+            const date = `${attendancePeriod.year}-${String(attendancePeriod.month).padStart(2, '0')}-${String(index + 1).padStart(2, '0')}`;
+            const log = logsByDate.get(date) || null;
+            return { date, log, status: log?.status || 'রেকর্ড নেই' };
+        });
+    }, [attendanceLogs, attendancePeriod.month, attendancePeriod.year]);
+    const selectedMonthSalary = salaryHistory.find((salary) => (
+        salary.month === attendancePeriod.month && salary.year === attendancePeriod.year
+    ));
+    const canEditAttendance = !selectedMonthSalary || isWithinPayrollEditWindow(selectedMonthSalary.generatedAt);
+
+    const handleAttendanceMonthChange = (value) => {
+        if (!value) return;
+        const [year, month] = value.split('-');
+        navigate(`${location.pathname}?month=${Number(month)}&year=${Number(year)}`, {
+            state: location.state
+        });
+    };
 
     const rankMetrics = useMemo(
         () => calculateLiveRankMetrics(teacher?.designation, teacher?.academicQualifications),
@@ -150,6 +222,60 @@ export default function TeacherProfileDossier() {
     );
 
     // ১. মাসিক ফ্রি ছুটির কোটা আপডেট হ্যান্ডলার
+    const handleSaveAttendanceException = async () => {
+        if (!canEditAttendance) {
+            toast.error('বেতন শিট তৈরির ৩০ দিনের সংশোধন সময় শেষ হয়েছে।');
+            return;
+        }
+        if (!exceptionDate) {
+            toast.error('সংশোধনের তারিখ নির্বাচন করুন।');
+            return;
+        }
+        if (['Present', 'Late'].includes(exceptionStatus) && !exceptionTime) {
+            toast.error('উপস্থিতির প্রবেশ সময় দিন।');
+            return;
+        }
+
+        setIsSavingAttendanceException(true);
+        try {
+            const payload = {
+                teacherId: teacher._id,
+                date: exceptionDate,
+                status: exceptionStatus,
+                remarks: `শিক্ষক প্রোফাইল থেকে ব্যতিক্রমী ${exceptionStatus} এন্ট্রি`
+            };
+            if (['Present', 'Late'].includes(exceptionStatus)) {
+                payload.punchTime = `${exceptionDate}T${exceptionTime}:00+06:00`;
+            }
+            const saveResult = await axiosClient.put('/attendance/override', payload);
+            const exceptionDateObject = new Date(`${exceptionDate}T12:00:00+06:00`);
+            const params = {
+                teacherId: teacher._id,
+                month: exceptionDateObject.getMonth() + 1,
+                year: exceptionDateObject.getFullYear()
+            };
+            const summaryRes = await axiosClient.get('/attendance/my-summary', { params });
+            const summary = summaryRes.data?.data;
+            setAttendanceSummary(summary?.summary || null);
+            setAttendanceLogs(Array.isArray(summary?.dailyLogs) ? summary.dailyLogs : []);
+            toast.success(
+                saveResult.data?.meta?.payrollRecalculated
+                    ? `${exceptionDate}-এর হাজিরা ${exceptionStatus} হয়েছে এবং বেতন পুনর্গণনা হয়েছে।`
+                    : `${exceptionDate}-এর হাজিরা ${exceptionStatus} হিসেবে সংরক্ষিত হয়েছে।`
+            );
+        } catch (error) {
+            toast.error(extractApiErrorMessage(error, 'হাজিরা ব্যতিক্রম সংরক্ষণ করা যায়নি।'));
+        } finally {
+            setIsSavingAttendanceException(false);
+        }
+    };
+
+    const selectAttendanceDateForEdit = (date, status) => {
+        setExceptionDate(date);
+        setExceptionStatus(['Absent', 'Official Duty', 'Present', 'Late'].includes(status) ? status : 'Absent');
+        attendanceEditorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
+
     const handleSaveLeaveQuota = async () => {
         const parsedQuota = Number(quotaInput);
         if (isNaN(parsedQuota) || parsedQuota < 0 || parsedQuota > 15) {
@@ -229,9 +355,13 @@ export default function TeacherProfileDossier() {
     const usedQuotaThisMonth = Number(attendanceSummary?.totalQuotaUsed) || 0;
     const totalQuotaAllowed = Number(teacher.customLeaveQuota ?? attendanceSummary?.monthlyAllowedQuota ?? 2);
     const remainingQuota = Math.max(0, totalQuotaAllowed - usedQuotaThisMonth);
-    const employmentPeriods = teacher.employmentHistory?.length
+    const employmentPeriods = Array.isArray(teacher.employmentHistory) && teacher.employmentHistory.length
         ? teacher.employmentHistory
         : [{ startDate: teacher.joiningDate, endDate: teacher.resignationDate }];
+    const teacherDisplayName = teacher.fullNameBng || teacher.fullNameEng || 'নাম নেই';
+    const academicQualifications = Array.isArray(teacher.academicQualifications)
+        ? teacher.academicQualifications
+        : [];
 
     return (
         <div className="space-y-6 animate-fade-up">
@@ -244,9 +374,13 @@ export default function TeacherProfileDossier() {
                     variant="ghost"
                     size="sm"
                     leftIcon={ArrowLeft}
-                    onClick={() => navigate('/admin/teachers')}
+                    onClick={() => navigate(payrollReturnTo)}
                 >
-                    <span className="font-bengali">শিক্ষক ও সিনিয়রিটি তালিকায় ফিরে যান</span>
+                    <span className="font-bengali">
+                        {payrollReturnTo.startsWith('/admin/payroll')
+                            ? 'বেতন শিটে ফিরে যান'
+                            : 'শিক্ষক ও সিনিয়রিটি তালিকায় ফিরে যান'}
+                    </span>
                 </Button>
 
                 <div className="flex flex-wrap items-center gap-2">
@@ -293,7 +427,7 @@ export default function TeacherProfileDossier() {
                                     className="w-full h-full object-cover"
                                 />
                             ) : (
-                                teacher.fullNameBng.charAt(0)
+                                teacherDisplayName.charAt(0)
                             )}
                         </div>
 
@@ -307,7 +441,18 @@ export default function TeacherProfileDossier() {
                                 </Badge>
                                 {teacher.assignedClass && (
                                     <Badge variant="gold" size="sm">
-                                        শ্রেণি শিক্ষক: {teacher.assignedClass}
+                                        শ্রেণি শিক্ষক: {normalizeAssignedClass(teacher.assignedClass)}
+                                    </Badge>
+                                )}
+                                {teacher.assignedClass && (
+                                    <Badge
+                                        variant={teacher.canEditAssignedClass ? 'success' : 'emerald-subtle'}
+                                        size="sm"
+                                        dot
+                                    >
+                                        {teacher.canEditAssignedClass
+                                            ? 'শ্রেণি এডিট অনুমতি: সক্রিয়'
+                                            : 'শ্রেণি এডিট অনুমতি: নিষ্ক্রিয়'}
                                     </Badge>
                                 )}
                                 <Badge
@@ -320,7 +465,7 @@ export default function TeacherProfileDossier() {
                             </div>
 
                             <h1 className="font-bengali text-2xl sm:text-3xl font-bold text-white">
-                                {teacher.fullNameBng}
+                                {teacherDisplayName}
                             </h1>
                             <p className="font-sans text-xs sm:text-sm text-gold-soft uppercase tracking-wider font-semibold">
                                 {teacher.fullNameEng}
@@ -462,14 +607,22 @@ export default function TeacherProfileDossier() {
                                     <dt className="font-bengali text-ink-muted">শ্রেণি শিক্ষক দায়িত্ব:</dt>
                                     <dd className="font-bengali font-semibold text-emerald-deep text-right">
                                         {teacher.assignedClass
-                                            ? `${teacher.assignedClass} শ্রেণি (${teacher.canEditAssignedClass ? 'এডিট অনুমতি সক্রিয়' : 'শুধুমাত্র দেখার অনুমতি'})`
+                                            ? `${normalizeAssignedClass(teacher.assignedClass)} শ্রেণি`
                                             : 'প্রযোজ্য নয় (সাধারণ শিক্ষক / স্টাফ)'}
                                     </dd>
                                 </div>
+                                <div className="flex justify-between gap-4 border-b border-ink-faint/60 pb-2">
+                                    <dt className="font-bengali text-ink-muted">শ্রেণি তথ্য এডিটের অনুমতি:</dt>
+                                    <dd className={`font-bengali font-bold text-right ${teacher.canEditAssignedClass ? 'text-success' : 'text-ink-muted'}`}>
+                                        {teacher.assignedClass
+                                            ? (teacher.canEditAssignedClass ? 'সক্রিয় — শ্রেণির তথ্য যোগ ও এডিট করতে পারবেন' : 'নিষ্ক্রিয় — কেবল তথ্য দেখতে পারবেন')
+                                            : 'প্রযোজ্য নয়'}
+                                    </dd>
+                                </div>
                                 <div className="flex justify-between gap-4">
-                                    <dt className="font-bengali text-ink-muted">বেতন প্রদানের মাধ্যম:</dt>
+                                    <dt className="font-bengali text-ink-muted">মাসিক ছুটির কোটা:</dt>
                                     <dd className="font-mono font-bold text-emerald text-right">
-                                        {teacher.paymentMethod || 'Cash'} (Monthly Quota: {totalQuotaAllowed})
+                                        {totalQuotaAllowed}
                                     </dd>
                                 </div>
                             </dl>
@@ -520,7 +673,7 @@ export default function TeacherProfileDossier() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-ink-faint font-bengali">
-                                    {(teacher.academicQualifications || []).map((q, idx) => {
+                                    {academicQualifications.map((q, idx) => {
                                         const degObj = DEGREE_LEVELS.find((d) => d.key === q.degreeLevel);
                                         return (
                                             <tr key={idx}>
@@ -557,6 +710,81 @@ export default function TeacherProfileDossier() {
             {/* TAB 2: BIOMETRIC ATTENDANCE & LEAVE QUOTA OVERRIDE */}
             {activeTab === 'ATTENDANCE' && (
                 <div className="space-y-6 animate-fade-up">
+                    <section className="ledger-surface p-5 bg-paper-panel">
+                        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <h3 className="font-bengali text-base font-bold text-emerald-deep">
+                                    {toBengaliDigits(attendancePeriod.month)}/{toBengaliDigits(attendancePeriod.year)} মাসের হাজিরা ও ব্যতিক্রম
+                                </h3>
+                                <p className="font-bengali text-xs text-ink-soft">
+                                    প্রতিটি দিনের রেকর্ড দেখুন; বেতন শিট তৈরির ৩০ দিনের মধ্যে ব্যতিক্রমী হাজিরা সংশোধন করা যাবে।
+                                </p>
+                                {!canEditAttendance && (
+                                    <p className="font-bengali text-xs text-danger mt-1">
+                                        এই মাসের সংশোধন সময় শেষ হয়েছে।
+                                    </p>
+                                )}
+                            </div>
+                            <label className="flex items-center gap-2 font-bengali text-xs font-semibold text-ink-soft">
+                                মাস নির্বাচন
+                                <input
+                                    type="month"
+                                    aria-label="হাজিরার মাস নির্বাচন"
+                                    value={`${attendancePeriod.year}-${String(attendancePeriod.month).padStart(2, '0')}`}
+                                    onChange={(event) => handleAttendanceMonthChange(event.target.value)}
+                                    className="erp-input w-auto font-mono text-xs"
+                                />
+                            </label>
+                        </div>
+                        <div ref={attendanceEditorRef} className="grid grid-cols-1 gap-3 md:grid-cols-4 scroll-mt-24">
+                            <FormInput
+                                labelEng="Attendance Date"
+                                labelBng="তারিখ"
+                                type="date"
+                                variant="erp"
+                                value={exceptionDate}
+                                onChange={(event) => setExceptionDate(event.target.value)}
+                            />
+                            <FormSelect
+                                labelEng="Exception Status"
+                                labelBng="হাজিরা স্ট্যাটাস"
+                                variant="erp"
+                                value={exceptionStatus}
+                                onChange={(event) => setExceptionStatus(event.target.value)}
+                                options={[
+                                    'Absent',
+                                    'Official Duty',
+                                    'Present',
+                                    'Late'
+                                ]}
+                            />
+                            {['Present', 'Late'].includes(exceptionStatus) && (
+                                <FormInput
+                                    labelEng="In Time"
+                                    labelBng="প্রবেশ সময়"
+                                    type="time"
+                                    variant="erp"
+                                    isMonoText
+                                    value={exceptionTime}
+                                    onChange={(event) => setExceptionTime(event.target.value)}
+                                />
+                            )}
+                            <div className="flex items-end">
+                                <Button
+                                    variant={exceptionStatus === 'Absent' ? 'danger' : 'emerald'}
+                                    size="sm"
+                                    fullWidth
+                                    isLoading={isSavingAttendanceException}
+                                    disabled={!canEditAttendance}
+                                    onClick={handleSaveAttendanceException}
+                                >
+                                    <span className="font-bengali">
+                                        {exceptionStatus === 'Absent' ? 'Absent করে সংরক্ষণ' : 'তারিখটি সংরক্ষণ করুন'}
+                                    </span>
+                                </Button>
+                            </div>
+                        </div>
+                    </section>
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         {/* কোটা কন্ট্রোল ওভাররাইড কার্ড */}
                         <div className="ledger-surface p-6 bg-paper-panel flex flex-col justify-between">
@@ -607,7 +835,7 @@ export default function TeacherProfileDossier() {
                         <div className="lg:col-span-2 ledger-surface p-6 bg-paper-panel">
                             <div className="flex items-center justify-between pb-3 mb-4 border-b border-ink-faint">
                                 <h3 className="font-bengali text-base font-bold text-emerald-deep">
-                                    সাম্প্রতিক ZKTeco K40 বায়োমেট্রিক পাঞ্চ লগ (PIN #{teacher.biometricDeviceId})
+                                    পুরো মাসের হাজিরা (PIN #{teacher.biometricDeviceId})
                                 </h3>
                                 <Badge variant="emerald-subtle" size="sm" mono>
                                     9:00 AM Rule
@@ -623,23 +851,17 @@ export default function TeacherProfileDossier() {
                                             <th className="py-2.5 px-3">প্রস্থান (Out Time)</th>
                                             <th className="py-2.5 px-3 text-center">অবস্থা</th>
                                             <th className="py-2.5 px-3 text-right">কোটা ব্যয়</th>
+                                            <th className="py-2.5 px-3 text-right no-print">সংশোধন</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-ink-faint">
-                                        {attendanceLogs.length === 0 && (
-                                            <tr>
-                                                <td colSpan="5" className="py-6 px-3 text-center font-bengali text-ink-muted">
-                                                    এই মাসে কোনো হাজিরা রেকর্ড নেই।
-                                                </td>
-                                            </tr>
-                                        )}
-                                        {attendanceLogs.map((log) => (
-                                            <tr key={log._id || `${log.teacherId}-${log.date}`}>
+                                        {monthAttendanceRows.map(({ date, log, status }) => (
+                                            <tr key={log?._id || date}>
                                                 <td className="py-2.5 px-3 font-bengali font-semibold">
-                                                    {formatDisplayDate(log.date, 'bn')}
+                                                    {formatDisplayDate(date, 'bn')}
                                                 </td>
                                                 <td className="py-2.5 px-3 font-mono font-bold text-emerald-deep">
-                                                    {log.punchTime
+                                                    {log?.punchTime
                                                         ? new Intl.DateTimeFormat('bn-BD', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Dhaka' }).format(new Date(log.punchTime))
                                                         : '—'}
                                                 </td>
@@ -649,19 +871,33 @@ export default function TeacherProfileDossier() {
                                                 <td className="py-2.5 px-3 text-center">
                                                     <Badge
                                                         variant={
-                                                            ['Present', 'Holiday_Duty', 'Official_Duty', 'Excused_Late'].includes(log.status)
+                                                            ['Present', 'Holiday Duty', 'Holiday_Duty', 'Official Duty', 'Official_Duty', 'Excused Late', 'Excused_Late'].includes(status)
                                                                 ? 'success'
-                                                                : log.status === 'Late'
+                                                                : status === 'Absent'
+                                                                    ? 'danger'
+                                                                    : status === 'Late'
                                                                     ? 'warning'
                                                                     : 'gold'
                                                         }
                                                         size="sm"
                                                     >
-                                                        {log.status || '—'}
+                                                        {status}
                                                     </Badge>
                                                 </td>
                                                 <td className="py-2.5 px-3 text-right font-mono font-bold">
-                                                    {Number(log.deductionWeight) > 0 ? `-${log.deductionWeight}` : '0.0'}
+                                                    {Number(log?.quotaDeduction ?? log?.deductionWeight) > 0
+                                                        ? `-${log.quotaDeduction ?? log.deductionWeight}`
+                                                        : '0.0'}
+                                                </td>
+                                                <td className="py-2.5 px-3 text-right no-print">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="xs"
+                                                        disabled={!canEditAttendance}
+                                                        onClick={() => selectAttendanceDateForEdit(date, status)}
+                                                    >
+                                                        <span className="font-bengali">এডিট</span>
+                                                    </Button>
                                                 </td>
                                             </tr>
                                         ))}
@@ -673,16 +909,16 @@ export default function TeacherProfileDossier() {
                 </div>
             )}
 
-            {/* TAB 3: SALARY & CASH VOUCHER HISTORY */}
+            {/* TAB 3: SAVED MONTHLY SALARY SHEETS */}
             {activeTab === 'PAYROLL' && (
                 <div className="ledger-surface p-6 bg-paper-panel animate-fade-up">
                     <div className="flex flex-wrap items-center justify-between gap-2 pb-4 mb-4 border-b border-ink-faint">
                         <div>
                             <h3 className="font-bengali text-base sm:text-lg font-bold text-emerald-deep">
-                                মাসিক বেতন ও ক্যাশ ভাউচার লেজার ({teacher.fullNameBng})
+                                সংরক্ষিত মাসিক বেতন শিট ({teacher.fullNameBng})
                             </h3>
                             <p className="font-bengali text-xs text-ink-soft">
-                                মূল বেতন: <b>{formatBDT(teacher.basicSalary, true)}</b> · প্রদানের মাধ্যম: <b>{teacher.paymentMethod || 'Cash'}</b>
+                                মূল বেতন: <b>{formatBDT(teacher.basicSalary, true)}</b>
                             </p>
                         </div>
                     </div>
@@ -691,21 +927,16 @@ export default function TeacherProfileDossier() {
                         <table className="w-full text-left border-collapse text-xs sm:text-[13px]">
                             <thead>
                                 <tr className="bg-paper-deep border-b border-ink-faint font-bengali text-emerald-deep">
-                                    <th className="py-3 px-3">ভাউচার নং</th>
                                     <th className="py-3 px-3">মাস ও বছর</th>
                                     <th className="py-3 px-3 text-right">মূল বেতন</th>
                                     <th className="py-3 px-3 text-center">কোটা ব্যবহার</th>
                                     <th className="py-3 px-3 text-right">কর্তন (Deduction)</th>
-                                    <th className="py-3 px-3 text-right">নিট প্রদেয় ক্যাশ</th>
-                                    <th className="py-3 px-3 text-right">রিসিট</th>
+                                    <th className="py-3 px-3 text-right">নিট বেতন</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-ink-faint">
                                 {salaryHistory.map((sal) => (
-                                    <tr key={sal.voucherNo} className="hover:bg-emerald-subtle/30">
-                                        <td className="py-3 px-3 font-mono font-bold text-emerald-deep">
-                                            {sal.voucherNo}
-                                        </td>
+                                    <tr key={sal.id} className="hover:bg-emerald-subtle/30">
                                         <td className="py-3 px-3 font-bengali font-semibold">
                                             {sal.monthBng}
                                         </td>
@@ -719,23 +950,13 @@ export default function TeacherProfileDossier() {
                                             {sal.deduction > 0 ? `-${formatBDT(sal.deduction, true)}` : '০ ৳'}
                                         </td>
                                         <td className="py-3 px-3 text-right font-bengali font-bold text-emerald-deep">
-                                            {formatBDT(sal.netPaid, true)}
-                                        </td>
-                                        <td className="py-3 px-3 text-right">
-                                            <Button
-                                                variant="outline"
-                                                size="xs"
-                                                leftIcon={Receipt}
-                                                onClick={() => setSelectedVoucher(sal)}
-                                            >
-                                                <span className="font-bengali">ক্যাশ ভাউচার</span>
-                                            </Button>
+                                            {formatBDT(sal.netSalary, true)}
                                         </td>
                                     </tr>
                                 ))}
                                 {salaryHistory.length === 0 && (
                                     <tr>
-                                        <td colSpan="7" className="py-6 px-3 text-center font-bengali text-ink-muted">
+                                        <td colSpan="5" className="py-6 px-3 text-center font-bengali text-ink-muted">
                                             এই শিক্ষকের কোনো বেতন শিট পাওয়া যায়নি।
                                         </td>
                                     </tr>
@@ -859,63 +1080,6 @@ export default function TeacherProfileDossier() {
                 />
             </Modal>
 
-            {/* প্রিন্টেবল ক্যাশ ভাউচার রিসিট মডাল */}
-            <Modal
-                isOpen={Boolean(selectedVoucher)}
-                onClose={() => setSelectedVoucher(null)}
-                size="md"
-                titleEng="Official Cash Salary Voucher"
-                titleBng="মাসিক বেতন পরিশোধের ক্যাশ ভাউচার"
-                footer={
-                    <>
-                        <Button variant="ghost" size="sm" onClick={() => setSelectedVoucher(null)}>
-                            <span className="font-bengali">বন্ধ করুন</span>
-                        </Button>
-                        <Button variant="gold" size="sm" leftIcon={Printer} onClick={() => window.print()}>
-                            <span className="font-bengali">ভাউচার প্রিন্ট করুন</span>
-                        </Button>
-                    </>
-                }
-            >
-                {selectedVoucher && (
-                    <div className="p-5 rounded-2xl bg-paper border-2 border-gold/50 space-y-3 text-xs sm:text-sm font-bengali">
-                        <div className="text-center pb-3 border-b border-ink-faint">
-                            <h4 className="font-serif text-lg font-bold text-emerald-deep">
-                                {INSTITUTION_INFO.nameEng}
-                            </h4>
-                            <p className="text-xs text-emerald font-bold">
-                                {INSTITUTION_INFO.nameBng} · ক্যাশ বেতন রসিদ ({selectedVoucher.monthBng})
-                            </p>
-                            <span className="font-mono text-[11px] text-ink-muted">
-                                Voucher No: {selectedVoucher.voucherNo}
-                            </span>
-                        </div>
-
-                        <div className="space-y-1.5">
-                            <div className="flex justify-between">
-                                <span className="text-ink-muted">প্রাপক শিক্ষকের নাম:</span>
-                                <b>{teacher.fullNameBng} (ID: {teacher.teacherCode})</b>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-ink-muted">পদবী:</span>
-                                <span>{rankMetrics.designationBng}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-ink-muted">মাসিক মূল বেতন:</span>
-                                <span>{formatBDT(selectedVoucher.basicSalary, true)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-ink-muted">কোটা অতিরিক্ত কর্তন:</span>
-                                <span className="text-danger">-{formatBDT(selectedVoucher.deduction, true)}</span>
-                            </div>
-                            <div className="flex justify-between pt-2 border-t border-ink-faint text-base font-bold text-emerald-deep">
-                                <span>সর্বমোট পরিশোধিত ক্যাশ:</span>
-                                <span>{formatBDT(selectedVoucher.netPaid, true)}</span>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </Modal>
         </div>
     );
 }

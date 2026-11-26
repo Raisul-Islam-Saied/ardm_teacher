@@ -43,15 +43,10 @@ export const erpService = {
         return res.data?.data;
     },
 
-    // ৩. মাসিক পে-রোল ও ক্যাশ ভাউচার এপিআই
+    // ৩. মাসিক পে-রোল শিট এপিআই
     getMonthlyPayrollSheet: async (year, month) => {
         const res = await axiosClient.get('/payroll/sheets', { params: { year, month } });
         return res.data?.data?.salaries || [];
-    },
-
-    disburseCashSalary: async (salaryId, payload) => {
-        const res = await axiosClient.patch(`/payroll/sheets/${salaryId}/pay`, payload);
-        return res.data?.data;
     },
 
     // ৪. সিস্টেম সেটিংস ও ছুটির নীতিমালা এপিআই

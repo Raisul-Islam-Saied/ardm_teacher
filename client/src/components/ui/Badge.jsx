@@ -1,6 +1,6 @@
 /**
  * ARDM Enterprise ERP — Semantic Status & Seniority Rank Badge
- * Used for Attendance Status (Present/Late/Leave/Absent), Payroll Status (Paid/Cash), and Rank (#1)
+ * Used for attendance status, payroll labels, and rank indicators.
  */
 
 import React from 'react';

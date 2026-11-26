@@ -1,8 +1,11 @@
 const moment = require('moment-timezone');
+const mongoose = require('mongoose');
 const Attendance = require('../models/Attendance');
+const AttendanceDay = require('../models/AttendanceDay');
 const SpecialDate = require('../models/SpecialDate');
 const Teacher = require('../models/Teacher');
 const SystemSettings = require('../models/SystemSettings');
+const Salary = require('../models/Salary');
 const {
     processBiometricPunch,
     parseAndSyncRawZKTecoLogs,
@@ -10,6 +13,10 @@ const {
     evaluatePunchStatus
 } = require('../services/attendance.service');
 const { ATTENDANCE_STATUS, ATTENDANCE_RULES } = require('../constants/system.constants');
+const {
+    calculateTeacherMonthlyPayroll,
+    isPayrollEditable
+} = require('../services/payroll.service');
 const ApiError = require('../utils/ApiError');
 const ApiResponse = require('../utils/ApiResponse');
 const asyncHandler = require('../utils/asyncHandler');
@@ -37,12 +44,29 @@ const setSpecialDateConfig = asyncHandler(async (req, res) => {
         record.appliedInTime = updatedEval.appliedInTime;
         record.status = updatedEval.status;
         record.deductionWeight = updatedEval.deductionWeight;
+        record.quotaDeduction = updatedEval.deductionWeight;
+        record.salaryDeduction = 0;
         record.directSalaryPenaltyDays = updatedEval.directSalaryPenaltyDays;
+        record.isAutoMarked = false;
         record.remarks = isHoliday
             ? updatedEval.remarks
             : `স্পেশাল ইন-টাইম (${customInTime}) অনুযায়ী পুনরায় সমন্বয়কৃত`;
         await record.save();
     }
+
+    await AttendanceDay.findOneAndUpdate(
+        { date },
+        {
+            $set: {
+                date,
+                dayType: isHoliday ? 'HOLIDAY' : 'OPEN_OVERRIDE',
+                reason: title || (isHoliday ? 'প্রাতিষ্ঠানিক ছুটি' : 'প্রাতিষ্ঠানিক কর্মদিবস'),
+                isAutoResolved: false,
+                updatedBy: req.user._id
+            }
+        },
+        { upsert: true, new: true }
+    );
 
     return res.status(200).json(
         new ApiResponse(
@@ -81,10 +105,25 @@ const deleteSpecialDate = asyncHandler(async (req, res) => {
         record.appliedInTime = evaluated.appliedInTime;
         record.status = evaluated.status;
         record.deductionWeight = evaluated.deductionWeight;
+        record.quotaDeduction = evaluated.deductionWeight;
+        record.salaryDeduction = 0;
         record.directSalaryPenaltyDays = evaluated.directSalaryPenaltyDays;
         record.remarks = evaluated.remarks;
         await record.save();
     }
+    await AttendanceDay.findOneAndUpdate(
+        { date: req.params.date },
+        {
+            $set: {
+                date: req.params.date,
+                dayType: 'OPEN_OVERRIDE',
+                reason: 'ছুটির ঘোষণা বাতিল করে খোলা কর্মদিবস করা হয়েছে',
+                isAutoResolved: false,
+                updatedBy: req.user._id
+            }
+        },
+        { upsert: true, new: true }
+    );
     return res.status(200).json(new ApiResponse(200, 'তারিখটি পুনরায় খোলা দিন হিসেবে ফিরিয়ে নেওয়া হয়েছে।', specialDate));
 });
 
@@ -95,7 +134,7 @@ const getDailyAttendance = asyncHandler(async (req, res) => {
     }
 
     const monthStartDate = moment.tz(date, 'YYYY-MM-DD', 'Asia/Dhaka').startOf('month').format('YYYY-MM-DD');
-    const [teachers, attendanceLogs, monthAttendanceLogs, specialDate, settings] = await Promise.all([
+    const [teachers, attendanceLogs, monthAttendanceLogs, specialDate, dayFlag, settings] = await Promise.all([
         Teacher.find({ isActive: true, registrationStatus: 'Approved' })
             .select('teacherCode fullNameBng fullNameEng designation biometricDeviceId customLeaveQuota')
             .sort({ teacherCode: 1 })
@@ -105,6 +144,7 @@ const getDailyAttendance = asyncHandler(async (req, res) => {
             .select('teacherId deductionWeight')
             .lean(),
         SpecialDate.findOne({ date }).lean(),
+        AttendanceDay.findOne({ date }).lean(),
         SystemSettings.getSettings()
     ]);
 
@@ -140,6 +180,7 @@ const getDailyAttendance = asyncHandler(async (req, res) => {
         isSpecialHoliday: Boolean(specialDate?.isHoliday),
         isOpenOverride: Boolean(specialDate && !specialDate.isHoliday),
         holidayTitle: specialDate?.title || '',
+        dayFlag: dayFlag || null,
         records
     }));
 });
@@ -272,17 +313,38 @@ const adminOverrideAttendance = asyncHandler(async (req, res) => {
     const teacher = await Teacher.findById(teacherId).lean();
     if (!teacher) throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
 
+    const targetMoment = moment.tz(date, 'YYYY-MM-DD', 'Asia/Dhaka');
+    const existingSalary = await Salary.findOne({
+        teacherId,
+        month: targetMoment.month() + 1,
+        year: targetMoment.year()
+    }).lean();
+    if (existingSalary && !isPayrollEditable(existingSalary)) {
+        throw new ApiError(403, 'বেতন শিট তৈরির ৩০ দিনের সংশোধন সময় শেষ হয়েছে; হাজিরা পরিবর্তন করা যাবে না।');
+    }
+
     let deductionWeight = 0;
     let directSalaryPenaltyDays = 0;
+    let quotaDeduction = 0;
+    let salaryDeduction = 0;
 
     if (status === ATTENDANCE_STATUS.LATE) {
         deductionWeight = ATTENDANCE_RULES.LATE_DEDUCTION_WEIGHT; // 0.5 কোটা কাটবে
+        quotaDeduction = ATTENDANCE_RULES.LATE_DEDUCTION_WEIGHT;
     } else if (status === ATTENDANCE_STATUS.LEAVE) {
         deductionWeight = ATTENDANCE_RULES.LEAVE_DEDUCTION_WEIGHT; // 1.0 কোটা কাটবে
+        quotaDeduction = ATTENDANCE_RULES.LEAVE_DEDUCTION_WEIGHT;
     } else if (status === ATTENDANCE_STATUS.ABSENT) {
         // বিনা অনুমতিতে অনুপস্থিত করলে কোটা কাটবে না, সরাসরি ১ দিনের বেতন কাটা যাবে!
         deductionWeight = 0;
+        quotaDeduction = 0;
+        salaryDeduction = ATTENDANCE_RULES.ABSENT_PENALTY_DAYS;
         directSalaryPenaltyDays = ATTENDANCE_RULES.ABSENT_PENALTY_DAYS; // 1.0 দিন সরাসরি বেতন কর্তন
+    } else if (status === ATTENDANCE_STATUS.OFFICIAL_DUTY) {
+        deductionWeight = 0;
+        quotaDeduction = 0;
+        salaryDeduction = 0;
+        directSalaryPenaltyDays = 0;
     }
 
     const updated = await Attendance.findOneAndUpdate(
@@ -293,11 +355,17 @@ const adminOverrideAttendance = asyncHandler(async (req, res) => {
                 biometricDeviceId: teacher.biometricDeviceId,
                 date,
                 status,
-                ...(punchTime ? { punchTime: new Date(punchTime) } : {}),
+                punchTime: [ATTENDANCE_STATUS.PRESENT, ATTENDANCE_STATUS.LATE, ATTENDANCE_STATUS.EXCUSED_LATE].includes(status) && punchTime
+                    ? new Date(punchTime)
+                    : null,
                 deductionWeight,
+                quotaDeduction,
+                salaryDeduction,
                 directSalaryPenaltyDays,
                 isLateExcused: status === ATTENDANCE_STATUS.EXCUSED_LATE,
                 isIgnored: false,
+                isAutoMarked: false,
+                isManuallyEdited: true,
                 source: 'Admin_Manual',
                 modifiedBy: req.user._id,
                 remarks: remarks || `অ্যাডমিন কর্তৃক স্ট্যাটাস '${status}' করা হয়েছে`
@@ -306,10 +374,235 @@ const adminOverrideAttendance = asyncHandler(async (req, res) => {
         { upsert: true, new: true, runValidators: true }
     );
 
-    return res.status(200).json(new ApiResponse(200, 'হাজিরা স্ট্যাটাস সফলভাবে আপডেট করা হয়েছে!', updated));
+    let payrollRecalculated = false;
+
+    if (existingSalary) {
+        const payrollResult = await calculateTeacherMonthlyPayroll({
+            teacher,
+            month: targetMoment.month() + 1,
+            year: targetMoment.year(),
+            basicSalaryOverride: existingSalary.basicSalarySnapshot,
+            includeBonus: existingSalary.includeBonus,
+            bonusPercentage: existingSalary.bonusPercentage,
+            bonusTitle: existingSalary.bonusTitle,
+            bonusAmountOverride: existingSalary.bonusAmount,
+            adjustmentMode: existingSalary.customAdjustment?.mode,
+            adjustmentValue: existingSalary.customAdjustment?.value,
+            adjustmentReason: existingSalary.customAdjustment?.reason,
+            extraAllowance: existingSalary.extraAllowance,
+            extraDeduction: existingSalary.extraDeduction,
+            adjustmentNote: existingSalary.adjustmentNote,
+            preparedOn: existingSalary.preparedOn,
+            generatedBy: req.user._id
+        });
+        payrollRecalculated = !payrollResult.skipped;
+    }
+
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            payrollRecalculated
+                ? 'হাজিরা আপডেট হয়েছে এবং সংশ্লিষ্ট মাসের বেতন পুনর্গণনা করা হয়েছে।'
+                    : 'হাজিরা স্ট্যাটাস সফলভাবে আপডেট করা হয়েছে!',
+            updated,
+            { payrollRecalculated }
+        )
+    );
 });
 
-// ৭. শিক্ষকের মাসিক সামারি (কোটা বনাম সরাসরি Absent পেনাল্টি আলাদা হিসাবসহ)
+// ৭. বাল্ক ম্যানুয়াল হাজিরা — তারিখের সক্রিয় শিক্ষক লিস্ট ও সেভ
+const getBulkAttendanceForDate = asyncHandler(async (req, res) => {
+    const date = req.query.date || moment.tz('Asia/Dhaka').format('YYYY-MM-DD');
+    if (!moment(date, 'YYYY-MM-DD', true).isValid()) {
+        throw new ApiError(400, 'তারিখ YYYY-MM-DD ফরম্যাটে হতে হবে।');
+    }
+
+    const targetMoment = moment.tz(date, 'YYYY-MM-DD', 'Asia/Dhaka');
+    const targetDateEnd = targetMoment.clone().endOf('day').toDate();
+    const [teachers, logs, dayFlag] = await Promise.all([
+        Teacher.find({
+            isActive: true,
+            registrationStatus: 'Approved',
+            joiningDate: { $lte: targetDateEnd },
+            $or: [
+                { resignationDate: null },
+                { resignationDate: { $exists: false } },
+                { resignationDate: { $gt: targetDateEnd } }
+            ]
+        }).select('_id teacherCode biometricDeviceId fullNameBng fullNameEng designation').sort({ teacherCode: 1 }).lean(),
+        Attendance.find({ date }).lean(),
+        AttendanceDay.findOne({ date }).lean()
+    ]);
+
+    const logMap = new Map(logs.map((log) => [String(log.teacherId), log]));
+    return res.status(200).json(new ApiResponse(200, 'বাল্ক হাজিরার তালিকা', {
+        date,
+        dayFlag: dayFlag || null,
+        records: teachers.map((teacher) => {
+            const log = logMap.get(String(teacher._id));
+            return {
+                teacher,
+                status: log?.status || null,
+                punchTime: log?.punchTime
+                    ? moment.tz(log.punchTime, 'Asia/Dhaka').format('YYYY-MM-DDTHH:mm')
+                    : '',
+                source: log?.source || null,
+                isManuallyEdited: Boolean(log?.isManuallyEdited),
+                remarks: log?.remarks || ''
+            };
+        })
+    }));
+});
+
+const saveBulkAttendanceForDate = asyncHandler(async (req, res) => {
+    const { date, records = [] } = req.body;
+    if (typeof date !== 'string' || !moment(date, 'YYYY-MM-DD', true).isValid()) {
+        throw new ApiError(400, 'সঠিক তারিখ প্রদান করুন।');
+    }
+    if (!Array.isArray(records)) {
+        throw new ApiError(400, 'হাজিরার তালিকা সঠিক নয়।');
+    }
+
+    const recordByTeacherId = new Map();
+    for (const record of records) {
+        if (!record || !mongoose.Types.ObjectId.isValid(record.teacherId)) {
+            throw new ApiError(400, 'বাল্ক হাজিরায় একটি ভুল শিক্ষক আইডি পাওয়া গেছে।');
+        }
+        const teacherId = String(record.teacherId);
+        if (recordByTeacherId.has(teacherId)) {
+            throw new ApiError(400, 'একই শিক্ষককে একাধিকবার বাল্ক হাজিরায় পাঠানো হয়েছে।');
+        }
+        if (!['Present', 'Late'].includes(record.status)) {
+            throw new ApiError(400, 'বাল্ক হাজিরার স্ট্যাটাস Present অথবা Late হতে হবে।');
+        }
+        recordByTeacherId.set(teacherId, record);
+    }
+
+    const targetMoment = moment.tz(date, 'YYYY-MM-DD', 'Asia/Dhaka');
+    const [activeTeachers, specialDate, settings] = await Promise.all([
+        Teacher.find({
+            isActive: true,
+            registrationStatus: 'Approved',
+            joiningDate: { $lte: targetMoment.clone().endOf('day').toDate() },
+            $or: [
+                { resignationDate: null },
+                { resignationDate: { $exists: false } },
+                { resignationDate: { $gt: targetMoment.clone().endOf('day').toDate() } }
+            ]
+        }).lean(),
+        SpecialDate.findOne({ date }).lean(),
+        SystemSettings.getSettings()
+    ]);
+
+    if (activeTeachers.length === 0) {
+        throw new ApiError(400, 'এই তারিখে কোনো সক্রিয় শিক্ষক নেই।');
+    }
+    const isConfiguredWeekend = (settings.attendancePolicy.weekendDays || [5]).includes(targetMoment.day()) && !specialDate;
+    if (specialDate?.isHoliday || isConfiguredWeekend) {
+        throw new ApiError(400, 'সাপ্তাহিক বা ঘোষিত ছুটির দিনে বাল্ক হাজিরা দেওয়া যাবে না। আগে দিনটিকে কর্মদিবস করুন।');
+    }
+
+    const activeTeacherIds = new Set(activeTeachers.map((teacher) => String(teacher._id)));
+    for (const teacherId of recordByTeacherId.keys()) {
+        if (!activeTeacherIds.has(teacherId)) {
+            throw new ApiError(400, 'বাল্ক হাজিরায় নিষ্ক্রিয় বা তারিখে কর্মরত নন এমন শিক্ষক আছেন।');
+        }
+    }
+
+    const bulkOps = [];
+    let presentCount = 0;
+    let lateCount = 0;
+    let leaveCount = 0;
+
+    for (const teacher of activeTeachers) {
+        const selected = recordByTeacherId.get(String(teacher._id));
+        let status = ATTENDANCE_STATUS.LEAVE;
+        let punchTime = null;
+        let deductionWeight = settings.attendancePolicy.leaveDeductionWeight;
+        let remarks = 'ম্যানুয়াল বাল্ক এন্ট্রি: পাঞ্চ সিলেক্ট হয়নি';
+
+        if (selected) {
+            const punchMoment = selected.punchTime
+                ? moment.tz(selected.punchTime, 'Asia/Dhaka')
+                : moment.tz(
+                    `${date}T${selected.status === 'Late' ? '09:30' : '08:55'}:00`,
+                    'Asia/Dhaka'
+                );
+            if (!punchMoment.isValid() || punchMoment.format('YYYY-MM-DD') !== date) {
+                throw new ApiError(400, 'বাল্ক হাজিরার প্রবেশ সময় নির্বাচিত তারিখের সঙ্গে মিলছে না।');
+            }
+            const evaluation = await evaluatePunchStatus(
+                punchMoment,
+                false,
+                null,
+                { specialConfig: specialDate, settings }
+            );
+            status = evaluation.status;
+            punchTime = punchMoment.toDate();
+            deductionWeight = evaluation.deductionWeight;
+            remarks = `ম্যানুয়াল বাল্ক এন্ট্রি: ${evaluation.remarks}`;
+        }
+
+        if (status === ATTENDANCE_STATUS.PRESENT || status === ATTENDANCE_STATUS.HOLIDAY_DUTY) {
+            presentCount += 1;
+        } else if (status === ATTENDANCE_STATUS.LATE) {
+            lateCount += 1;
+        } else {
+            leaveCount += 1;
+        }
+
+        bulkOps.push({
+            updateOne: {
+                filter: { teacherId: teacher._id, date },
+                update: {
+                    $set: {
+                        teacherId: teacher._id,
+                        biometricDeviceId: teacher.biometricDeviceId,
+                        date,
+                        punchTime,
+                        status,
+                        appliedInTime: specialDate?.customInTime || settings.attendancePolicy.defaultInTime,
+                        deductionWeight,
+                        quotaDeduction: deductionWeight,
+                        salaryDeduction: 0,
+                        directSalaryPenaltyDays: 0,
+                        isIgnored: false,
+                        isAutoMarked: false,
+                        isManuallyEdited: true,
+                        source: 'Admin_Bulk_Manual',
+                        modifiedBy: req.user._id,
+                        remarks: selected?.remarks || remarks
+                    }
+                },
+                upsert: true
+            }
+        });
+    }
+
+    await Attendance.bulkWrite(bulkOps);
+    await AttendanceDay.findOneAndUpdate(
+        { date },
+        {
+            $set: {
+                date,
+                dayType: 'WORKDAY',
+                reason: 'অ্যাডমিন ম্যানুয়াল বাল্ক হাজিরা এন্ট্রি',
+                isAutoResolved: false,
+                updatedBy: req.user._id
+            }
+        },
+        { upsert: true, new: true }
+    );
+
+    return res.status(200).json(new ApiResponse(200, 'বাল্ক হাজিরা সেভ হয়েছে', {
+        date,
+        present: presentCount,
+        late: lateCount,
+        leave: leaveCount
+    }));
+});
+
+// ৮. শিক্ষকের মাসিক সামারি (কোটা বনাম সরাসরি Absent পেনাল্টি আলাদা হিসাবসহ)
 const getTeacherMonthlySummary = asyncHandler(async (req, res) => {
     const targetTeacherId = (req.user.role === 'Teacher') ? req.user._id : (req.query.teacherId || req.user._id);
     const now = moment.tz('Asia/Dhaka');
@@ -418,6 +711,8 @@ module.exports = {
     uploadUsbAttendanceLogs,
     excuseTeacherLateOrDuty,
     adminOverrideAttendance,
+    getBulkAttendanceForDate,
+    saveBulkAttendanceForDate,
     getTeacherMonthlySummary,
     triggerEndOfDayAuditManually
 };

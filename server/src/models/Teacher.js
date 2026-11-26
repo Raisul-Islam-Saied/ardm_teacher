@@ -402,6 +402,13 @@ teacherSchema.index({ isActive: 1, registrationStatus: 1 });
 
 // ভ্যালিডেশনের আগে বাংলা পদবী, স্টাফ ক্যাটাগরি ও র‍্যাংকিং মেট্রিক্স হিসাব করা
 teacherSchema.pre('validate', function (next) {
+    if (this.assignedClass) {
+        this.assignedClass = this.assignedClass.replace(/\u09DF/g, '\u09AF\u09BC');
+    } else {
+        this.assignedClass = '';
+        this.canEditAssignedClass = false;
+    }
+
     if (
         this.registrationStatus === 'Approved'
         && this.isActive !== false

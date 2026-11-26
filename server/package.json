@@ -5,7 +5,11 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "migrate:attendance": "node migrate_attendance_schema.js",
+    "test:attendance": "node test_attendance_reconciliation.js",
+    "test:attendance:api": "node test_attendance_api_integration.js",
+    "test:payroll:email": "node test_payroll_email.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -24,7 +28,8 @@
     "mongoose": "^8.3.2",
     "morgan": "^1.10.0",
     "multer": "^2.5.0",
-    "node-cron": "^3.0.3"
+    "node-cron": "^3.0.3",
+    "nodemailer": "^10.6.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"

@@ -9,7 +9,7 @@ import Step3AddressContact, { validateStep3AddressContactData } from '@pages/pub
 import Step4PhotoReview from '@pages/public/registration/Step4PhotoReview';
 import { extractPureDigits, toEnglishDigits } from '@utils/formatters';
 import { ArrowLeft, ArrowRight, Check, Save } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 const ADDRESS_FIELDS = [
     'houseNameBn', 'houseNameEn', 'villageBn', 'villageEn', 'unionBn', 'unionEn', 'wardNo',
@@ -36,6 +36,14 @@ function normalizeEnglishName(val = '') {
     return clean
         .toLowerCase()
         .replace(/(^|[\s.'-])([a-z])/g, (_, sep, char) => sep + char.toUpperCase());
+}
+
+function normalizeAssignedClass(val = '') {
+    return String(val || '').replace(/\u09AF\u09BC/g, '\u09DF');
+}
+
+function toServerAssignedClass(val = '') {
+    return normalizeAssignedClass(val).replace(/\u09DF/g, '\u09AF\u09BC');
 }
 
 function dateInputValue(value) {
@@ -108,6 +116,7 @@ function mapTeacherToForm(teacher) {
 }
 
 function mapAdminFields(teacher) {
+    const assignedClass = normalizeAssignedClass(teacher.assignedClass);
     return {
         employmentType: teacher.employmentType || 'Non-MPO',
         resignationDate: dateInputValue(teacher.resignationDate),
@@ -115,7 +124,6 @@ function mapAdminFields(teacher) {
         basicSalary: String(teacher.basicSalary ?? 0),
         biometricDeviceId: String(teacher.biometricDeviceId ?? 1),
         customLeaveQuota: String(teacher.customLeaveQuota ?? 2),
-        paymentMethod: teacher.paymentMethod || 'Cash',
         bankDetails: {
             bankName: '',
             branchName: '',
@@ -124,8 +132,8 @@ function mapAdminFields(teacher) {
             routingNumber: '',
             ...(teacher.bankDetails || {})
         },
-        assignedClass: teacher.assignedClass || '',
-        canEditAssignedClass: Boolean(teacher.canEditAssignedClass),
+        assignedClass,
+        canEditAssignedClass: Boolean(assignedClass && teacher.canEditAssignedClass),
         role: teacher.role || 'Teacher',
         registrationStatus: teacher.registrationStatus || 'Approved',
         isActive: teacher.isActive !== false
@@ -206,6 +214,18 @@ export default function AdminTeacherProfileEditor({ teacher, onClose, onUpdated 
     const [touchedFields, setTouchedFields] = useState({});
     const [isSaving, setIsSaving] = useState(false);
 
+    useEffect(() => {
+        setFormData(mapTeacherToForm(teacher));
+        setAdminFields(mapAdminFields(teacher));
+        setPhotoData(teacher.profilePicture?.url ? {
+            dataUrl: teacher.profilePicture.url,
+            uploadedUrl: teacher.profilePicture.url,
+            uploadedPublicId: teacher.profilePicture.publicId || ''
+        } : null);
+        setActiveStep(0);
+        setStepErrors({});
+    }, [teacher]);
+
     const isReturningTeacher = teacher.isActive === false
         && !['Pending', 'Rejected'].includes(teacher.registrationStatus);
 
@@ -230,6 +250,34 @@ export default function AdminTeacherProfileEditor({ teacher, onClose, onUpdated 
             toast.error(extractFirstError(result.errors));
         }
         return result.valid;
+    };
+
+    const handleJumpToStep = (targetStep) => {
+        if (isSaving) return;
+
+        if (targetStep < activeStep) {
+            setActiveStep(targetStep);
+            setStepErrors({});
+            return;
+        }
+
+        if (targetStep > activeStep) {
+            for (let stepIndex = 0; stepIndex < targetStep; stepIndex += 1) {
+                const validator = EDIT_STEPS[stepIndex].validate;
+                if (!validator) continue;
+
+                const result = validator(formData);
+                if (!result.valid) {
+                    setActiveStep(stepIndex);
+                    setStepErrors(result.errors);
+                    toast.error(`ধাপ ${stepIndex + 1}: ${extractFirstError(result.errors)}`);
+                    return;
+                }
+            }
+        }
+
+        setActiveStep(targetStep);
+        setStepErrors({});
     };
 
     const handleNext = () => {
@@ -319,11 +367,10 @@ export default function AdminTeacherProfileEditor({ teacher, onClose, onUpdated 
             basicSalary,
             biometricDeviceId,
             customLeaveQuota,
-            paymentMethod: adminFields.paymentMethod,
             bankDetails: Object.fromEntries(
                 Object.entries(adminFields.bankDetails || {}).map(([k, v]) => [k, String(v || '').trim()])
             ),
-            assignedClass: adminFields.assignedClass || '',
+            assignedClass: toServerAssignedClass(adminFields.assignedClass),
             canEditAssignedClass: Boolean(adminFields.assignedClass && adminFields.canEditAssignedClass),
             role: adminFields.role,
             registrationStatus: adminFields.registrationStatus,
@@ -333,7 +380,13 @@ export default function AdminTeacherProfileEditor({ teacher, onClose, onUpdated 
         setIsSaving(true);
         try {
             const response = await axiosClient.patch(`/teachers/${teacher._id}`, payload);
-            let updatedTeacher = response.data?.data?.teacher || response.data?.data || teacher;
+            const responseTeacher = response.data?.data?.teacher || response.data?.data;
+            let updatedTeacher = {
+                ...teacher,
+                ...(responseTeacher && typeof responseTeacher === 'object' ? responseTeacher : {}),
+                assignedClass: normalizeAssignedClass(payload.assignedClass),
+                canEditAssignedClass: Boolean(payload.assignedClass && payload.canEditAssignedClass)
+            };
             onUpdated(updatedTeacher);
 
             if (photoData?.blob) {
@@ -388,9 +441,19 @@ export default function AdminTeacherProfileEditor({ teacher, onClose, onUpdated 
                         </Button>
                     )}
                     {activeStep < EDIT_STEPS.length - 1 ? (
-                        <Button variant="emerald" size="sm" rightIcon={ArrowRight} onClick={handleNext} disabled={isSaving}>
-                            <span className="font-bengali">পরের ধাপ</span>
-                        </Button>
+                        <>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleJumpToStep(EDIT_STEPS.length - 1)}
+                                disabled={isSaving}
+                            >
+                                <span className="font-bengali">শেষ ধাপে যান</span>
+                            </Button>
+                            <Button variant="emerald" size="sm" rightIcon={ArrowRight} onClick={handleNext} disabled={isSaving}>
+                                <span className="font-bengali">পরের ধাপ</span>
+                            </Button>
+                        </>
                     ) : (
                         <Button variant="gold" size="sm" leftIcon={Save} isLoading={isSaving} loadingText="সংরক্ষণ হচ্ছে..." onClick={handleSave}>
                             <span className="font-bengali">সব তথ্য সংরক্ষণ করুন</span>
@@ -405,15 +468,7 @@ export default function AdminTeacherProfileEditor({ teacher, onClose, onUpdated 
                         key={step.title}
                         type="button"
                         disabled={isSaving}
-                        onClick={() => {
-                            if (
-                                index <= activeStep
-                                || (index === activeStep + 1 && validateActiveStep())
-                            ) {
-                                setActiveStep(index);
-                                setStepErrors({});
-                            }
-                        }}
+                        onClick={() => handleJumpToStep(index)}
                         className={`rounded-lg px-3 py-2 text-xs font-bengali disabled:opacity-50 ${index === activeStep ? 'bg-emerald text-white' : 'bg-paper-deep text-ink-soft hover:text-emerald-deep'}`}
                     >
                         {index < activeStep ? <Check className="mr-1 inline h-3.5 w-3.5" /> : null}
@@ -450,7 +505,6 @@ export default function AdminTeacherProfileEditor({ teacher, onClose, onUpdated 
                         <FormInput labelEng="Monthly Basic Salary (BDT)" labelBng="মাসিক মূল বেতন (টাকা)" inputMode="decimal" isMonoText variant="erp" value={adminFields.basicSalary} error={stepErrors.basicSalary} onChange={(event) => updateAdminField('basicSalary', event.target.value)} required />
                         <FormInput labelEng="Biometric Device ID" labelBng="বায়োমেট্রিক ডিভাইস আইডি" inputMode="numeric" isMonoText variant="erp" value={adminFields.biometricDeviceId} error={stepErrors.biometricDeviceId} onChange={(event) => updateAdminField('biometricDeviceId', extractPureDigits(event.target.value))} required />
                         <FormInput labelEng="Monthly Leave Quota" labelBng="মাসিক ছুটির কোটা" inputMode="decimal" isMonoText variant="erp" value={adminFields.customLeaveQuota} error={stepErrors.customLeaveQuota} onChange={(event) => updateAdminField('customLeaveQuota', event.target.value)} required />
-                        <FormSelect labelEng="Payment Method" labelBng="পেমেন্ট পদ্ধতি" variant="erp" value={adminFields.paymentMethod} onChange={(event) => updateAdminField('paymentMethod', event.target.value)} options={['Cash', 'Bank', 'Mobile Banking']} />
                         {[
                             ['bankName', 'Bank Name', 'ব্যাংকের নাম'],
                             ['branchName', 'Branch Name', 'শাখা'],

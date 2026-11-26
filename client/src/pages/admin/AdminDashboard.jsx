@@ -92,8 +92,7 @@ export default function AdminDashboard() {
     const [approvalForm, setApprovalForm] = useState({
         basicSalary: '',
         biometricDeviceId: '',
-        customLeaveQuota: '2.0',
-        paymentMethod: 'Cash'
+        customLeaveQuota: '2.0'
     });
     const [isApproving, setIsApproving] = useState(false);
 
@@ -172,8 +171,7 @@ export default function AdminDashboard() {
         setApprovalForm({
             basicSalary: teacherItem.suggestedBasicSalary || '',
             biometricDeviceId: String(teacherItem.suggestedBiometricId || ''),
-            customLeaveQuota: '2.0',
-            paymentMethod: 'Cash'
+            customLeaveQuota: '2.0'
         });
     };
 
@@ -198,8 +196,7 @@ export default function AdminDashboard() {
             await axiosClient.patch(`/teachers/${selectedPendingTeacher._id}/approve`, {
                 basicSalary: cleanSalary,
                 biometricDeviceId: cleanBioId,
-                customLeaveQuota: Number(approvalForm.customLeaveQuota),
-                paymentMethod: approvalForm.paymentMethod
+                customLeaveQuota: Number(approvalForm.customLeaveQuota)
             });
 
             // লোকাল ড্যাশবোর্ড স্টেট সাথে সাথে আপডেট করা
@@ -389,7 +386,7 @@ export default function AdminDashboard() {
                     </div>
                 </div>
 
-                {/* KPI 4: চলতি মাসের ক্যাশ পে-রোল */}
+                {/* KPI 4: চলতি মাসের সংরক্ষিত পে-রোল */}
                 <div
                     onClick={() => navigate('/admin/payroll')}
                     className="ledger-surface p-5 bg-paper-panel hover:border-gold cursor-pointer transition-all group flex flex-col justify-between"
@@ -397,7 +394,7 @@ export default function AdminDashboard() {
                     <div className="flex items-start justify-between gap-3">
                         <div>
                             <span className="font-mono text-[10px] uppercase tracking-wider text-ink-muted block">
-                                Monthly Cash Ledger
+                                Monthly Payroll Sheet
                             </span>
                             <h3 className="font-bengali text-sm font-bold text-emerald-deep mt-0.5">
                                 চলতি মাসের পে-রোল বাজেট
@@ -413,7 +410,7 @@ export default function AdminDashboard() {
                             {formatBDT(stats.monthlyPayrollNum, true)}
                         </span>
                         <Badge variant="gold" size="sm">
-                            Cash Voucher
+                            সংরক্ষিত শিট
                         </Badge>
                     </div>
                 </div>
@@ -434,7 +431,7 @@ export default function AdminDashboard() {
                             <h2 className="font-bengali text-base sm:text-lg font-bold text-emerald-deep">
                                 {chartTab === 'ATTENDANCE'
                                     ? 'সাপ্তাহিক বায়োমেট্রিক হাজিরা বিশ্লেষণ (শনি – বৃহস্পতি)'
-                                    : 'মাসভিত্তিক ক্যাশ বেতন ও কোটা কর্তন প্রবাহ (৬ মাস)'}
+                                    : 'মাসভিত্তিক বেতন ও কোটা কর্তন প্রবাহ (৬ মাস)'}
                             </h2>
                         </div>
 
@@ -523,8 +520,8 @@ export default function AdminDashboard() {
                                     />
                                     <Area
                                         type="monotone"
-                                        dataKey="netPaid"
-                                        name="নিট ক্যাশ বেতন (৳)"
+                                        dataKey="netPayroll"
+                                        name="নিট মাসিক বেতন (৳)"
                                         stroke="#0E3B2E"
                                         fill="#0E3B2E"
                                         fillOpacity={0.18}
@@ -864,24 +861,6 @@ export default function AdminDashboard() {
                                 isMonoText
                             />
 
-                            <FormSelect
-                                labelEng="Payment Method"
-                                labelBng="বেতন প্রদানের মাধ্যম"
-                                variant="erp"
-                                value={approvalForm.paymentMethod}
-                                onChange={(e) =>
-                                    setApprovalForm((prev) => ({
-                                        ...prev,
-                                        paymentMethod: e.target.value
-                                    }))
-                                }
-                                options={[
-                                    { value: 'Cash', label: 'নগদ ক্যাশ ভাউচার (Cash Payment)' },
-                                    { value: 'Bank', label: 'ব্যাংক ট্রান্সফার (Bank Account)' },
-                                    { value: 'Mobile Banking', label: 'মোবাইল ব্যাংকিং (bKash / Nagad)' }
-                                ]}
-                                placeholder={false}
-                            />
                         </div>
                     </div>
                 )}

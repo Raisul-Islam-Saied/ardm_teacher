@@ -48,8 +48,7 @@ export default function PendingApprovals() {
             await axiosClient.patch(`/teachers/${activeApplicant._id}/approve`, {
                 basicSalary,
                 biometricDeviceId,
-                customLeaveQuota: Number(activeApplicant.customLeaveQuota ?? 2),
-                paymentMethod: activeApplicant.paymentMethod || 'Cash'
+                customLeaveQuota: Number(activeApplicant.customLeaveQuota ?? 2)
             });
             setApplicants((prev) => prev.filter((item) => item._id !== activeApplicant._id));
             toast.success(`${activeApplicant.fullNameBng}-এর নিবন্ধন অনুমোদিত হয়েছে।`);

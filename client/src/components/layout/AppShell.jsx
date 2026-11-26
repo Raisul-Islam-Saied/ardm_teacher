@@ -7,12 +7,13 @@
  * - MobileBottomNav (Fixed bottom bar + slide-over drawer for mobile)
  */
 
-import React, { useState } from 'react';
+import React, { Suspense, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { INSTITUTION_INFO, STORAGE_KEYS } from '@constants/app.constants';
 import DesktopSidebar from './DesktopSidebar';
 import TopHeaderBar from './TopHeaderBar';
 import MobileBottomNav from './MobileBottomNav';
+import PageLoadingSkeleton from './PageLoadingSkeleton';
 
 export default function AppShell({ children }) {
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
@@ -54,7 +55,9 @@ export default function AppShell({ children }) {
                 <TopHeaderBar onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)} />
 
                 <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1440px] w-full mx-auto">
-                    {children || <Outlet />}
+                    <Suspense fallback={<PageLoadingSkeleton />}>
+                        {children || <Outlet />}
+                    </Suspense>
                 </main>
 
                 <footer className="py-4 px-6 border-t border-ink-faint text-center font-bengali text-xs text-ink-muted no-print">

@@ -1,0 +1,599 @@
+.document-container {
+    width: 100%;
+    max-width: 1024px;
+    min-height: auto;
+    margin: 2rem auto;
+    padding: 1.5cm;
+    position: relative;
+    border-radius: 4px;
+    background: #fff;
+    color: #111827;
+    font-family: Inter, Arial, sans-serif;
+}
+
+.salary-period-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    color: #1f2937;
+    font-weight: 600;
+}
+
+#main-table {
+    width: 100%;
+    margin-top: 10px;
+    border-collapse: collapse;
+}
+
+#main-table th,
+#main-table td {
+    border: 1px solid #1f2937;
+    padding: 8px 10px;
+    color: #111827;
+    font-size: 20px;
+}
+
+#main-table th {
+    background: #f3f4f6;
+    font-weight: 700;
+}
+
+#main-table.attendance-table th,
+#main-table.attendance-table td {
+    padding: 6px 4px;
+    font-size: 15px;
+    line-height: 1.2;
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+
+#main-table.attendance-table {
+    table-layout: fixed;
+}
+
+#main-table.attendance-table .name-col {
+    text-align: left;
+}
+
+#main-table.attendance-table tfoot td {
+    background: #f3f4f6;
+    font-weight: 700;
+}
+
+#main-table .name-col {
+    white-space: normal;
+    font-weight: 500;
+}
+
+#main-table .desig-sub {
+    display: block;
+    color: #4b5563;
+    font-size: 15px;
+    font-weight: 400;
+    white-space: normal;
+}
+
+#main-table input[type="number"] {
+    width: 100%;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: #111827;
+    font-family: inherit;
+    font-size: inherit;
+    text-align: right;
+}
+
+#main-table input[type="number"]::-webkit-outer-spin-button,
+#main-table input[type="number"]::-webkit-inner-spin-button {
+    margin: 0;
+    -webkit-appearance: none;
+}
+
+#main-table input[type="number"] {
+    -moz-appearance: textfield;
+}
+
+#main-table .adjust-col .adjust-display {
+    display: inline-block;
+    width: 100%;
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-weight: 700;
+    text-align: right;
+    cursor: pointer;
+}
+
+#main-table .adjust-display.is-plus {
+    color: #16a34a;
+}
+
+#main-table .adjust-display.is-minus {
+    color: #dc2626;
+}
+
+#main-table .adjust-display.is-empty {
+    color: #94a3b8;
+    font-weight: 400;
+}
+
+.bonus-col {
+    display: none;
+}
+
+#main-table.show-bonus .bonus-col {
+    display: table-cell;
+}
+
+#main-table .bonus-input {
+    color: #16a34a;
+    font-weight: 700;
+}
+
+.signature-col,
+.signature-block {
+    display: none;
+}
+
+.absent-print-display,
+.prepared-print-display {
+    display: none;
+}
+
+.print-title-row {
+    margin-bottom: 14px;
+}
+
+.input-cell {
+    background: #f8fafc;
+    transition: background-color 0.2s, box-shadow 0.2s;
+}
+
+.input-cell:focus-within {
+    background: #e0f2fe;
+    box-shadow: inset 0 0 0 1px #3b82f6;
+}
+
+.inline-input {
+    display: inline-block;
+    min-width: 120px;
+    padding: 0 4px;
+    border: 0;
+    border-bottom: 1px dashed #64748b;
+    outline: 0;
+    background: transparent;
+    color: inherit;
+    font-family: inherit;
+    font-size: inherit;
+    transition: background-color 0.2s;
+}
+
+.inline-input:focus {
+    background: #e0f2fe;
+}
+
+.prepared-datetime {
+    width: 220px;
+    text-align: left;
+}
+
+#single-adjust-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 110;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgb(15 23 42 / 60%);
+}
+
+#single-adjust-modal.open {
+    display: flex;
+}
+
+#single-adjust-box {
+    width: 100%;
+    max-width: 360px;
+    padding: 20px;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 10px 30px rgb(0 0 0 / 25%);
+}
+
+#single-adjust-box select,
+#single-adjust-box input[type="number"] {
+    width: 100%;
+    margin-top: 4px;
+    margin-bottom: 12px;
+    padding: 8px 10px;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 14px;
+    text-align: left;
+}
+
+#single-adjust-box label {
+    color: #475569;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+#adj-panel {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    padding: 12px 18px;
+    border: 1.5px solid #86efac;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #f0fdf4 0%, #f0f9ff 100%);
+    box-shadow: 0 1px 6px rgb(16 185 129 / 10%);
+}
+
+#adj-panel label {
+    color: #166534;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+#adj-panel select,
+#adj-panel input[type="number"] {
+    min-width: 80px;
+    padding: 5px 10px;
+    border: 1.5px solid #86efac;
+    border-radius: 6px;
+    outline: 0;
+    background: #fff;
+    color: #14532d;
+    font-size: 13px;
+    font-weight: 600;
+    -moz-appearance: textfield;
+}
+
+#adj-panel select {
+    cursor: pointer;
+}
+
+#adj-panel input[type="number"]::-webkit-outer-spin-button,
+#adj-panel input[type="number"]::-webkit-inner-spin-button {
+    margin: 0;
+    -webkit-appearance: none;
+}
+
+#adj-btn {
+    padding: 6px 20px;
+    border: 0;
+    border-radius: 6px;
+    background: linear-gradient(90deg, #16a34a, #0ea5e9);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.15s;
+    white-space: nowrap;
+}
+
+#adj-btn:hover {
+    opacity: 0.88;
+    transform: scale(1.03);
+}
+
+#adj-reset-btn {
+    padding: 6px 14px;
+    border: 1.5px solid #fca5a5;
+    border-radius: 6px;
+    background: #fff;
+    color: #dc2626;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    white-space: nowrap;
+}
+
+#adj-reset-btn:hover {
+    background: #fef2f2;
+}
+
+#adj-status {
+    min-width: 80px;
+    color: #15803d;
+    font-size: 12px;
+    font-weight: 600;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+#adj-status.is-visible {
+    opacity: 1;
+}
+
+.adj-divider {
+    width: 1px;
+    height: 28px;
+    margin: 0 2px;
+    background: #bbf7d0;
+}
+
+.attendance-detail-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-top: 20px;
+    padding: 12px 14px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #f8fafc;
+    color: #475569;
+    font-size: 13px;
+}
+
+.attendance-detail-toggle,
+.attendance-details-error button {
+    padding: 8px 14px;
+    border: 0;
+    border-radius: 6px;
+    background: #1d4ed8;
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.attendance-details {
+    margin-top: 16px;
+}
+
+.attendance-details-title {
+    margin: 0 0 12px;
+    font-size: 18px;
+    font-weight: 700;
+    text-align: center;
+}
+
+.attendance-detail-teacher {
+    margin-bottom: 12px;
+    padding: 12px;
+    border: 1px solid #94a3b8;
+    border-radius: 6px;
+    break-inside: avoid;
+    page-break-inside: avoid;
+}
+
+.attendance-detail-teacher h4 {
+    margin: 0 0 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #cbd5e1;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.attendance-detail-categories {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.attendance-detail-category strong {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 13px;
+}
+
+.attendance-detail-category ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.attendance-detail-category li {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 2px 8px;
+    padding: 3px 0;
+    border-bottom: 1px dotted #cbd5e1;
+    font-size: 12px;
+}
+
+.attendance-detail-category p,
+.attendance-detail-time,
+.attendance-detail-status,
+.attendance-details-message {
+    margin: 0;
+    color: #475569;
+    font-size: 12px;
+}
+
+.attendance-detail-status {
+    font-style: italic;
+}
+
+.attendance-details-error {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid #fca5a5;
+    border-radius: 6px;
+    background: #fef2f2;
+    color: #b91c1c;
+}
+
+@page {
+    size: A4 portrait;
+    margin-top: 4.72cm;
+    margin-right: 1.5cm;
+    margin-bottom: 2.3cm;
+    margin-left: 1.5cm;
+}
+
+@media screen {
+    #main-table .adjust-col .adjust-display:hover {
+        background: #e0f2fe;
+    }
+
+    .signature-col {
+        display: none;
+    }
+
+    .signature-block {
+        display: none !important;
+    }
+
+    @media (max-width: 640px) {
+        .attendance-detail-categories {
+            grid-template-columns: 1fr;
+        }
+    }
+}
+
+@media print {
+    body {
+        min-width: auto;
+        margin: 0;
+        padding: 0;
+        background: transparent !important;
+    }
+
+    body * {
+        visibility: hidden !important;
+    }
+
+    #salary-print-root,
+    #salary-print-root * {
+        visibility: visible !important;
+    }
+
+    .document-container {
+        position: absolute !important;
+        top: 0;
+        left: 0;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+    }
+
+    .overflow-hidden,
+    .overflow-auto,
+    .overflow-y-auto,
+    .overflow-x-auto {
+        overflow: visible !important;
+    }
+
+    .no-print {
+        display: none !important;
+    }
+
+    .attendance-detail-teacher {
+        border-color: #000 !important;
+    }
+
+    .attendance-detail-teacher h4,
+    .attendance-detail-category li {
+        border-color: #666 !important;
+    }
+
+    #main-table th {
+        background: transparent !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    #main-table th,
+    #main-table td {
+        border: 1px solid #000 !important;
+        font-size: 14px !important;
+    }
+
+    #main-table.attendance-table th,
+    #main-table.attendance-table td {
+        padding: 5px 3px !important;
+        font-size: 11px !important;
+    }
+
+    #main-table.attendance-table tfoot td {
+        background: transparent !important;
+    }
+
+    #main-table .input-cell {
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+
+    .inline-input {
+        padding: 0 0 0 5px !important;
+        border-bottom: 0 !important;
+    }
+
+    .prepared-datetime,
+    .absent-input {
+        display: none !important;
+    }
+
+    .prepared-print-display {
+        display: inline-block !important;
+        min-width: 120px;
+        padding-left: 5px;
+    }
+
+    .absent-print-display {
+        display: inline-block !important;
+        width: 100%;
+        text-align: center;
+    }
+
+    #main-table.hide-absent-print .absent-col {
+        display: none !important;
+    }
+
+    #main-table .adjust-col {
+        display: none !important;
+    }
+
+    #main-table.show-adjust .adjust-col {
+        display: table-cell !important;
+    }
+
+    .signature-col {
+        display: table-cell !important;
+    }
+
+    #main-table thead {
+        display: table-header-group;
+    }
+
+    #main-table tr {
+        page-break-inside: avoid;
+        break-inside: avoid;
+    }
+
+    #main-table .desig-sub {
+        font-size: 11px !important;
+    }
+
+    #main-table:not(.show-bonus):not(.show-adjust) th:nth-child(2),
+    #main-table:not(.show-bonus):not(.show-adjust) td.name-col {
+        width: 24% !important;
+    }
+
+    #footer-block {
+        page-break-inside: avoid;
+        break-inside: avoid;
+    }
+
+    .signature-block {
+        display: flex !important;
+        justify-content: space-between;
+        margin-top: 90px;
+        text-align: center;
+    }
+}

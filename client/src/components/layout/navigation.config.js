@@ -57,8 +57,8 @@ export const ADMIN_NAV_ITEMS = Object.freeze([
     {
         key: 'admin-payroll',
         path: '/admin/payroll',
-        labelBng: 'বেতন ও ক্যাশ ভাউচার',
-        labelEng: 'Payroll & Cash Ledger',
+        labelBng: 'মাসিক বেতন শিট',
+        labelEng: 'Monthly Payroll',
         icon: Banknote,
         badge: '2.0 Quota',
         mobileTab: true

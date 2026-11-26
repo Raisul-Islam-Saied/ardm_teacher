@@ -21,7 +21,8 @@ import {
     SlidersHorizontal,
     Sun,
     AlertTriangle,
-    Search
+    Search,
+    Upload
 } from 'lucide-react';
 import { INSTITUTION_INFO } from '@constants/app.constants';
 import {
@@ -99,7 +100,8 @@ export default function AttendanceManagement() {
         isHoliday: false,
         isSpecialHoliday: false,
         isOpenOverride: false,
-        holidayTitle: ''
+        holidayTitle: '',
+        dayFlag: null
     });
 
     // ম্যানুয়াল ওভাররাইড মডাল স্টেট
@@ -109,6 +111,10 @@ export default function AttendanceManagement() {
         inTime24: '08:55',
         remarks: ''
     });
+    const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+    const [bulkRows, setBulkRows] = useState([]);
+    const [isBulkSaving, setIsBulkSaving] = useState(false);
+    const [usbSummary, setUsbSummary] = useState(null);
 
     const isSelectedHoliday = dayHolidayState.isHoliday;
 
@@ -125,7 +131,8 @@ export default function AttendanceManagement() {
                 isHoliday: Boolean(res?.data?.data?.isHoliday),
                 isSpecialHoliday: Boolean(res?.data?.data?.isSpecialHoliday),
                 isOpenOverride: Boolean(res?.data?.data?.isOpenOverride),
-                holidayTitle: res?.data?.data?.holidayTitle || ''
+                holidayTitle: res?.data?.data?.holidayTitle || '',
+                dayFlag: res?.data?.data?.dayFlag || null
             });
             setRows(serverRecords.map((rec) => {
                 const teacher = rec.teacher || {};
@@ -177,6 +184,74 @@ export default function AttendanceManagement() {
     };
 
     // অ্যাডমিন ম্যানুয়াল ওভাররাইড সংরক্ষণ
+    const openBulkAttendance = async () => {
+        try {
+            const res = await axiosClient.get('/attendance/bulk', { params: { date: selectedDate } });
+            const records = res?.data?.data?.records;
+            if (!Array.isArray(records)) throw new Error('বাল্ক হাজিরার তালিকা পাওয়া যায়নি।');
+            setBulkRows(records.map((record) => ({
+                teacherId: record.teacher?._id,
+                teacherCode: record.teacher?.teacherCode || '',
+                fullNameBng: record.teacher?.fullNameBng || '',
+                biometricDeviceId: record.teacher?.biometricDeviceId || '',
+                presentChecked: ['Present', 'Late'].includes(record.status),
+                status: record.status === 'Late' ? 'Late' : 'Present',
+                punchTime: record.punchTime || ''
+            })));
+            setIsBulkModalOpen(true);
+        } catch (error) {
+            toast.error(extractApiErrorMessage(error, 'বাল্ক হাজিরার তালিকা লোড করা যায়নি।'));
+        }
+    };
+
+    const saveBulkAttendance = async () => {
+        setIsBulkSaving(true);
+        try {
+            const payloadRecords = bulkRows
+                .filter((row) => row.presentChecked)
+                .map((row) => ({
+                    teacherId: row.teacherId,
+                    status: row.status,
+                    punchTime: row.punchTime
+                        ? new Date(row.punchTime).toISOString()
+                        : undefined,
+                    remarks: ''
+                }));
+            await axiosClient.put('/attendance/bulk', {
+                date: selectedDate,
+                records: payloadRecords
+            });
+            await loadAttendanceForDate(selectedDate, false);
+            setIsBulkModalOpen(false);
+            toast.success('বাল্ক হাজিরা সেভ হয়েছে। সিলেক্ট না করা শিক্ষক Leave হিসেবে সংরক্ষিত হয়েছে।');
+        } catch (error) {
+            toast.error(extractApiErrorMessage(error, 'বাল্ক হাজিরা সেভ করা যায়নি।'));
+        } finally {
+            setIsBulkSaving(false);
+        }
+    };
+
+    const handleUsbUpload = async (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        setIsSyncing(true);
+        try {
+            const form = new FormData();
+            form.append('file', file);
+            const res = await axiosClient.post('/attendance/upload-usb-logs', form, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            setUsbSummary(res.data?.data || null);
+            await loadAttendanceForDate(selectedDate, false);
+            toast.success('USB/pendrive ডেটা Smart Merge সম্পন্ন হয়েছে।');
+        } catch (error) {
+            toast.error(extractApiErrorMessage(error, 'USB ডেটা ইম্পোর্ট করা যায়নি।'));
+        } finally {
+            setIsSyncing(false);
+            event.target.value = '';
+        }
+    };
+
     const handleSaveManualOverride = async () => {
         if (!overrideRow) return;
         const newStatus = overrideForm.status;
@@ -211,7 +286,9 @@ export default function AttendanceManagement() {
         try {
             await axiosClient.post('/attendance/special-date', {
                 date: selectedDate,
-                title: 'প্রাতিষ্ঠানিক ছুটি',
+                title: dayHolidayState.dayFlag?.dayType === 'MACHINE_OFF'
+                    ? 'মেশিন বন্ধ / অনির্ধারিত ছুটি'
+                    : 'প্রাতিষ্ঠানিক ছুটি',
                 isHoliday: true
             });
             await loadAttendanceForDate(selectedDate, false);
@@ -294,7 +371,7 @@ export default function AttendanceManagement() {
                             দৈনিক বায়োমেট্রিক হাজিরা ও কোটা লেজার
                         </h1>
                         <p className="font-bengali text-xs text-ink-soft">
-                            তারিখ: <b>{formatDisplayDate(selectedDate, 'bn')}</b> · সকাল ৯:০০টার পর পাঞ্চ করলে স্বয়ংক্রিয়ভাবে <b>০.৫ কোটা (Late)</b> গণনা হয়।
+                            তারিখ: <b>{formatDisplayDate(selectedDate, 'bn')}</b> · পাঞ্চ না পাওয়া গেলে স্বয়ংক্রিয়ভাবে <b>ছুটি (Leave)</b> দেখাবে; প্রশাসক প্রমাণের ভিত্তিতে পরে <b>অনুপস্থিত (Absent)</b> পরিবর্তন করবেন।
                         </p>
                     </div>
                 </div>
@@ -318,9 +395,40 @@ export default function AttendanceManagement() {
                     >
                         <span className="font-bengali">A4 শিট প্রিন্ট</span>
                     </Button>
+                    <Button
+                        variant="emerald"
+                        size="sm"
+                        leftIcon={Fingerprint}
+                        onClick={openBulkAttendance}
+                    >
+                        <span className="font-bengali">ম্যানুয়াল বাল্ক এন্ট্রি</span>
+                    </Button>
+                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-gold/50 bg-gold-subtle px-3 py-2.5 text-xs font-bengali font-bold text-emerald-deep">
+                        <Upload className="h-4 w-4" />
+                        USB ডেটা ইম্পোর্ট
+                        <input
+                            type="file"
+                            accept=".dat,.txt,.csv"
+                            className="hidden"
+                            onChange={handleUsbUpload}
+                        />
+                    </label>
 
                 </div>
             </section>
+
+            {usbSummary && (
+                <section className="ledger-surface p-4 bg-emerald-subtle/30 border-emerald/20">
+                    <div className="flex flex-wrap items-center gap-3 font-bengali text-sm">
+                        <strong className="text-emerald-deep">USB Smart Merge সম্পন্ন:</strong>
+                        <span>নতুন ডেটা: <b>{toBengaliDigits(usbSummary.newlySyncedPunches || 0)}</b></span>
+                        <span>স্কিপ: <b>{toBengaliDigits(usbSummary.skippedOrDuplicateLines || 0)}</b></span>
+                        {usbSummary.affectedDates?.length > 0 && (
+                            <span>প্রভাবিত তারিখ: <b>{usbSummary.affectedDates.join(', ')}</b></span>
+                        )}
+                    </div>
+                </section>
+            )}
 
             {/* =================================================================
                 2. DATE PICKER, FRIDAY ALERT & SUMMARY PILLS
@@ -374,6 +482,16 @@ export default function AttendanceManagement() {
                                     </Button>
                                 )}
                             </div>
+                        ) : dayHolidayState.dayFlag?.dayType === 'MACHINE_OFF' ? (
+                            <Button
+                                variant="gold"
+                                size="xs"
+                                leftIcon={Sun}
+                                isLoading={isSavingSheet}
+                                onClick={handleDeclareSpecialHoliday}
+                            >
+                                <span className="font-bengali">১ ক্লিকে এই Machine-Off দিন Holiday করুন</span>
+                            </Button>
                         ) : (
                             <Button
                                 variant="ghost"
@@ -385,6 +503,11 @@ export default function AttendanceManagement() {
                             >
                                 <span className="font-bengali">এই দিনটিকে ছুটি (Holiday) ঘোষণা করুন</span>
                             </Button>
+                        )}
+                        {dayHolidayState.dayFlag?.dayType === 'MACHINE_OFF' && (
+                            <Badge variant="danger" size="md" dot>
+                                মেশিন বন্ধ/কনেকশন: <span className="ml-1">{toBengaliDigits(dayHolidayState.dayFlag.attendancePercentage || 0)}%</span> পাঞ্চ
+                            </Badge>
                         )}
                     </div>
 
@@ -593,6 +716,93 @@ export default function AttendanceManagement() {
                 isLoading={isSavingSheet}
             />
 
+            <Modal
+                isOpen={isBulkModalOpen}
+                onClose={() => setIsBulkModalOpen(false)}
+                size="xl"
+                titleEng="Manual Bulk Attendance Entry"
+                titleBng="ম্যানুয়াল বাল্ক হাজিরা এন্ট্রি"
+                subtitleBng={`${formatDisplayDate(selectedDate, 'bn')} · যাদের আসা নিশ্চিত, শুধু তাদের সিলেক্ট করুন`}
+                footer={
+                    <>
+                        <Button variant="ghost" size="sm" onClick={() => setIsBulkModalOpen(false)}>
+                            <span className="font-bengali">বাতিল</span>
+                        </Button>
+                        <Button variant="emerald" size="sm" isLoading={isBulkSaving} onClick={saveBulkAttendance}>
+                            <span className="font-bengali">১ ক্লিকে বাল্ক সেভ করুন</span>
+                        </Button>
+                    </>
+                }
+            >
+                <div className="max-h-[60vh] overflow-y-auto rounded-xl border border-ink-faint">
+                    <table className="w-full border-collapse text-xs">
+                        <thead className="sticky top-0 bg-paper-deep font-bengali text-emerald-deep">
+                            <tr>
+                                <th className="px-3 py-3 text-left">শিক্ষক</th>
+                                <th className="px-3 py-3 text-center">আসেনি/এসেছেন</th>
+                                <th className="px-3 py-3 text-center">স্ট্যাটাস</th>
+                                <th className="px-3 py-3 text-center">প্রবেশ সময়</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-ink-faint">
+                            {bulkRows.map((row) => (
+                                <tr key={row.teacherId}>
+                                    <td className="px-3 py-2.5 font-bengali">
+                                        <b className="block text-emerald-deep">{row.fullNameBng}</b>
+                                        <span className="font-mono text-[10px] text-ink-muted">
+                                            {row.teacherCode} · PIN #{row.biometricDeviceId}
+                                        </span>
+                                    </td>
+                                    <td className="px-3 py-2.5 text-center">
+                                        <input
+                                            type="checkbox"
+                                            checked={row.presentChecked}
+                                            onChange={(event) => setBulkRows((current) =>
+                                                current.map((item) => item.teacherId === row.teacherId
+                                                    ? { ...item, presentChecked: event.target.checked }
+                                                    : item)
+                                            )}
+                                        />
+                                    </td>
+                                    <td className="px-3 py-2.5 text-center">
+                                        {row.presentChecked ? (
+                                            <select
+                                                value={row.status}
+                                                onChange={(event) => setBulkRows((current) =>
+                                                    current.map((item) => item.teacherId === row.teacherId
+                                                        ? { ...item, status: event.target.value }
+                                                        : item)
+                                                )}
+                                                className="erp-input w-auto py-1.5 text-xs"
+                                            >
+                                                <option value="Present">Present</option>
+                                                <option value="Late">Late</option>
+                                            </select>
+                                        ) : (
+                                            <span className="font-bengali text-ink-muted">Leave</span>
+                                        )}
+                                    </td>
+                                    <td className="px-3 py-2.5 text-center">
+                                        {row.presentChecked && (
+                                            <input
+                                                type="datetime-local"
+                                                value={row.punchTime}
+                                                onChange={(event) => setBulkRows((current) =>
+                                                    current.map((item) => item.teacherId === row.teacherId
+                                                        ? { ...item, punchTime: event.target.value }
+                                                        : item)
+                                                )}
+                                                className="erp-input w-auto py-1.5 font-mono text-xs"
+                                            />
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </Modal>
+
             {/* =================================================================
                 5. ADMIN MANUAL ATTENDANCE OVERRIDE MODAL
                ================================================================= */}
@@ -626,8 +836,9 @@ export default function AttendanceManagement() {
                         options={[
                             { value: 'Present', label: 'উপস্থিত (Present · ০.০ কোটা)' },
                             { value: 'Late', label: 'বিলম্ব উপস্থিতি (Late · ০.৫ কোটা)' },
-                            { value: 'Leave', label: 'অনুমোদিত ছুটি (Leave · ১.০ কোটা)' },
-                            { value: 'Absent', label: 'অনুপস্থিত (Absent · বেতন কর্তন)' }
+                            { value: 'Leave', label: 'পাঞ্চ না পাওয়া গেছে (Leave · ১.০ কোটা)' },
+                            { value: 'Absent', label: 'অনুপস্থিত (Absent · বেতন কর্তন)' },
+                            { value: 'Official Duty', label: 'অফিসিয়াল ডিউটি (কোটা ও বেতন কর্তন নেই)' }
                         ]}
                         placeholder={false}
                     />

@@ -4,11 +4,13 @@ import {
     Routes,
     Route,
     Navigate,
+    useLocation,
     useNavigate
 } from 'react-router-dom';
 import { AuthProvider, useAuth, SYSTEM_ROLES } from '@context/AuthContext';
 import { ProtectedRoute, PublicOnlyRoute } from '@components/guards/ProtectedRoute';
 import AppShell from '@components/layout/AppShell';
+import PageLoadingSkeleton from '@components/layout/PageLoadingSkeleton';
 const PublicRegistrationLedger = lazy(() => import('@pages/public/registration/PublicRegistrationLedger'));
 const Login = lazy(() => import('@pages/auth/Login'));
 const AdminDashboard = lazy(() => import('@pages/admin/AdminDashboard'));
@@ -31,6 +33,27 @@ const TeacherProfileView = lazy(() =>
     import('@pages/teacher/TeacherPortalSuite').then((module) => ({ default: module.TeacherProfileView }))
 );
 
+function RouteLoadingFallback() {
+    const { pathname } = useLocation();
+    const isPortalRoute = pathname.startsWith('/teacher/') || pathname.startsWith('/admin/');
+
+    if (isPortalRoute) {
+        return (
+            <AppShell>
+                <PageLoadingSkeleton />
+            </AppShell>
+        );
+    }
+
+    return (
+        <div className="min-h-screen bg-paper p-4 sm:p-8">
+            <div className="mx-auto max-w-[1440px]">
+                <PageLoadingSkeleton />
+            </div>
+        </div>
+    );
+}
+
 function AppRoutes() {
     const { establishSession, defaultDashboardPath } = useAuth();
     const navigate = useNavigate();
@@ -42,13 +65,7 @@ function AppRoutes() {
     ];
 
     return (
-        <Suspense
-            fallback={
-                <div className="min-h-screen flex items-center justify-center bg-paper font-bengali text-emerald-deep">
-                    পৃষ্ঠা লোড হচ্ছে…
-                </div>
-            }
-        >
+        <Suspense fallback={<RouteLoadingFallback />}>
         <Routes>
             {/* ১. পাবলিক শিক্ষক নিবন্ধন ও ডিজিটাল আইডি কার্ড */}
             <Route path="/register" element={<PublicRegistrationLedger />} />

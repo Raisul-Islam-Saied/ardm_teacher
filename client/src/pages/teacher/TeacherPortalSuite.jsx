@@ -25,7 +25,6 @@ import {
     User,
     MapPin,
     Sparkles,
-    Send,
     ShieldCheck,
     ArrowRight
 } from 'lucide-react';
@@ -314,7 +313,7 @@ export function TeacherDashboardView() {
                                 <b className="text-success">{formatBDT(attendance?.currentMonthEstimatedCut || 0, true)}</b>
                             </div>
                             <div className="flex justify-between pt-2 border-t border-ink-faint text-sm font-bold text-emerald-deep">
-                                <span>প্রাক্কলিত নিট ক্যাশ প্রাপ্য:</span>
+                                <span>প্রাক্কলিত নিট মাসিক বেতন:</span>
                                 <span>{formatBDT(Math.max(0, basicSalary - (attendance?.currentMonthEstimatedCut || 0)), true)}</span>
                             </div>
                         </div>
@@ -327,7 +326,7 @@ export function TeacherDashboardView() {
                             rightIcon={ArrowRight}
                             onClick={() => navigate('/teacher/payroll')}
                         >
-                            <span className="font-bengali">সকল মাসের বেতন স্লিপ ও ক্যাশ ভাউচার দেখুন</span>
+                            <span className="font-bengali">সকল মাসের সংরক্ষিত বেতন শিট দেখুন</span>
                         </Button>
                     </div>
                 </div>
@@ -340,43 +339,10 @@ export function TeacherDashboardView() {
 // VIEW 2: TEACHER PERSONAL ATTENDANCE & QUOTA LEDGER (/teacher/attendance)
 // ============================================================================
 export function TeacherAttendanceView() {
-    const toast = useToast();
     const { teacher, dashboard, loadError } = useResolvedTeacherProfile();
     const logs = dashboard?.selectedMonthAttendance?.logs || [];
-    const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
-    const [isSubmittingLeave, setIsSubmittingLeave] = useState(false);
-    const [leaveForm, setLeaveForm] = useState({
-        date: moment().tz('Asia/Dhaka').format('YYYY-MM-DD'),
-        reason: ''
-    });
-
     const quotaLimit = Number(dashboard?.selectedMonthAttendance?.allowedQuota ?? teacher.customLeaveQuota) || 0;
     const totalUsedQuota = Number(dashboard?.selectedMonthAttendance?.quotaUsed) || 0;
-
-    const handleSubmitLeaveRequest = async (e) => {
-        e.preventDefault();
-        if (isSubmittingLeave) return;
-        if (!leaveForm.reason.trim()) {
-            toast.error('অনুগ্রহ করে ছুটির কারণ উল্লেখ করুন।');
-            return;
-        }
-        setIsSubmittingLeave(true);
-        try {
-            await axiosClient.post('/payroll/leaves/apply', {
-                applicationType: 'Casual Leave',
-                startDate: leaveForm.date,
-                endDate: leaveForm.date,
-                reason: leaveForm.reason.trim()
-            });
-            toast.success(`${formatDisplayDate(leaveForm.date, 'bn')} তারিখের ছুটির আবেদন সার্ভারে জমা হয়েছে।`);
-            setIsLeaveModalOpen(false);
-            setLeaveForm({ date: moment().tz('Asia/Dhaka').format('YYYY-MM-DD'), reason: '' });
-        } catch (error) {
-            toast.error(extractApiErrorMessage(error, 'ছুটির আবেদন জমা দেওয়া যায়নি।'));
-        } finally {
-            setIsSubmittingLeave(false);
-        }
-    };
 
     return (
         <div className="space-y-6 animate-fade-up">
@@ -389,7 +355,7 @@ export function TeacherAttendanceView() {
                         আমার বায়োমেট্রিক হাজিরা ও ২.০ ছুটির কোটা খতিয়ান
                     </h1>
                     <p className="font-bengali text-xs text-ink-soft mt-0.5">
-                        ZKTeco K40 PIN: <b className="font-mono">#{teacher.biometricDeviceId}</b> · সকাল ৯:০০টার পরে পাঞ্চ করলে ০.৫ কোটা এবং পূর্ণদিন ছুটিতে ১.০ কোটা ব্যবহৃত হয়।
+                        ZKTeco K40 PIN: <b className="font-mono">#{teacher.biometricDeviceId}</b> · পাঞ্চ না পাওয়া গেলে স্বয়ংক্রিয়ভাবে ছুটি (Leave) দেখাবে।
                     </p>
                 </div>
 
@@ -401,14 +367,6 @@ export function TeacherAttendanceView() {
                         onClick={() => window.print()}
                     >
                         <span className="font-bengali">হাজিরা শিট প্রিন্ট</span>
-                    </Button>
-                    <Button
-                        variant="emerald"
-                        size="sm"
-                        leftIcon={Send}
-                        onClick={() => setIsLeaveModalOpen(true)}
-                    >
-                        <span className="font-bengali">ছুটির আবেদন করুন</span>
                     </Button>
                 </div>
             </section>
@@ -498,51 +456,6 @@ export function TeacherAttendanceView() {
                 </div>
             </section>
 
-            {/* ছুটির আবেদন মডাল */}
-            <Modal
-                isOpen={isLeaveModalOpen}
-                onClose={() => setIsLeaveModalOpen(false)}
-                size="sm"
-                titleEng="Official Leave Application"
-                titleBng="নতুন ছুটির আবেদনপত্র"
-                footer={
-                    <>
-                        <Button variant="ghost" size="sm" onClick={() => setIsLeaveModalOpen(false)}>
-                            <span className="font-bengali">বাতিল</span>
-                        </Button>
-                        <Button
-                            variant="emerald"
-                            size="sm"
-                            isLoading={isSubmittingLeave}
-                            onClick={handleSubmitLeaveRequest}
-                        >
-                            <span className="font-bengali">আবেদন জমা দিন</span>
-                        </Button>
-                    </>
-                }
-            >
-                <div className="space-y-4">
-                    <FormInput
-                        labelEng="Leave Date"
-                        labelBng="ছুটির তারিখ"
-                        type="date"
-                        variant="erp"
-                        isMonoText
-                        value={leaveForm.date}
-                        onChange={(e) => setLeaveForm((prev) => ({ ...prev, date: e.target.value }))}
-                    />
-                    <FormInput
-                        labelEng="Reason for Leave"
-                        labelBng="ছুটির কারণ (বাংলায়)"
-                        variant="erp"
-                        isBengaliText
-                        value={leaveForm.reason}
-                        onChange={(e) => setLeaveForm((prev) => ({ ...prev, reason: e.target.value }))}
-                        placeholder="যেমনঃ শারীরিক অসুস্থতা / জরুরি পারিবারিক প্রয়োজন"
-                        required
-                    />
-                </div>
-            </Modal>
         </div>
     );
 }
@@ -551,15 +464,13 @@ export function TeacherAttendanceView() {
 // VIEW 3: TEACHER PERSONAL SALARY SLIPS & CASH VOUCHERS (/teacher/payroll)
 // ============================================================================
 export function TeacherPayrollView() {
-    const { teacher, dashboard, loadError, rankMetrics } = useResolvedTeacherProfile();
-    const [activeVoucher, setActiveVoucher] = useState(null);
+    const { teacher, dashboard, loadError } = useResolvedTeacherProfile();
 
     const basicSalary = Number(teacher.basicSalary) || 0;
 
     const slips = useMemo(
         () => (dashboard?.salarySheets || []).map((salary) => ({
             id: salary._id,
-            voucherNo: salary.voucherNo || String(salary._id),
             monthBng: new Date(Number(salary.year), Number(salary.month) - 1, 1)
                 .toLocaleDateString('bn-BD', { month: 'long', year: 'numeric' }),
             basicSalary: Number(salary.basicSalarySnapshot) || 0,
@@ -568,9 +479,7 @@ export function TeacherPayrollView() {
             quotaAllowed: Number(salary.attendanceBreakdown?.allowedPaidQuota) || 0,
             deduction: Number(salary.leaveAndAbsentDeductionAmount) || 0,
             bonus: Number(salary.bonusAmount) || 0,
-            netPaid: Number(salary.netPayableSalary) || 0,
-            status: salary.paymentStatus,
-            paidDate: salary.paidAt
+            netSalary: Number(salary.netPayableSalary) || 0
         })),
         [dashboard?.salarySheets]
     );
@@ -580,13 +489,13 @@ export function TeacherPayrollView() {
             <section className="ledger-surface p-6 bg-paper-panel flex flex-wrap items-center justify-between gap-4">
                 <div>
                     <Badge variant="gold" size="sm" mono className="mb-1">
-                        MY SALARY SLIPS &amp; VOUCHERS
+                        MY SAVED MONTHLY PAYROLL
                     </Badge>
                     <h1 className="font-bengali text-xl sm:text-2xl font-bold text-emerald-deep">
-                        আমার মাসিক বেতন স্লিপ ও ক্যাশ ভাউচার লেজার
+                        আমার সংরক্ষিত মাসিক বেতন শিট
                     </h1>
                     <p className="font-bengali text-xs text-ink-soft mt-0.5">
-                        নির্ধারিত মাসিক মূল বেতন: <b>{formatBDT(basicSalary, true)}</b> · প্রদানের মাধ্যম: <b>{teacher.paymentMethod || '—'}</b>
+                        নির্ধারিত মাসিক মূল বেতন: <b>{formatBDT(basicSalary, true)}</b>
                     </p>
                 </div>
             </section>
@@ -597,22 +506,16 @@ export function TeacherPayrollView() {
                     <table className="w-full text-left border-collapse text-xs">
                         <thead>
                             <tr className="bg-paper-deep border-b border-ink-faint font-bengali font-bold text-emerald-deep">
-                                <th className="py-3.5 px-4">ভাউচার নং</th>
                                 <th className="py-3.5 px-3">বেতনের মাস</th>
                                 <th className="py-3.5 px-3 text-right">মূল বেতন</th>
                                 <th className="py-3.5 px-3 text-center">কোটা ব্যবহার</th>
                                 <th className="py-3.5 px-3 text-right">কর্তন</th>
-                                <th className="py-3.5 px-3 text-right">নিট প্রাপ্ত ক্যাশ</th>
-                                <th className="py-3.5 px-3 text-center">স্ট্যাটাস</th>
-                                <th className="py-3.5 px-4 text-right">রিসিট</th>
+                                <th className="py-3.5 px-3 text-right">নিট বেতন</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-ink-faint">
                             {slips.map((s) => (
-                                <tr key={s.voucherNo} className="hover:bg-emerald-subtle/25">
-                                    <td className="py-3.5 px-4 font-mono font-bold text-emerald-deep">
-                                        {s.voucherNo}
-                                    </td>
+                                <tr key={s.id} className="hover:bg-emerald-subtle/25">
                                     <td className="py-3.5 px-3 font-bengali font-bold text-ink">
                                         {s.monthBng}
                                     </td>
@@ -626,28 +529,13 @@ export function TeacherPayrollView() {
                                         {s.deduction > 0 ? `-${formatBDT(s.deduction, true)}` : '০ ৳'}
                                     </td>
                                     <td className="py-3.5 px-3 text-right font-bengali text-sm font-bold text-emerald-deep">
-                                        {formatBDT(s.netPaid, true)}
-                                    </td>
-                                    <td className="py-3.5 px-3 text-center">
-                                        <Badge variant={s.status === 'Paid' ? 'success' : 'warning'} size="sm" dot>
-                                            {s.status === 'Paid' ? 'পরিশোধিত' : 'বকেয়া'}
-                                        </Badge>
-                                    </td>
-                                    <td className="py-3.5 px-4 text-right">
-                                        <Button
-                                            variant="outline"
-                                            size="xs"
-                                            leftIcon={Receipt}
-                                            onClick={() => setActiveVoucher(s)}
-                                        >
-                                            <span className="font-bengali">ক্যাশ ভাউচার প্রিন্ট</span>
-                                        </Button>
+                                        {formatBDT(s.netSalary, true)}
                                     </td>
                                 </tr>
                             ))}
                             {slips.length === 0 && (
                                 <tr>
-                                    <td colSpan="8" className="py-6 text-center font-bengali text-ink-muted">
+                                    <td colSpan="5" className="py-6 text-center font-bengali text-ink-muted">
                                         কোনো বেতন শিট তৈরি হয়নি।
                                     </td>
                                 </tr>
@@ -657,63 +545,6 @@ export function TeacherPayrollView() {
                 </div>
             </section>
 
-            {/* প্রিন্টেবল ক্যাশ ভাউচার মডাল */}
-            <Modal
-                isOpen={Boolean(activeVoucher)}
-                onClose={() => setActiveVoucher(null)}
-                size="md"
-                titleEng="Official Cash Salary Voucher"
-                titleBng="মাসিক ক্যাশ বেতন রসিদ"
-                footer={
-                    <>
-                        <Button variant="ghost" size="sm" onClick={() => setActiveVoucher(null)}>
-                            <span className="font-bengali">বন্ধ করুন</span>
-                        </Button>
-                        <Button variant="gold" size="sm" leftIcon={Printer} onClick={() => window.print()}>
-                            <span className="font-bengali">প্রিন্ট করুন</span>
-                        </Button>
-                    </>
-                }
-            >
-                {activeVoucher && (
-                    <div className="p-5 rounded-2xl bg-paper border-2 border-gold space-y-3 text-xs sm:text-sm font-bengali">
-                        <div className="text-center pb-3 border-b border-ink-faint">
-                            <h4 className="font-serif text-lg font-bold text-emerald-deep">
-                                {INSTITUTION_INFO.nameEng}
-                            </h4>
-                            <p className="text-xs font-bold text-emerald">
-                                {INSTITUTION_INFO.nameBng} · ক্যাশ বেতন ভাউচার ({activeVoucher.monthBng})
-                            </p>
-                            <span className="font-mono text-[11px] text-ink-muted">
-                                Voucher No: {activeVoucher.voucherNo}
-                            </span>
-                        </div>
-
-                        <div className="space-y-1.5">
-                            <div className="flex justify-between">
-                                <span className="text-ink-muted">শিক্ষকের নাম ও আইডি:</span>
-                                <b>{teacher.fullNameBng} ({teacher.teacherCode})</b>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-ink-muted">পদবী:</span>
-                                <span>{rankMetrics.designationBng}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-ink-muted">মাসিক মূল বেতন:</span>
-                                <span>{formatBDT(activeVoucher.basicSalary, true)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-ink-muted">কোটা অতিরিক্ত কর্তন:</span>
-                                <span className="text-danger">-{formatBDT(activeVoucher.deduction, true)}</span>
-                            </div>
-                            <div className="flex justify-between pt-2 border-t border-ink-faint text-base font-bold text-emerald-deep">
-                                <span>সর্বমোট নিট প্রাপ্ত ক্যাশ:</span>
-                                <span>{formatBDT(activeVoucher.netPaid, true)}</span>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </Modal>
         </div>
     );
 }
@@ -789,14 +620,42 @@ export function TeacherProfileView() {
             </div>
 
             {tab === 'ID_CARD' ? (
-                <DigitalRegistryIdCard
-                    registryRecord={{
-                        uid: teacher.uid || `ardm-${teacher.teacherCode}`,
-                        teacherId: teacher.teacherCode,
-                        registrationStatus: 'Approved',
-                        teacher
-                    }}
-                />
+                <div className="space-y-5">
+                    <section className="ledger-surface bg-paper-panel p-5 sm:p-6">
+                        <div className="mb-4 flex items-center gap-2 border-b border-ink-faint pb-3">
+                            <ShieldCheck className="h-5 w-5 text-gold-deep" />
+                            <h2 className="font-bengali text-base font-bold text-emerald-deep">
+                                শ্রেণি ও সম্পাদনা অ্যাক্সেস
+                            </h2>
+                        </div>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div className="rounded-xl border border-ink-faint bg-paper p-4">
+                                <p className="font-bengali text-xs text-ink-muted">নির্ধারিত শ্রেণি</p>
+                                <p className="mt-1 font-bengali text-lg font-bold text-emerald-deep">
+                                    {teacher.assignedClass
+                                        ? `${String(teacher.assignedClass).replace(/\u09AF\u09BC/g, '\u09DF')} শ্রেণি`
+                                        : 'কোনো শ্রেণি নির্ধারিত নয়'}
+                                </p>
+                            </div>
+                            <div className="rounded-xl border border-ink-faint bg-paper p-4">
+                                <p className="font-bengali text-xs text-ink-muted">শ্রেণি তথ্য এডিটের অনুমতি</p>
+                                <p className={`mt-1 font-bengali text-lg font-bold ${teacher.canEditAssignedClass ? 'text-success' : 'text-ink-muted'}`}>
+                                    {teacher.assignedClass
+                                        ? (teacher.canEditAssignedClass ? 'সক্রিয়' : 'নিষ্ক্রিয়')
+                                        : 'প্রযোজ্য নয়'}
+                                </p>
+                            </div>
+                        </div>
+                    </section>
+                    <DigitalRegistryIdCard
+                        registryRecord={{
+                            uid: teacher.uid || `ardm-${teacher.teacherCode}`,
+                            teacherId: teacher.teacherCode,
+                            registrationStatus: 'Approved',
+                            teacher
+                        }}
+                    />
+                </div>
             ) : (
                 <div className="ledger-surface p-6 sm:p-8 max-w-xl mx-auto bg-paper-panel">
                     <Badge variant="gold" size="sm" mono className="mb-2">

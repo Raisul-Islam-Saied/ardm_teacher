@@ -21,7 +21,7 @@ export default defineConfig({
         }
     },
     server: {
-        port: 5173,
+        port: 5174,
         host: true, // একই Wi-Fi বা LAN-এ পিসি ও মোবাইল উভয় থেকেই টেস্ট করা যাবে
         strictPort: true,
         proxy: {

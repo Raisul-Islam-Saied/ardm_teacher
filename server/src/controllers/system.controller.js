@@ -165,7 +165,7 @@ const getAdminDashboardOverview = asyncHandler(async (req, res) => {
         }).select('date status').lean(),
         Salary.find({
             $or: payrollMonths.map(({ month, year }) => ({ month, year }))
-        }).select('month year paymentStatus netPayableSalary leaveAndAbsentDeductionAmount').lean()
+        }).select('month year netPayableSalary leaveAndAbsentDeductionAmount').lean()
     ]);
 
     const todayPresent = todayAttendances.filter((a) => [
@@ -185,10 +185,6 @@ const getAdminDashboardOverview = asyncHandler(async (req, res) => {
     const todayAbsent = todayAttendances.filter((a) => a.status === ATTENDANCE_STATUS.ABSENT).length;
 
     const totalMonthlyPayroll = currentMonthSalaries.reduce((s, item) => s + item.netPayableSalary, 0);
-    const totalPaidAmount = currentMonthSalaries
-        .filter((s) => s.paymentStatus === 'Paid')
-        .reduce((s, item) => s + item.netPayableSalary, 0);
-
     const totalActiveLoanBalance = activeLoans.reduce((s, l) => s + l.remainingBalance, 0);
     const weeklyAttendance = schoolWeekDates.map((date) => {
         const dayAttendances = schoolWeekAttendances.filter((attendance) => attendance.date === date.format('YYYY-MM-DD'));
@@ -215,8 +211,7 @@ const getAdminDashboardOverview = asyncHandler(async (req, res) => {
         const monthSheets = recentPayrollSheets.filter((salary) => salary.month === month && salary.year === year);
         return {
             monthBng: `${MONTH_NAMES_BN[month - 1]} ${String(year).slice(-2)}`,
-            netPaid: monthSheets
-                .filter((salary) => salary.paymentStatus === 'Paid')
+            netPayroll: monthSheets
                 .reduce((sum, salary) => sum + Number(salary.netPayableSalary || 0), 0),
             deduction: monthSheets.reduce((sum, salary) => sum + Number(salary.leaveAndAbsentDeductionAmount || 0), 0)
         };
@@ -241,8 +236,6 @@ const getAdminDashboardOverview = asyncHandler(async (req, res) => {
                 year: currentYear,
                 generatedSheetsCount: currentMonthSalaries.length,
                 totalMonthlyPayroll,
-                totalPaidAmount,
-                totalUnpaidAmount: totalMonthlyPayroll - totalPaidAmount
             },
             loanOverview: {
                 activeLoansCount: activeLoans.length,

@@ -7,6 +7,9 @@ import axiosClient, { extractApiErrorMessage } from '@api/axiosClient';
 import { calculateLiveRankMetrics, formatPhoneDisplay } from '@utils/formatters';
 import { openOfficialIdCardsPrint } from '@components/teacher/OfficialTeacherIdCard';
 
+const normalizeAssignedClass = (val = '') =>
+    String(val || '').replace(/\u09AF\u09BC/g, '\u09DF');
+
 export function computeAutoSeniorityRanking(teachersArray = []) {
     const enriched = teachersArray.map((teacher) => {
         const metrics = calculateLiveRankMetrics(teacher.designation, teacher.academicQualifications);
@@ -194,7 +197,7 @@ export default function TeacherDirectory() {
                                     <Badge variant="gold" size="sm" mono>{teacher.teacherCode || 'No ID'}</Badge>
                                     {teacher.assignedClass && (
                                         <Badge variant="emerald-subtle" size="sm">
-                                            শ্রেণি শিক্ষক: {teacher.assignedClass}
+                                            শ্রেণি শিক্ষক: {normalizeAssignedClass(teacher.assignedClass)}
                                         </Badge>
                                     )}
                                     {statusView === 'FORMER' && (
