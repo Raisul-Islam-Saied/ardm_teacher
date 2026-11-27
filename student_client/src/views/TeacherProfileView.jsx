@@ -5,7 +5,6 @@ import {
   Banknote,
   Calendar,
   CheckCircle2,
-  Clock,
   Eye,
   EyeOff,
   IdCard,
@@ -17,53 +16,24 @@ import {
   Phone,
   Save,
   Settings,
-  Shield,
   ShieldCheck,
   Sliders,
   Sparkles,
   User,
   Users,
-  Wrench,
-  XCircle
+  Wrench
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import TeacherMonthlyAttendancePanel from '../components/TeacherMonthlyAttendancePanel';
+import TeacherSalaryHistoryPanel from '../components/TeacherSalaryHistoryPanel';
 import { DEFAULT_PORTAL_SETTINGS } from '../config/systemConfig';
 import { authApi, systemSettingsApi, teacherPortalApi } from '../services/studentApiService';
-
-const MONTHS_BN = [
-  { val: 1, label: 'জানুয়ারি (January)' },
-  { val: 2, label: 'ফেব্রুয়ারি (February)' },
-  { val: 3, label: 'মার্চ (March)' },
-  { val: 4, label: 'এপ্রিল (April)' },
-  { val: 5, label: 'মে (May)' },
-  { val: 6, label: 'জুন (June)' },
-  { val: 7, label: 'জুলাই (July)' },
-  { val: 8, label: 'আগস্ট (August)' },
-  { val: 9, label: 'সেপ্টেম্বর (September)' },
-  { val: 10, label: 'অক্টোবর (October)' },
-  { val: 11, label: 'নভেম্বর (November)' },
-  { val: 12, label: 'ডিসেম্বর (December)' }
-];
 
 const formatBDT = (n) =>
   new Intl.NumberFormat('bn-BD', { maximumFractionDigits: 0 }).format(Number(n || 0));
 
-const formatQuota = (n) =>
-  new Intl.NumberFormat('bn-BD', { maximumFractionDigits: 2 }).format(Number(n || 0));
-
 const getApiErrorMessage = (error, fallback) =>
   error?.response?.data?.message || error?.message || fallback;
-
-const getDhakaDate = () => {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    timeZone: 'Asia/Dhaka'
-  }).formatToParts(new Date());
-  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
-  return `${values.year}-${values.month}-${values.day}`;
-};
 
 const formatProfileValue = (value) => {
   if (value === null || value === undefined || value === '') return '—';
@@ -163,9 +133,6 @@ const ToggleSwitch = ({ checked, onChange, accent = 'emerald' }) => {
 };
 
 const TeacherProfileView = ({ currentUser, onBack, onLogout }) => {
-  const now = new Date();
-  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [activeTab, setActiveTab] = useState('attendance'); // 'attendance' | 'salary' | 'info' | 'security' | 'settings'
 
   const isAdminUser =
@@ -188,13 +155,7 @@ const TeacherProfileView = ({ currentUser, onBack, onLogout }) => {
   }, [isAdminUser]);
 
   const [dashboardData, setDashboardData] = useState(null);
-  const [attData, setAttData] = useState(null);
-  const [salaryList, setSalaryList] = useState([]);
-  const [loadingProfile, setLoadingProfile] = useState(true);
-  const [loadingAtt, setLoadingAtt] = useState(true);
   const [profileError, setProfileError] = useState('');
-  const [salaryError, setSalaryError] = useState('');
-  const [attendanceError, setAttendanceError] = useState('');
 
   // Password Change State
   const [currentPassword, setCurrentPassword] = useState('');
@@ -221,79 +182,26 @@ const TeacherProfileView = ({ currentUser, onBack, onLogout }) => {
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsStatus, setSettingsStatus] = useState({ type: '', msg: '' });
 
-  const years = useMemo(() => {
-    const cur = new Date().getFullYear();
-    return [cur - 1, cur, cur + 1];
-  }, []);
-
-  // ১. টিচার প্রোফাইল ও স্যালারি হিস্ট্রি লোড
+  // ১. টিচার প্রোফাইল লোড
   useEffect(() => {
     let active = true;
-    setLoadingProfile(true);
+    setProfileError('');
 
-    Promise.allSettled([
-      teacherPortalApi.getMyDashboard(),
-      teacherPortalApi.getMySalaryHistory()
-    ]).then(([dashRes, salRes]) => {
-      if (!active) return;
-      if (dashRes.status === 'fulfilled') {
-        setDashboardData(dashRes.value);
-        setProfileError('');
-      } else {
-        setProfileError(getApiErrorMessage(dashRes.reason, 'শিক্ষক প্রোফাইল লোড করা যায়নি।'));
-      }
-      if (salRes.status === 'fulfilled') {
-        const raw = salRes.value;
-        const sheets = Array.isArray(raw) ? raw : raw?.sheets || raw?.salaries || raw?.records || [];
-        const myId = String(currentUser?._id || '');
-        const myCode = String(currentUser?.teacherCode || '');
-        const mine = sheets.filter((item) => {
-          const teacher = item.teacherId && typeof item.teacherId === 'object'
-            ? item.teacherId
-            : item.teacher && typeof item.teacher === 'object'
-              ? item.teacher
-              : null;
-          const teacherId = String(teacher?._id || item.teacherId || item.teacher || '');
-          const teacherCode = String(item.teacherCode || teacher?.teacherCode || '');
-          return (myId && teacherId === myId) || (myCode && teacherCode === myCode);
-        });
-        setSalaryList(mine);
-        setSalaryError('');
-      } else {
-        setSalaryList([]);
-        setSalaryError(getApiErrorMessage(salRes.reason, 'বেতন হিস্ট্রি লোড করা যায়নি।'));
-      }
-      setLoadingProfile(false);
-    });
+    teacherPortalApi
+      .getMyDashboard()
+      .then((data) => {
+        if (active) setDashboardData(data);
+      })
+      .catch((error) => {
+        if (active) {
+          setProfileError(getApiErrorMessage(error, 'শিক্ষক প্রোফাইল লোড করা যায়নি।'));
+        }
+      });
 
     return () => { active = false; };
   }, [currentUser?._id, currentUser?.teacherCode]);
 
-  // ২. নির্বাচিত মাসের অ্যাটেনডেন্স লোড
-  useEffect(() => {
-    let active = true;
-    setLoadingAtt(true);
-    setAttendanceError('');
-
-    teacherPortalApi
-      .getMyMonthlyAttendance(selectedMonth, selectedYear)
-      .then((res) => {
-        if (active) setAttData(res);
-      })
-      .catch((error) => {
-        if (active) {
-          setAttData(null);
-          setAttendanceError(getApiErrorMessage(error, 'মাসিক হাজিরা লোড করা যায়নি।'));
-        }
-      })
-      .finally(() => {
-        if (active) setLoadingAtt(false);
-      });
-
-    return () => { active = false; };
-  }, [selectedMonth, selectedYear]);
-
-  // ৩. অ্যাডমিন হলে সার্ভার থেকে সিস্টেম সেটিংস লোড
+  // ২. অ্যাডমিন হলে সার্ভার থেকে সিস্টেম সেটিংস লোড
   useEffect(() => {
     if (!isAdminUser) return undefined;
     let active = true;
@@ -446,36 +354,6 @@ const TeacherProfileView = ({ currentUser, onBack, onLogout }) => {
   const designation = teacher.designationBng || teacher.designation || currentUser?.designation || currentUser?.role || 'Teacher';
   const teacherCode = teacher.teacherCode || currentUser?.teacherCode || '—';
 
-  const summary = attData?.summary || attData?.stats || attData || {};
-  const logs = Array.isArray(attData?.dailyLogs)
-    ? attData.dailyLogs
-    : Array.isArray(attData?.logs || attData?.records || attData?.days || attData?.attendance)
-      ? (attData.logs || attData.records || attData.days || attData.attendance)
-      : [];
-
-  const monthDays = useMemo(() => {
-    const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
-    return Array.from({ length: daysInMonth }, (_, index) =>
-      `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(index + 1).padStart(2, '0')}`
-    );
-  }, [selectedMonth, selectedYear]);
-
-  const logsByDate = new Map(logs.map((log) => [log.date, log]));
-  const calendarByDate = new Map(
-    (Array.isArray(attData?.calendarDays) ? attData.calendarDays : []).map((day) => [day.date, day])
-  );
-  const todayDhaka = getDhakaDate();
-  const visibleMonthDays = monthDays.filter((date) => date <= todayDhaka).reverse();
-
-  const counts = {
-    present: summary.present ?? summary.totalPresent ?? logs.filter((l) => l.status === 'Present').length,
-    absent: summary.absent ?? summary.totalAbsent ?? logs.filter((l) => l.status === 'Absent').length,
-    late: summary.late ?? summary.totalLate ?? logs.filter((l) => l.status === 'Late').length,
-    leave: summary.leave ?? summary.totalLeave ?? (
-      Number(summary.totalLeaveCount || 0) + Number(summary.totalApprovedLeaveCount || 0)
-    )
-  };
-
   const toRows = (source, fields) => fields
     .filter(([key]) => source?.[key] !== undefined && source?.[key] !== null && source[key] !== '')
     .map(([key, label, formatter]) => [label, formatter ? formatter(source[key]) : formatProfileValue(source[key])]);
@@ -594,329 +472,6 @@ const TeacherProfileView = ({ currentUser, onBack, onLogout }) => {
       ]
     }
   ];
-
-  // ==============================================================
-  // SECTION 1: MONTHLY ATTENDANCE
-  // ==============================================================
-  const renderAttendanceSection = () => (
-    <div className="space-y-4 lg:space-y-5">
-      <div className="bg-white rounded-2xl lg:rounded-3xl p-4 lg:p-5 shadow-sm border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h3 className="text-sm lg:text-base font-black text-slate-800 flex items-center gap-2">
-            <Calendar size={17} className="text-emerald-600" />
-            মাসিক উপস্থিতি ও হাজিরা বিবরণী
-          </h3>
-          <p className="text-[11px] font-bold text-slate-400 mt-0.5">
-            মাস ও বছর পরিবর্তন করে উপস্থিত, অনুপস্থিত, দেরি ও ছুটির হিসাব দেখুন
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2.5 shrink-0">
-          <select
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(Number(e.target.value))}
-            className="flex-1 sm:w-44 py-2.5 px-3.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-black text-slate-800 outline-none focus:border-[#060D1F] transition"
-          >
-            {MONTHS_BN.map((m) => (
-              <option key={m.val} value={m.val}>{m.label}</option>
-            ))}
-          </select>
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(Number(e.target.value))}
-            className="w-28 py-2.5 px-3.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-black text-slate-800 outline-none focus:border-[#060D1F] transition"
-          >
-            {years.map((y) => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {loadingAtt ? (
-        <div className="bg-white rounded-3xl p-14 flex flex-col items-center justify-center text-slate-400 border border-slate-200/70">
-          <Loader2 className="animate-spin text-blue-600 mb-3" size={32} />
-          <span className="text-xs font-bold">মাসিক হাজিরা লোড হচ্ছে...</span>
-        </div>
-      ) : (
-        <>
-          {attendanceError && (
-            <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-bold text-red-700">
-              {attendanceError}
-            </div>
-          )}
-
-          {/* Attendance Summary Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
-            <div className="bg-white rounded-2xl lg:rounded-3xl p-4 lg:p-5 border border-emerald-200/70 shadow-sm hover:shadow-md transition">
-              <div className="flex items-center justify-between text-emerald-600 mb-2">
-                <span className="text-[11px] font-black">মোট উপস্থিত</span>
-                <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center">
-                  <CheckCircle2 size={17} />
-                </div>
-              </div>
-              <p className="text-2xl lg:text-3xl font-black text-slate-800">{counts.present} <span className="text-xs font-bold text-slate-400">দিন</span></p>
-              <p className="text-[10px] font-bold text-emerald-600 mt-1">Present</p>
-            </div>
-
-            <div className="bg-white rounded-2xl lg:rounded-3xl p-4 lg:p-5 border border-red-200/70 shadow-sm hover:shadow-md transition">
-              <div className="flex items-center justify-between text-red-600 mb-2">
-                <span className="text-[11px] font-black">মোট অনুপস্থিত</span>
-                <div className="w-8 h-8 rounded-xl bg-red-50 flex items-center justify-center">
-                  <XCircle size={17} />
-                </div>
-              </div>
-              <p className="text-2xl lg:text-3xl font-black text-red-600">{counts.absent} <span className="text-xs font-bold text-red-300">দিন</span></p>
-              <p className="text-[10px] font-bold text-red-500 mt-1">Absent</p>
-            </div>
-
-            <div className="bg-white rounded-2xl lg:rounded-3xl p-4 lg:p-5 border border-amber-200/70 shadow-sm hover:shadow-md transition">
-              <div className="flex items-center justify-between text-amber-600 mb-2">
-                <span className="text-[11px] font-black">মোট দেরি</span>
-                <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center">
-                  <Clock size={17} />
-                </div>
-              </div>
-              <p className="text-2xl lg:text-3xl font-black text-amber-600">{counts.late} <span className="text-xs font-bold text-amber-400">দিন</span></p>
-              <p className="text-[10px] font-bold text-amber-600 mt-1">Late Arrival</p>
-            </div>
-
-            <div className="bg-white rounded-2xl lg:rounded-3xl p-4 lg:p-5 border border-blue-200/70 shadow-sm hover:shadow-md transition">
-              <div className="flex items-center justify-between text-blue-600 mb-2">
-                <span className="text-[11px] font-black">মোট ছুটি</span>
-                <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center">
-                  <Shield size={17} />
-                </div>
-              </div>
-              <p className="text-2xl lg:text-3xl font-black text-blue-600">{counts.leave} <span className="text-xs font-bold text-blue-300">দিন</span></p>
-              <p className="text-[10px] font-bold text-blue-500 mt-1">Approved Leave</p>
-            </div>
-          </div>
-
-          {/* Leave Quota Strip */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {[
-              ['পূর্ববর্তী অবশিষ্ট কোটা', summary.previousQuotaRemaining],
-              ['চলতি মাসের কোটা', summary.currentMonthQuota ?? summary.monthlyAllowedQuota],
-              ['ব্যবহৃত কোটা', summary.totalQuotaUsed],
-              ['মোট অবশিষ্ট কোটা', summary.remainingPaidQuota ?? summary.quotaRemaining]
-            ].map(([label, amount]) => (
-              <div key={label} className="rounded-2xl border border-violet-200/70 bg-violet-50/70 px-4 py-3">
-                <p className="text-[10.5px] font-black text-violet-700">{label}</p>
-                <p className="mt-1 text-lg font-black text-slate-800">
-                  {formatQuota(amount)} <span className="text-[11px] font-bold text-slate-500">দিন</span>
-                </p>
-              </div>
-            ))}
-          </div>
-
-          {/* Daily Log Table */}
-          <div className="bg-white rounded-2xl lg:rounded-3xl p-4 lg:p-6 shadow-sm border border-slate-200/80">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-xs lg:text-sm font-black text-slate-800">দিনভিত্তিক হাজিরা (সাম্প্রতিক তারিখ আগে)</h3>
-                <p className="text-[10px] font-bold text-slate-400 mt-0.5">যে দিনে তথ্য নেই, সেটিকে অনুপস্থিত হিসেবে ধরা হয়নি</p>
-              </div>
-              <span className="text-[11px] font-black px-2.5 py-1 rounded-full bg-slate-100 text-slate-500">
-                {logs.length} টি রেকর্ড
-              </span>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 text-[11px] font-black text-slate-400 uppercase tracking-wider">
-                    <th className="py-2.5 px-3">তারিখ (Date)</th>
-                    <th className="py-2.5 px-3">পাঞ্চের সময়</th>
-                    <th className="py-2.5 px-3 text-right">অবস্থা (Status)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-xs">
-                  {visibleMonthDays.length === 0 ? (
-                    <tr>
-                      <td colSpan={3} className="py-8 text-center font-bold text-slate-400">
-                        এই মাসে এখনো কোনো হাজিরার তারিখ নেই
-                      </td>
-                    </tr>
-                  ) : visibleMonthDays.map((date) => {
-                    const item = logsByDate.get(date);
-                    const calendarDay = calendarByDate.get(date);
-                    const st = item?.status || (
-                      calendarDay?.isHoliday
-                        ? 'বন্ধ (Holiday)'
-                        : calendarDay?.dayType === 'MACHINE_OFF'
-                          ? 'মেশিন বন্ধ'
-                          : 'রেকর্ড নেই'
-                    );
-                    const badge =
-                      st === 'Present' || st === 'Holiday Duty' || st === 'Official Duty' || st === 'Late (Excused)'
-                        ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
-                        : st === 'Absent'
-                          ? 'bg-red-100 text-red-700 border-red-200'
-                          : st === 'Late'
-                            ? 'bg-amber-100 text-amber-700 border-amber-200'
-                            : st === 'বন্ধ (Holiday)'
-                              ? 'bg-amber-100 text-amber-800 border-amber-200'
-                              : st === 'মেশিন বন্ধ'
-                                ? 'bg-violet-100 text-violet-700 border-violet-200'
-                                : st === 'রেকর্ড নেই'
-                                  ? 'bg-slate-100 text-slate-500 border-slate-200'
-                                  : 'bg-blue-100 text-blue-700 border-blue-200';
-                    const punchTime = item?.punchTime
-                      ? new Intl.DateTimeFormat('bn-BD', {
-                        hour: 'numeric',
-                        minute: '2-digit',
-                        hour12: true,
-                        timeZone: 'Asia/Dhaka'
-                      }).format(new Date(item.punchTime))
-                      : '—';
-                    return (
-                      <tr key={date} className="hover:bg-slate-50/80 transition">
-                        <td className="py-3 px-3 font-black text-slate-800">
-                          {date}
-                          {(calendarDay?.title || calendarDay?.reason) && (
-                            <span className="mt-0.5 block text-[10px] font-bold text-slate-400">
-                              {calendarDay.title || calendarDay.reason}
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3 px-3 font-mono font-bold text-slate-600">{punchTime}</td>
-                        <td className="py-3 px-3 text-right">
-                          <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-black border ${badge}`}>
-                            {st}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
-
-  // ==============================================================
-  // SECTION 2: SALARY HISTORY
-  // ==============================================================
-  const renderSalarySection = () => (
-    <div className="space-y-4">
-      <div className="bg-white rounded-2xl lg:rounded-3xl p-4 lg:p-5 shadow-sm border border-slate-200/80 flex items-center justify-between">
-        <div>
-          <h3 className="text-sm lg:text-base font-black text-slate-800 flex items-center gap-2">
-            <Banknote size={18} className="text-emerald-600" />
-            বেতন ও পেরোল হিস্ট্রি (Salary History)
-          </h3>
-          <p className="text-[11px] font-bold text-slate-400 mt-0.5">
-            প্রতি মাসের মূল বেতন, কর্তন ও নিট প্রাপ্য বেতনের হিসাব
-          </p>
-        </div>
-        <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-[11px] font-black">
-          মোট {salaryList.length} মাস
-        </span>
-      </div>
-
-      {loadingProfile ? (
-        <div className="bg-white rounded-3xl p-14 flex flex-col items-center justify-center text-slate-400 border border-slate-200/70">
-          <Loader2 className="animate-spin text-blue-600 mb-3" size={32} />
-          <span className="text-xs font-bold">বেতন হিস্ট্রি লোড হচ্ছে...</span>
-        </div>
-      ) : salaryList.length === 0 ? (
-        <div className="bg-white rounded-3xl p-12 text-center border border-slate-200/70">
-          {salaryError ? (
-            <p role="alert" className="text-xs font-bold text-red-600">{salaryError}</p>
-          ) : (
-            <p className="text-xs font-bold text-slate-400">এখনো কোনো বেতন শিট তৈরি হয়নি</p>
-          )}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 lg:gap-4">
-          {salaryList.map((sal, i) => {
-            const monthName = MONTHS_BN.find((m) => m.val === Number(sal.month))?.label.split(' ')[0] || sal.month;
-            const basic = Number(sal.basicSalarySnapshot) || 0;
-            const effectiveBasic = Number(sal.proRataInfo?.effectiveBasicSalary ?? basic);
-            const attendanceDeduction = Number(sal.leaveAndAbsentDeductionAmount) || 0;
-            const loanDeduction = Number(sal.loanDeduction?.installmentAmount) || 0;
-            const extraDeduction = Number(sal.extraDeduction) || 0;
-            const adjustment = Number(sal.customAdjustment?.amount) || 0;
-            const totalDeduction = attendanceDeduction + loanDeduction + extraDeduction + Math.max(0, -adjustment);
-            const net = Number(sal.netPayableSalary) || 0;
-
-            return (
-              <div
-                key={sal._id || i}
-                className="bg-white rounded-2xl lg:rounded-3xl p-4 lg:p-5 shadow-sm border border-slate-200/80 hover:border-emerald-300 transition space-y-3"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-base font-black text-slate-800">
-                      {monthName} {sal.year || ''}
-                    </p>
-                    <p className="text-[11px] text-slate-400 font-bold mt-0.5">
-                      {sal.proRataInfo?.isProRated ? 'কার্যকর মূল বেতন' : 'মূল বেতন'}: ৳{formatBDT(effectiveBasic)}
-                    </p>
-                  </div>
-                  <span className="px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-black">
-                    বেতন শিট
-                  </span>
-                </div>
-
-                <div className="space-y-2 border-t border-slate-100 pt-3 text-xs">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-slate-500 font-bold">হাজিরা/ছুটি কর্তন</span>
-                    <span className="font-black text-red-600">− ৳ {formatBDT(attendanceDeduction)}</span>
-                  </div>
-                  {!!loanDeduction && (
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-slate-500 font-bold">লোন/অগ্রিম কর্তন</span>
-                      <span className="font-black text-red-600">− ৳ {formatBDT(loanDeduction)}</span>
-                    </div>
-                  )}
-                  {!!extraDeduction && (
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-slate-500 font-bold">অতিরিক্ত কর্তন</span>
-                      <span className="font-black text-red-600">− ৳ {formatBDT(extraDeduction)}</span>
-                    </div>
-                  )}
-                  {!!sal.bonusAmount && (
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-slate-500 font-bold">{sal.bonusTitle || 'বোনাস'}</span>
-                      <span className="font-black text-emerald-700">+ ৳ {formatBDT(sal.bonusAmount)}</span>
-                    </div>
-                  )}
-                  {!!adjustment && (
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-slate-500 font-bold">সমন্বয়</span>
-                      <span className={`font-black ${adjustment > 0 ? 'text-emerald-700' : 'text-red-600'}`}>
-                        {adjustment > 0 ? '+' : '−'} ৳ {formatBDT(Math.abs(adjustment))}
-                      </span>
-                    </div>
-                  )}
-                  {!!sal.extraAllowance && (
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-slate-500 font-bold">অতিরিক্ত ভাতা</span>
-                      <span className="font-black text-emerald-700">+ ৳ {formatBDT(sal.extraAllowance)}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between gap-3 pt-1 border-t border-dashed border-slate-100">
-                    <span className="text-slate-600 font-black">মোট কর্তন</span>
-                    <span className="font-black text-red-700">৳ {formatBDT(totalDeduction)}</span>
-                  </div>
-                </div>
-
-                <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs bg-emerald-50/50 -mx-2 px-3 py-2 rounded-xl">
-                  <span className="text-slate-700 font-black">নিট প্রাপ্য বেতন:</span>
-                  <span className="text-lg font-black text-emerald-700">৳ {formatBDT(net)}</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
 
   // ==============================================================
   // SECTION 3: FULL ORGANIZED PROFILE DETAILS
@@ -1496,8 +1051,15 @@ const TeacherProfileView = ({ currentUser, onBack, onLogout }) => {
             </div>
 
             {/* Active Tab View */}
-            {activeTab === 'attendance' && renderAttendanceSection()}
-            {activeTab === 'salary' && renderSalarySection()}
+            <div className={activeTab === 'attendance' ? '' : 'hidden'}>
+              <TeacherMonthlyAttendancePanel />
+            </div>
+            {activeTab === 'salary' && (
+              <TeacherSalaryHistoryPanel
+                viewerId={currentUser?._id}
+                teacherCode={currentUser?.teacherCode}
+              />
+            )}
             {activeTab === 'info' && (
               <div className="space-y-4">
                 {renderProfileDetails()}

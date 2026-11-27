@@ -1524,7 +1524,15 @@ const FullForm = ({ initialData, currentUser, portalSettings, onSave, onCancel, 
       };
       setForm(merged);
       setImgPreview(f.imageUrl || null);
-      setMigration({ studentCode: res.autoFillData.studentCode, admissionDate: res.autoFillData.admissionDate });
+      setMigration({
+        studentCode: res.autoFillData.studentCode,
+        admissionDate: res.autoFillData.admissionDate,
+        legacyAcademicRecord: {
+          session: res.autoFillData.session,
+          classBn: res.autoFillData.classBn,
+          roll: res.autoFillData.roll
+        }
+      });
       setErrors({});
       showToast('তথ্য লোড হয়েছে — যাচাই করে পরবর্তী ধাপে যান', 'success');
     } catch (err) {

@@ -71,11 +71,15 @@ export const authApi = {
         return res.data;
     },
 
-    async changePassword(currentPassword, newPassword) {
+    async changePassword(currentPassword, newPassword, currentUserObj = null) {
         const res = await axiosClient.patch('/auth/change-password', {
             currentPassword: String(currentPassword || '').trim(),
             newPassword: String(newPassword || '').trim()
         });
+        const newToken = res.data?.data?.token;
+        if (newToken) {
+            setAuthSessionStorage(newToken, currentUserObj);
+        }
         return res.data;
     },
 
@@ -129,10 +133,12 @@ export const teacherPortalApi = {
         return res.data?.data || res.data || {};
     },
 
-    /** GET /attendance/my-summary?month=MM&year=YYYY */
-    async getMyMonthlyAttendance(month, year) {
+    /** GET /attendance/my-summary?month=MM&year=YYYY[&teacherId=...] */
+    async getMyMonthlyAttendance(month, year, teacherId) {
+        const params = { month, year };
+        if (teacherId) params.teacherId = teacherId;
         const res = await axiosClient.get('/attendance/my-summary', {
-            params: { month, year }
+            params
         });
         return res.data?.data || res.data || {};
     },
@@ -141,6 +147,32 @@ export const teacherPortalApi = {
     async getMySalaryHistory(params = {}) {
         const res = await axiosClient.get('/payroll/sheets', { params });
         return res.data?.data || res.data || [];
+    },
+
+    /** GET /teachers (র‍্যাংক অনুযায়ী তালিকা) */
+    async listTeachers(params = {}) {
+        const res = await axiosClient.get('/teachers', { params });
+        return res.data?.data?.teachers || [];
+    },
+
+    /** GET /teachers/:id */
+    async getTeacherById(id) {
+        const res = await axiosClient.get(`/teachers/${encodeURIComponent(id)}`);
+        return res.data?.data || null;
+    },
+
+    /** POST /teachers/recalculate-ranks (Admin) */
+    async recalculateRanks() {
+        const res = await axiosClient.post('/teachers/recalculate-ranks');
+        return res.data;
+    },
+
+    /** PATCH /teachers/:id/reset-password (Admin / SuperAdmin) */
+    async resetTeacherPassword(id, newPassword) {
+        const res = await axiosClient.patch(`/teachers/${encodeURIComponent(id)}/reset-password`, {
+            newPassword: String(newPassword || '').trim()
+        });
+        return res.data;
     }
 };
 
@@ -188,6 +220,11 @@ export const studentApi = {
         const res = await axiosClient.get(
             `/students/legacy-lookup/${encodeURIComponent(studentCode)}`
         );
+        return { ...(res.data?.data || {}), message: res.data?.message };
+    },
+
+    async promoteBulk(payload) {
+        const res = await axiosClient.post('/students/promote', payload);
         return { ...(res.data?.data || {}), message: res.data?.message };
     }
 };

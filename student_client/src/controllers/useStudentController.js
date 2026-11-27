@@ -64,6 +64,7 @@ export default function useStudentController() {
   const isEdit = pathname.includes('/edit') && Boolean(studentId);
   const tab = useMemo(() => {
     if (pathname === '/profile') return 'profile';
+    if (pathname === '/promote') return 'promote';
     if (pathname === '/search') return 'search';
     if (pathname.startsWith('/admission') || isEdit) return 'add';
     return 'home';

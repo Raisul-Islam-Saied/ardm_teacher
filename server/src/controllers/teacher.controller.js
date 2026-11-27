@@ -360,13 +360,36 @@ const getAllTeachers = asyncHandler(async (req, res) => {
         ];
     }
 
-    const teachers = await Teacher.find(filter)
+    const isAdmin = [ROLES.SUPER_ADMIN, ROLES.ADMIN].includes(req.user.role);
+
+    // সাধারণ শিক্ষকদের জন্য শুধুমাত্র সক্রিয় ও অনুমোদিত শিক্ষকদের সাধারণ তথ্য পাঠানো হবে
+    if (!isAdmin) {
+        filter.isActive = true;
+        filter.registrationStatus = 'Approved';
+    }
+
+    const query = Teacher.find(filter)
         .sort({
             'rankingMetrics.overallMadrasahRank': 1,
             'rankingMetrics.designationPriority': 1,
             biometricDeviceId: 1
-        })
-        .lean();
+        });
+
+    if (!isAdmin) {
+        query.select([
+            'teacherCode', 'uid', 'fullNameBng', 'fullNameEng',
+            'gender', 'bloodGroup', 'phone', 'email',
+            'designation', 'designationBng', 'staffCategory',
+            'subject', 'assignedClass', 'joiningDate',
+            'academicQualifications.degreeLevel', 'academicQualifications.examTitle',
+            'academicQualifications.majorOrGroup', 'academicQualifications.boardOrUniversity',
+            'academicQualifications.passingYear',
+            'rankingMetrics.overallMadrasahRank', 'rankingMetrics.designationPriority',
+            'profilePicture', 'isActive', 'registrationStatus'
+        ].join(' '));
+    }
+
+    const teachers = await query.lean();
 
     res.status(200).json(new ApiResponse(200, 'র‍্যাংক অনুযায়ী শিক্ষকদের তালিকা সফলভাবে পাওয়া গেছে', {
         totalCount: teachers.length,
@@ -380,15 +403,35 @@ const triggerRankRecalculation = asyncHandler(async (req, res) => {
     res.status(200).json(new ApiResponse(200, 'সকল শিক্ষকের পদবী, শিক্ষাগত যোগ্যতা ও GPA অনুযায়ী র‍্যাংকিং সফলভাবে আপডেট করা হয়েছে!', { totalRanked }));
 });
 
-// ৭. একক শিক্ষকের বিস্তারিত প্রোফাইল
+// ৭. একক শিক্ষকের বিস্তারিত প্রোফাইল (অ্যাডমিন ও নিজের জন্য পূর্ণ তথ্য, অন্য শিক্ষকের জন্য সাধারণ তথ্য)
 const getTeacherById = asyncHandler(async (req, res) => {
-    if (req.user.role === ROLES.TEACHER && String(req.user._id) !== req.params.id) {
-        throw new ApiError(403, 'আপনি শুধু নিজের শিক্ষকের তথ্য দেখতে পারবেন।');
+    const isAdmin = [ROLES.SUPER_ADMIN, ROLES.ADMIN].includes(req.user.role);
+    const isSelf = String(req.user._id) === String(req.params.id);
+
+    const query = Teacher.findById(req.params.id);
+
+    if (!isAdmin && !isSelf) {
+        query.select([
+            'teacherCode', 'uid', 'fullNameBng', 'fullNameEng',
+            'gender', 'bloodGroup', 'phone', 'email',
+            'designation', 'designationBng', 'staffCategory',
+            'subject', 'assignedClass', 'joiningDate',
+            'academicQualifications.degreeLevel', 'academicQualifications.examTitle',
+            'academicQualifications.majorOrGroup', 'academicQualifications.boardOrUniversity',
+            'academicQualifications.passingYear',
+            'rankingMetrics.overallMadrasahRank', 'rankingMetrics.designationPriority',
+            'profilePicture', 'isActive', 'registrationStatus'
+        ].join(' '));
     }
-    const teacher = await Teacher.findById(req.params.id).lean();
+
+    const teacher = await query.lean();
     if (!teacher) {
         throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
     }
+    if (!isAdmin && !isSelf && (teacher.isActive === false || teacher.registrationStatus !== 'Approved')) {
+        throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
+    }
+
     res.status(200).json(new ApiResponse(200, 'শিক্ষকের তথ্য পাওয়া গেছে', teacher));
 });
 

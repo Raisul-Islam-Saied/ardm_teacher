@@ -134,6 +134,7 @@ const registerStudent = asyncHandler(async (req, res) => {
     const {
         studentCode,
         migratedFromSheet = false,
+        legacyAcademicRecord,
         session,
         classBn,
         roll,
@@ -196,8 +197,10 @@ const registerStudent = asyncHandler(async (req, res) => {
         ? req.body.permanentAddress
         : req.body.presentAddress;
 
-    const student = await Student.create({
-        ...req.body,
+    const studentPayload = { ...req.body };
+    delete studentPayload.legacyAcademicRecord;
+    const studentData = {
+        ...studentPayload,
         studentCode: finalStudentCode,
         migratedFromSheet: Boolean(migratedFromSheet),
         biometricDeviceId: finalBiometricId,
@@ -205,7 +208,45 @@ const registerStudent = asyncHandler(async (req, res) => {
         editToken,
         permanentAddress,
         createdBy: req.user._id
-    });
+    };
+
+    if (migratedFromSheet && legacyAcademicRecord) {
+        const sourceClassBn = normalizeClassBn(legacyAcademicRecord.classBn);
+        const sourceClass = STUDENT_CLASSES.find((item) => normalizeClassBn(item.classBn) === sourceClassBn);
+        const currentClass = STUDENT_CLASSES.find((item) => normalizeClassBn(item.classBn) === normalizeClassBn(classBn));
+        const sourceSession = String(legacyAcademicRecord.session || '').trim();
+        const sourceRoll = Number(legacyAcademicRecord.roll);
+        const sameSourceRecord =
+            sourceSession === String(session)
+            && sourceClass?.classBn === currentClass?.classBn;
+
+        if (!sourceClass || !currentClass || !/^20\d{2}$/.test(sourceSession) || !Number.isInteger(sourceRoll) || sourceRoll < 1 || sourceRoll > 500) {
+            throw new ApiError(400, 'পুরনো শিক্ষার্থীর সেশন, শ্রেণি ও রোল সঠিক নয়।');
+        }
+
+        if (!sameSourceRecord) {
+            studentData.academicHistory = [
+                {
+                    session: sourceSession,
+                    classBn: sourceClass.classBn,
+                    classEn: sourceClass.classEn,
+                    roll: sourceRoll,
+                    group: '',
+                    resultStatus: currentClass.order > sourceClass.order ? 'Promoted' : 'Failed'
+                },
+                {
+                    session: String(session),
+                    classBn: currentClass.classBn,
+                    classEn: currentClass.classEn,
+                    roll: Number(roll),
+                    group: req.body.group || '',
+                    resultStatus: 'Studying'
+                }
+            ];
+        }
+    }
+
+    const student = await Student.create(studentData);
 
     await AuditLog.recordLog({
         req,
@@ -403,7 +444,7 @@ const updateStudent = asyncHandler(async (req, res) => {
     }
 
     student.updatedBy = req.user._id;
-    await student.save();
+    await student.save({ validateModifiedOnly: true });
 
     await AuditLog.recordLog({
         req,
@@ -452,48 +493,178 @@ const deleteStudent = asyncHandler(async (req, res) => {
 
 const promoteStudentsBulk = asyncHandler(async (req, res) => {
     const { promotions, targetSession } = req.body;
-    if (!Array.isArray(promotions) || promotions.length === 0 || !/^20\d{2}$/.test(String(targetSession))) {
-        throw new ApiError(400, 'সঠিক সেশন এবং প্রমোশন তালিকা প্রদান করুন।');
+    const cleanSession = String(targetSession || '').trim();
+
+    if (!Array.isArray(promotions) || promotions.length === 0 || !/^20\d{2}$/.test(cleanSession)) {
+        throw new ApiError(400, 'সঠিক সেশন (যেমন: 2027) এবং প্রমোশন তালিকা প্রদান করুন।');
     }
 
-    let promotedCount = 0;
+    const findClassMeta = (cls) => {
+        const norm = normalizeClassBn(cls);
+        return STUDENT_CLASSES.find((c) => normalizeClassBn(c.classBn) === norm);
+    };
+
+    // ১. পেলোডের ভেতরেই একই ক্লাস ও সেশনে ডুপ্লিকেট রোল আছে কি না যাচাই
+    const seenKeys = new Set();
     for (const item of promotions) {
-        const student = await Student.findById(item.studentId);
-        if (!student || student.status !== 'Active') continue;
+        if (item.resultStatus === 'Transferred') continue;
+        const meta = findClassMeta(item.nextClassBn);
+        if (!meta) {
+            throw new ApiError(400, `অবৈধ শ্রেণি: ${item.nextClassBn}`);
+        }
+        const rollNum = Number(item.nextRoll);
+        if (!Number.isInteger(rollNum) || rollNum < 1 || rollNum > 500) {
+            throw new ApiError(400, `অবৈধ রোল নম্বর (${item.nextRoll}) — রোল ১ থেকে ৫০০-এর মধ্যে হতে হবে।`);
+        }
+        const key = `${cleanSession}__${meta.classBn}__${rollNum}`;
+        if (seenKeys.has(key)) {
+            throw new ApiError(409, `${meta.classBn} শ্রেণিতে রোল ${rollNum} একাধিকবার দেওয়া হয়েছে!`);
+        }
+        seenKeys.add(key);
+    }
+
+    const promotingIds = promotions
+        .map((p) => p.studentId)
+        .filter((id) => mongoose.Types.ObjectId.isValid(id));
+
+    // ২. ডাটাবেজে টার্গেট সেশন ও শ্রেণিতে অন্য কোনো শিক্ষার্থীর সাথে রোল সংঘর্ষ আছে কি না যাচাই
+    for (const item of promotions) {
+        if (item.resultStatus === 'Transferred') continue;
+        const meta = findClassMeta(item.nextClassBn);
+        const conflict = await Student.findOne({
+            _id: { $nin: promotingIds },
+            session: cleanSession,
+            classBn: meta.classBn,
+            roll: Number(item.nextRoll),
+            status: { $in: ['Active', 'Inactive'] }
+        }).select('fullNameBng studentCode').lean();
+
+        if (conflict) {
+            throw new ApiError(
+                409,
+                `${cleanSession} সেশনের ${meta.classBn} শ্রেণিতে রোল ${item.nextRoll} ইতিমধ্যে '${conflict.fullNameBng}' (${conflict.studentCode})-এর নামে বরাদ্দ আছে!`
+            );
+        }
+    }
+
+    // ৩. প্রতিটি শিক্ষার্থী আপডেট ও academicHistory সংরক্ষণ
+    let promotedCount = 0;
+    let failedCount = 0;
+    let transferredCount = 0;
+
+    for (const item of promotions) {
+        const student = await Student.findById(item.studentId).lean();
+        if (!student || student.status === 'Deleted') continue;
 
         await assertStudentActionPermission(req.user, 'edit', student.classBn);
-        await assertStudentActionPermission(req.user, 'edit', item.nextClassBn);
 
-        const currentHist = student.academicHistory.find(
-            h => h.session === student.session && h.classBn === student.classBn
+        const nextStatus = ['Promoted', 'Failed', 'Transferred'].includes(item.resultStatus)
+            ? item.resultStatus
+            : 'Promoted';
+
+        const nextHistory = Array.isArray(student.academicHistory)
+            ? student.academicHistory.map((h) => ({ ...h }))
+            : [];
+
+        // আগের সেশনের হিস্ট্রি আপডেট (না থাকলে তৈরি করে নেওয়া)
+        const currentHist = nextHistory.find(
+            (h) => h.session === student.session && normalizeClassBn(h.classBn) === normalizeClassBn(student.classBn)
         );
         if (currentHist) {
-            currentHist.resultStatus = item.resultStatus || 'Promoted';
+            currentHist.resultStatus = nextStatus;
+        } else {
+            const oldMeta = findClassMeta(student.classBn);
+            nextHistory.push({
+                session: student.session,
+                classBn: oldMeta ? oldMeta.classBn : student.classBn,
+                classEn: oldMeta ? oldMeta.classEn : (student.classEn || 'N/A'),
+                roll: student.roll,
+                group: student.group || '',
+                resultStatus: nextStatus,
+                recordedAt: new Date()
+            });
         }
 
-        student.session = String(targetSession);
-        student.classBn = item.nextClassBn;
-        student.roll = Number(item.nextRoll);
-        if (item.nextGroup !== undefined) student.group = item.nextGroup;
-        student.updatedBy = req.user._id;
+        if (nextStatus === 'Transferred') {
+            await Student.findByIdAndUpdate(
+                student._id,
+                {
+                    $set: {
+                        status: 'Transferred',
+                        isActive: false,
+                        statusReason: item.statusReason || `${student.session} সেশন শেষে ট্রান্সফার / পাস-আউট`,
+                        academicHistory: nextHistory,
+                        updatedBy: req.user._id
+                    }
+                },
+                { runValidators: false }
+            );
+            transferredCount++;
+            continue;
+        }
 
-        student.academicHistory.push({
-            session: String(targetSession),
-            classBn: item.nextClassBn,
-            classEn: '',
-            roll: Number(item.nextRoll),
-            group: item.nextGroup || '',
-            resultStatus: 'Studying'
-        });
+        const nextMeta = findClassMeta(item.nextClassBn);
+        await assertStudentActionPermission(req.user, 'edit', nextMeta.classBn);
 
-        await student.save();
-        promotedCount++;
+        const nextGroup = ['৯ম', '১০ম'].includes(nextMeta.classBn) ? (item.nextGroup || student.group || 'General') : '';
+
+        // নতুন সেশনের হিস্ট্রি এন্ট্রি যোগ করা (ডুপ্লিকেট এড়িয়ে)
+        const existingNextHist = nextHistory.find(
+            (h) => h.session === cleanSession && normalizeClassBn(h.classBn) === normalizeClassBn(nextMeta.classBn)
+        );
+        if (existingNextHist) {
+            existingNextHist.roll = Number(item.nextRoll);
+            existingNextHist.group = nextGroup;
+            existingNextHist.resultStatus = 'Studying';
+            existingNextHist.recordedAt = new Date();
+        } else {
+            nextHistory.push({
+                session: cleanSession,
+                classBn: nextMeta.classBn,
+                classEn: nextMeta.classEn,
+                roll: Number(item.nextRoll),
+                group: nextGroup,
+                resultStatus: 'Studying',
+                recordedAt: new Date()
+            });
+        }
+
+        await Student.findByIdAndUpdate(
+            student._id,
+            {
+                $set: {
+                    session: cleanSession,
+                    classBn: nextMeta.classBn,
+                    classEn: nextMeta.classEn,
+                    classOrder: nextMeta.order,
+                    roll: Number(item.nextRoll),
+                    group: nextGroup,
+                    status: 'Active',
+                    isActive: true,
+                    academicHistory: nextHistory,
+                    updatedBy: req.user._id
+                }
+            },
+            { runValidators: false }
+        );
+
+        if (nextStatus === 'Failed') failedCount++;
+        else promotedCount++;
     }
+    const totalUpdated = promotedCount + failedCount + transferredCount;
+
+    await AuditLog.recordLog({
+        req,
+        action: 'BULK_PROMOTE_STUDENTS',
+        module: 'Student',
+        targetId: null,
+        description: `সেশন ${cleanSession}-এ বাল্ক প্রমোশন সম্পন্ন: উত্তীর্ণ ${promotedCount}, অকৃতকার্য ${failedCount}, ট্রান্সফার ${transferredCount} (মোট ${totalUpdated} জন)`
+    }).catch(() => {});
 
     return res.status(200).json(new ApiResponse(
         200,
-        `মোট ${promotedCount} জন শিক্ষার্থীকে ${targetSession} সেশনে প্রমোশন দেওয়া হয়েছে!`,
-        { promotedCount }
+        `মোট ${totalUpdated} জন শিক্ষার্থীর তথ্য ${cleanSession} সেশনে সফলভাবে আপডেট হয়েছে! (উত্তীর্ণ: ${promotedCount}, অকৃতকার্য: ${failedCount}, টিসি: ${transferredCount})`,
+        { promotedCount, failedCount, transferredCount, totalUpdated }
     ));
 });
 

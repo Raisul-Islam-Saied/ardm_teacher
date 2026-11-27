@@ -94,6 +94,9 @@ export const toUiStudent = (doc) => {
   return {
     _id: doc._id,
     ID: doc.studentCode,
+    UID: doc.uid || '',
+    BiometricId: doc.biometricDeviceId ?? '',
+    MigratedFromSheet: Boolean(doc.migratedFromSheet),
     Time: doc.createdAt || doc.admissionDate || '',
     AdmissionDate: dateOnly(doc.admissionDate),
     Session: doc.session || '',
@@ -102,6 +105,7 @@ export const toUiStudent = (doc) => {
     Roll: doc.roll,
     ClassBn: toUiClass(doc.classBn),
     ClassEn: doc.classEn || CLASS_EN_MAP[toUiClass(doc.classBn)] || '',
+    ClassOrder: doc.classOrder ?? 99,
     Group: doc.group || '',
     FourthSubject: doc.fourthSubject || '',
     BoardRegNo: doc.boardRegNo || '',
@@ -145,6 +149,7 @@ export const toUiStudent = (doc) => {
     ImageURL: doc.profilePicture?.url || '',
     Status: doc.status || 'Active',
     StatusReason: doc.statusReason || '',
+    AcademicHistory: Array.isArray(doc.academicHistory) ? doc.academicHistory : [],
     LastUpdated: doc.updatedAt ? new Date(doc.updatedAt).toLocaleString() : ''
   };
 };
@@ -238,6 +243,24 @@ export const toServerPayload = (form, { isUpdate = false, imageUrl, publicId, mi
       payload.studentCode = migration.studentCode;
       payload.migratedFromSheet = true;
       if (migration.admissionDate) payload.admissionDate = migration.admissionDate;
+      if (migration.legacyAcademicRecord) {
+        const sourceSession = clean(migration.legacyAcademicRecord.session);
+        const sourceClassBn = toServerClass(toUiClass(migration.legacyAcademicRecord.classBn));
+        const sourceRoll = Number(migration.legacyAcademicRecord.roll);
+        if (
+          /^20\d{2}$/.test(sourceSession)
+          && CLASS_EN_MAP[sourceClassBn]
+          && Number.isInteger(sourceRoll)
+          && sourceRoll >= 1
+          && sourceRoll <= 500
+        ) {
+          payload.legacyAcademicRecord = {
+            session: sourceSession,
+            classBn: sourceClassBn,
+            roll: sourceRoll
+          };
+        }
+      }
     }
   }
   return payload;

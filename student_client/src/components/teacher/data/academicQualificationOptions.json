@@ -1,0 +1,3496 @@
+{
+  "passingYearStart": 1965,
+  "passingYearEnd": 2026,
+  "secondary": {
+    "examinations": [
+      {
+        "value": "S.S.C",
+        "label": "S.S.C",
+        "degreeLevel": "SSC",
+        "sourceValue": "1"
+      },
+      {
+        "value": "Dakhil",
+        "label": "Dakhil",
+        "degreeLevel": "Dakhil",
+        "sourceValue": "2"
+      },
+      {
+        "value": "S.S.C Vocational",
+        "label": "S.S.C Vocational",
+        "degreeLevel": "SSC",
+        "sourceValue": "3"
+      },
+      {
+        "value": "O Level/Cambridge",
+        "label": "O Level/Cambridge",
+        "degreeLevel": "SSC",
+        "sourceValue": "4"
+      },
+      {
+        "value": "S.S.C Equivalent",
+        "label": "S.S.C Equivalent",
+        "degreeLevel": "SSC",
+        "sourceValue": "5"
+      },
+      {
+        "value": "Dakhil Vocational",
+        "label": "Dakhil Vocational",
+        "degreeLevel": "Dakhil",
+        "sourceValue": "6"
+      }
+    ],
+    "boards": [
+      {
+        "value": "Barishal",
+        "label": "Barishal",
+        "sourceValue": "11"
+      },
+      {
+        "value": "Chittagong",
+        "label": "Chittagong",
+        "sourceValue": "12"
+      },
+      {
+        "value": "Cumilla",
+        "label": "Cumilla",
+        "sourceValue": "13"
+      },
+      {
+        "value": "Dhaka",
+        "label": "Dhaka",
+        "sourceValue": "14"
+      },
+      {
+        "value": "Dinajpur",
+        "label": "Dinajpur",
+        "sourceValue": "15"
+      },
+      {
+        "value": "Jashore",
+        "label": "Jashore",
+        "sourceValue": "16"
+      },
+      {
+        "value": "Madrasah",
+        "label": "Madrasah",
+        "sourceValue": "17"
+      },
+      {
+        "value": "Mymensingh",
+        "label": "Mymensingh",
+        "sourceValue": "18"
+      },
+      {
+        "value": "Rajshahi",
+        "label": "Rajshahi",
+        "sourceValue": "19"
+      },
+      {
+        "value": "Sylhet",
+        "label": "Sylhet",
+        "sourceValue": "20"
+      },
+      {
+        "value": "Open University",
+        "label": "Open University",
+        "sourceValue": "21"
+      },
+      {
+        "value": "Edexcel International",
+        "label": "Edexcel International",
+        "sourceValue": "22"
+      },
+      {
+        "value": "Cambridge International - IGCE",
+        "label": "Cambridge International - IGCE",
+        "sourceValue": "23"
+      },
+      {
+        "value": "Pharmacy Council of Bangladesh",
+        "label": "Pharmacy Council of Bangladesh",
+        "sourceValue": "24"
+      },
+      {
+        "value": "The State Medical Faculty of Bangladesh",
+        "label": "The State Medical Faculty of Bangladesh",
+        "sourceValue": "25"
+      },
+      {
+        "value": "Bangladesh Technical Education Board (BTEB)",
+        "label": "Bangladesh Technical Education Board (BTEB)",
+        "sourceValue": "26"
+      },
+      {
+        "value": "Other",
+        "label": "Other",
+        "sourceValue": "99"
+      }
+    ],
+    "subjects": [
+      {
+        "value": "Agro-Based Food",
+        "label": "Agro-Based Food",
+        "sourceValue": "11",
+        "category": "V"
+      },
+      {
+        "value": "Architectural Drafting with CAD",
+        "label": "Architectural Drafting with CAD",
+        "sourceValue": "12",
+        "category": "V"
+      },
+      {
+        "value": "Automotive",
+        "label": "Automotive",
+        "sourceValue": "13",
+        "category": "V"
+      },
+      {
+        "value": "Building Maintenance",
+        "label": "Building Maintenance",
+        "sourceValue": "14",
+        "category": "V"
+      },
+      {
+        "value": "Business Studies",
+        "label": "Business Studies",
+        "sourceValue": "3",
+        "category": "G"
+      },
+      {
+        "value": "Ceramic",
+        "label": "Ceramic",
+        "sourceValue": "15",
+        "category": "V"
+      },
+      {
+        "value": "Civil Construction",
+        "label": "Civil Construction",
+        "sourceValue": "16",
+        "category": "V"
+      },
+      {
+        "value": "Civil Drafting with CAD",
+        "label": "Civil Drafting with CAD",
+        "sourceValue": "17",
+        "category": "V"
+      },
+      {
+        "value": "Computer and Information Technology",
+        "label": "Computer and Information Technology",
+        "sourceValue": "18",
+        "category": "V"
+      },
+      {
+        "value": "Dress Making",
+        "label": "Dress Making",
+        "sourceValue": "19",
+        "category": "V"
+      },
+      {
+        "value": "Dyeing, Printing and Finishing",
+        "label": "Dyeing, Printing and Finishing",
+        "sourceValue": "20",
+        "category": "V"
+      },
+      {
+        "value": "Electrical Maintenance Works",
+        "label": "Electrical Maintenance Works",
+        "sourceValue": "21",
+        "category": "V"
+      },
+      {
+        "value": "Farm Machinery",
+        "label": "Farm Machinery",
+        "sourceValue": "22",
+        "category": "V"
+      },
+      {
+        "value": "Fish Culture and Breeding",
+        "label": "Fish Culture and Breeding",
+        "sourceValue": "23",
+        "category": "V"
+      },
+      {
+        "value": "Food Processing and Preservation",
+        "label": "Food Processing and Preservation",
+        "sourceValue": "24",
+        "category": "V"
+      },
+      {
+        "value": "Fruit and Vegetable Cultivation",
+        "label": "Fruit and Vegetable Cultivation",
+        "sourceValue": "25",
+        "category": "V"
+      },
+      {
+        "value": "General",
+        "label": "General",
+        "sourceValue": "4",
+        "category": "G"
+      },
+      {
+        "value": "General Electrical Works",
+        "label": "General Electrical Works",
+        "sourceValue": "26",
+        "category": "V"
+      },
+      {
+        "value": "General Electronics",
+        "label": "General Electronics",
+        "sourceValue": "27",
+        "category": "V"
+      },
+      {
+        "value": "General Mechanics",
+        "label": "General Mechanics",
+        "sourceValue": "28",
+        "category": "V"
+      },
+      {
+        "value": "Glass",
+        "label": "Glass",
+        "sourceValue": "29",
+        "category": "V"
+      },
+      {
+        "value": "Humanities",
+        "label": "Humanities",
+        "sourceValue": "2",
+        "category": "G"
+      },
+      {
+        "value": "Knitting",
+        "label": "Knitting",
+        "sourceValue": "33",
+        "category": "V"
+      },
+      {
+        "value": "Livestock Rearing and Farming",
+        "label": "Livestock Rearing and Farming",
+        "sourceValue": "30",
+        "category": "V"
+      },
+      {
+        "value": "Machine Tools Operation",
+        "label": "Machine Tools Operation",
+        "sourceValue": "31",
+        "category": "V"
+      },
+      {
+        "value": "Mechanical Drafting with CAD",
+        "label": "Mechanical Drafting with CAD",
+        "sourceValue": "32",
+        "category": "V"
+      },
+      {
+        "value": "Patient Care Technique",
+        "label": "Patient Care Technique",
+        "sourceValue": "34",
+        "category": "V"
+      },
+      {
+        "value": "Plumbing and Pipe Fittings",
+        "label": "Plumbing and Pipe Fittings",
+        "sourceValue": "35",
+        "category": "V"
+      },
+      {
+        "value": "Poultry Rearing and Farming",
+        "label": "Poultry Rearing and Farming",
+        "sourceValue": "36",
+        "category": "V"
+      },
+      {
+        "value": "Refrigeration and Air Conditioning",
+        "label": "Refrigeration and Air Conditioning",
+        "sourceValue": "37",
+        "category": "V"
+      },
+      {
+        "value": "Science",
+        "label": "Science",
+        "sourceValue": "1",
+        "category": "G"
+      },
+      {
+        "value": "Shrimp Culture and Breeding",
+        "label": "Shrimp Culture and Breeding",
+        "sourceValue": "38",
+        "category": "V"
+      },
+      {
+        "value": "Welding and Fabrication",
+        "label": "Welding and Fabrication",
+        "sourceValue": "39",
+        "category": "V"
+      },
+      {
+        "value": "Wood Working",
+        "label": "Wood Working",
+        "sourceValue": "40",
+        "category": "V"
+      },
+      {
+        "value": "Other",
+        "label": "Other",
+        "sourceValue": "99",
+        "category": "Z"
+      }
+    ],
+    "results": [
+      {
+        "value": "Division_First",
+        "label": "1st Division",
+        "resultType": "Division",
+        "resultGrade": "First",
+        "sourceValue": "1"
+      },
+      {
+        "value": "Division_Second",
+        "label": "2nd Division",
+        "resultType": "Division",
+        "resultGrade": "Second",
+        "sourceValue": "2"
+      },
+      {
+        "value": "Division_Third",
+        "label": "3rd Division",
+        "resultType": "Division",
+        "resultGrade": "Third",
+        "sourceValue": "3"
+      },
+      {
+        "value": "GPA_4",
+        "label": "GPA(out of 4)",
+        "resultType": "GPA",
+        "scale": 4,
+        "sourceValue": "4"
+      },
+      {
+        "value": "GPA_5",
+        "label": "GPA(out of 5)",
+        "resultType": "GPA",
+        "scale": 5,
+        "sourceValue": "5"
+      }
+    ]
+  },
+  "higherSecondary": {
+    "examinations": [
+      {
+        "value": "H.S.C",
+        "label": "H.S.C",
+        "degreeLevel": "HSC",
+        "sourceValue": "1"
+      },
+      {
+        "value": "Alim",
+        "label": "Alim",
+        "degreeLevel": "Alim",
+        "sourceValue": "2"
+      },
+      {
+        "value": "Business Management",
+        "label": "Business Management",
+        "degreeLevel": "HSC",
+        "sourceValue": "3"
+      },
+      {
+        "value": "Diploma-in-Engineering",
+        "label": "Diploma-in-Engineering",
+        "degreeLevel": "HSC",
+        "sourceValue": "4"
+      },
+      {
+        "value": "A Level/Sr. Cambridge",
+        "label": "A Level/Sr. Cambridge",
+        "degreeLevel": "HSC",
+        "sourceValue": "5"
+      },
+      {
+        "value": "H.S.C Equivalent",
+        "label": "H.S.C Equivalent",
+        "degreeLevel": "HSC",
+        "sourceValue": "6"
+      },
+      {
+        "value": "Diploma in Medical Technology",
+        "label": "Diploma in Medical Technology",
+        "degreeLevel": "HSC",
+        "sourceValue": "7"
+      },
+      {
+        "value": "H.S.C Vocational",
+        "label": "H.S.C Vocational",
+        "degreeLevel": "HSC",
+        "sourceValue": "8"
+      },
+      {
+        "value": "H.S.C (BM)",
+        "label": "H.S.C (BM)",
+        "degreeLevel": "HSC",
+        "sourceValue": "9"
+      },
+      {
+        "value": "Diploma in Pharmacy",
+        "label": "Diploma in Pharmacy",
+        "degreeLevel": "HSC",
+        "sourceValue": "10"
+      }
+    ],
+    "boards": [
+      {
+        "value": "DIBS (Dhaka)",
+        "label": "DIBS (Dhaka)",
+        "sourceValue": "10"
+      },
+      {
+        "value": "Barishal",
+        "label": "Barishal",
+        "sourceValue": "11"
+      },
+      {
+        "value": "Chittagong",
+        "label": "Chittagong",
+        "sourceValue": "12"
+      },
+      {
+        "value": "Cumilla",
+        "label": "Cumilla",
+        "sourceValue": "13"
+      },
+      {
+        "value": "Dhaka",
+        "label": "Dhaka",
+        "sourceValue": "14"
+      },
+      {
+        "value": "Dinajpur",
+        "label": "Dinajpur",
+        "sourceValue": "15"
+      },
+      {
+        "value": "Jashore",
+        "label": "Jashore",
+        "sourceValue": "16"
+      },
+      {
+        "value": "Madrasah",
+        "label": "Madrasah",
+        "sourceValue": "17"
+      },
+      {
+        "value": "Mymensingh",
+        "label": "Mymensingh",
+        "sourceValue": "18"
+      },
+      {
+        "value": "Rajshahi",
+        "label": "Rajshahi",
+        "sourceValue": "19"
+      },
+      {
+        "value": "Sylhet",
+        "label": "Sylhet",
+        "sourceValue": "20"
+      },
+      {
+        "value": "Open University",
+        "label": "Open University",
+        "sourceValue": "21"
+      },
+      {
+        "value": "Edexcel International",
+        "label": "Edexcel International",
+        "sourceValue": "22"
+      },
+      {
+        "value": "Cambridge International - IGCE",
+        "label": "Cambridge International - IGCE",
+        "sourceValue": "23"
+      },
+      {
+        "value": "Pharmacy Council of Bangladesh",
+        "label": "Pharmacy Council of Bangladesh",
+        "sourceValue": "24"
+      },
+      {
+        "value": "The State Medical Faculty of Bangladesh",
+        "label": "The State Medical Faculty of Bangladesh",
+        "sourceValue": "25"
+      },
+      {
+        "value": "Bangladesh Technical Education Board (BTEB)",
+        "label": "Bangladesh Technical Education Board (BTEB)",
+        "sourceValue": "26"
+      },
+      {
+        "value": "Other",
+        "label": "Other",
+        "sourceValue": "99"
+      }
+    ],
+    "subjects": [
+      {
+        "value": "Agriculture Technology",
+        "label": "Agriculture Technology",
+        "sourceValue": "12",
+        "category": "T"
+      },
+      {
+        "value": "Agro Machinery",
+        "label": "Agro Machinery",
+        "sourceValue": "71",
+        "category": "V"
+      },
+      {
+        "value": "Architecture and Interior Design Technology",
+        "label": "Architecture and Interior Design Technology",
+        "sourceValue": "13",
+        "category": "T"
+      },
+      {
+        "value": "Automobile",
+        "label": "Automobile",
+        "sourceValue": "72",
+        "category": "V"
+      },
+      {
+        "value": "Automobile Technology",
+        "label": "Automobile Technology",
+        "sourceValue": "15",
+        "category": "T"
+      },
+      {
+        "value": "Building Construction and Maintenance",
+        "label": "Building Construction and Maintenance",
+        "sourceValue": "73",
+        "category": "V"
+      },
+      {
+        "value": "Business Studies",
+        "label": "Business Studies",
+        "sourceValue": "3",
+        "category": "G"
+      },
+      {
+        "value": "Ceramic Technology",
+        "label": "Ceramic Technology",
+        "sourceValue": "48",
+        "category": "T"
+      },
+      {
+        "value": "Chemical Technology",
+        "label": "Chemical Technology",
+        "sourceValue": "21",
+        "category": "T"
+      },
+      {
+        "value": "Civil Technology",
+        "label": "Civil Technology",
+        "sourceValue": "16",
+        "category": "T"
+      },
+      {
+        "value": "Clothing and Garments Finishing",
+        "label": "Clothing and Garments Finishing",
+        "sourceValue": "74",
+        "category": "V"
+      },
+      {
+        "value": "Computer Operation and Maintenance",
+        "label": "Computer Operation and Maintenance",
+        "sourceValue": "75",
+        "category": "V"
+      },
+      {
+        "value": "Computer Science & Engineering Technology",
+        "label": "Computer Science & Engineering Technology",
+        "sourceValue": "20",
+        "category": "T"
+      },
+      {
+        "value": "Computer Science Technology",
+        "label": "Computer Science Technology",
+        "sourceValue": "17",
+        "category": "T"
+      },
+      {
+        "value": "Data Telecommunication and Network Technology",
+        "label": "Data Telecommunication and Network Technology",
+        "sourceValue": "23",
+        "category": "T"
+      },
+      {
+        "value": "Dental",
+        "label": "Dental",
+        "sourceValue": "93",
+        "category": "M"
+      },
+      {
+        "value": "Drafting Civil",
+        "label": "Drafting Civil",
+        "sourceValue": "76",
+        "category": "V"
+      },
+      {
+        "value": "Electrical and Electronics Technology",
+        "label": "Electrical and Electronics Technology",
+        "sourceValue": "24",
+        "category": "T"
+      },
+      {
+        "value": "Electrical Technology",
+        "label": "Electrical Technology",
+        "sourceValue": "22",
+        "category": "T"
+      },
+      {
+        "value": "Electrical Works and Maintenance",
+        "label": "Electrical Works and Maintenance",
+        "sourceValue": "77",
+        "category": "V"
+      },
+      {
+        "value": "Electro-Medical Technology",
+        "label": "Electro-Medical Technology",
+        "sourceValue": "57",
+        "category": "T"
+      },
+      {
+        "value": "Electronic Control and Communication",
+        "label": "Electronic Control and Communication",
+        "sourceValue": "78",
+        "category": "V"
+      },
+      {
+        "value": "Electronics Technology",
+        "label": "Electronics Technology",
+        "sourceValue": "42",
+        "category": "T"
+      },
+      {
+        "value": "Environmental Technology",
+        "label": "Environmental Technology",
+        "sourceValue": "27",
+        "category": "T"
+      },
+      {
+        "value": "Firm Machinery",
+        "label": "Firm Machinery",
+        "sourceValue": "46",
+        "category": "T"
+      },
+      {
+        "value": "Fish Culture and Breeding",
+        "label": "Fish Culture and Breeding",
+        "sourceValue": "79",
+        "category": "V"
+      },
+      {
+        "value": "Food",
+        "label": "Food",
+        "sourceValue": "85",
+        "category": "T"
+      },
+      {
+        "value": "Food Technology",
+        "label": "Food Technology",
+        "sourceValue": "54",
+        "category": "T"
+      },
+      {
+        "value": "Garments Design and Pattern Making",
+        "label": "Garments Design and Pattern Making",
+        "sourceValue": "53",
+        "category": "T"
+      },
+      {
+        "value": "General",
+        "label": "General",
+        "sourceValue": "4",
+        "category": "G"
+      },
+      {
+        "value": "General Mechanics",
+        "label": "General Mechanics",
+        "sourceValue": "45",
+        "category": "T"
+      },
+      {
+        "value": "Glass Technology",
+        "label": "Glass Technology",
+        "sourceValue": "50",
+        "category": "T"
+      },
+      {
+        "value": "Graphic Design Technology",
+        "label": "Graphic Design Technology",
+        "sourceValue": "49",
+        "category": "T"
+      },
+      {
+        "value": "Humanities",
+        "label": "Humanities",
+        "sourceValue": "2",
+        "category": "G"
+      },
+      {
+        "value": "Industrial Wood Working",
+        "label": "Industrial Wood Working",
+        "sourceValue": "84",
+        "category": "V"
+      },
+      {
+        "value": "Information and Communication Technology",
+        "label": "Information and Communication Technology",
+        "sourceValue": "18",
+        "category": "T"
+      },
+      {
+        "value": "Instrumentation & Process Control Technology",
+        "label": "Instrumentation & Process Control Technology",
+        "sourceValue": "31",
+        "category": "T"
+      },
+      {
+        "value": "Jute Technology",
+        "label": "Jute Technology",
+        "sourceValue": "52",
+        "category": "T"
+      },
+      {
+        "value": "Laboratory",
+        "label": "Laboratory",
+        "sourceValue": "92",
+        "category": "M"
+      },
+      {
+        "value": "Library Science",
+        "label": "Library Science",
+        "sourceValue": "43",
+        "category": "T"
+      },
+      {
+        "value": "Machine Tools Operation and Maintenance",
+        "label": "Machine Tools Operation and Maintenance",
+        "sourceValue": "80",
+        "category": "V"
+      },
+      {
+        "value": "Marine Technology",
+        "label": "Marine Technology",
+        "sourceValue": "55",
+        "category": "T"
+      },
+      {
+        "value": "Mechanical Technology",
+        "label": "Mechanical Technology",
+        "sourceValue": "32",
+        "category": "T"
+      },
+      {
+        "value": "Mechatronics",
+        "label": "Mechatronics",
+        "sourceValue": "86",
+        "category": "T"
+      },
+      {
+        "value": "Mechatronics Technology",
+        "label": "Mechatronics Technology",
+        "sourceValue": "34",
+        "category": "T"
+      },
+      {
+        "value": "Mining & Mine Survey Technology",
+        "label": "Mining & Mine Survey Technology",
+        "sourceValue": "56",
+        "category": "T"
+      },
+      {
+        "value": "Pharmacy",
+        "label": "Pharmacy",
+        "sourceValue": "96",
+        "category": "M"
+      },
+      {
+        "value": "Physiotherapy",
+        "label": "Physiotherapy",
+        "sourceValue": "94",
+        "category": "M"
+      },
+      {
+        "value": "Poultry Rearing and Farming",
+        "label": "Poultry Rearing and Farming",
+        "sourceValue": "81",
+        "category": "V"
+      },
+      {
+        "value": "Power Technology",
+        "label": "Power Technology",
+        "sourceValue": "36",
+        "category": "T"
+      },
+      {
+        "value": "Printing Technology",
+        "label": "Printing Technology",
+        "sourceValue": "37",
+        "category": "T"
+      },
+      {
+        "value": "Radiography",
+        "label": "Radiography",
+        "sourceValue": "91",
+        "category": "M"
+      },
+      {
+        "value": "Radiotherapy",
+        "label": "Radiotherapy",
+        "sourceValue": "95",
+        "category": "M"
+      },
+      {
+        "value": "Refrigeration & Air Conditioning Technology",
+        "label": "Refrigeration & Air Conditioning Technology",
+        "sourceValue": "38",
+        "category": "T"
+      },
+      {
+        "value": "Refrigeration and Air-conditioning",
+        "label": "Refrigeration and Air-conditioning",
+        "sourceValue": "82",
+        "category": "V"
+      },
+      {
+        "value": "Science",
+        "label": "Science",
+        "sourceValue": "1",
+        "category": "G"
+      },
+      {
+        "value": "Shipbuilding Technology",
+        "label": "Shipbuilding Technology",
+        "sourceValue": "47",
+        "category": "T"
+      },
+      {
+        "value": "Survey",
+        "label": "Survey",
+        "sourceValue": "44",
+        "category": "T"
+      },
+      {
+        "value": "Telecommunication Technology",
+        "label": "Telecommunication Technology",
+        "sourceValue": "41",
+        "category": "T"
+      },
+      {
+        "value": "Textile Engineering",
+        "label": "Textile Engineering",
+        "sourceValue": "51",
+        "category": "T"
+      },
+      {
+        "value": "Welding and Fabrication",
+        "label": "Welding and Fabrication",
+        "sourceValue": "83",
+        "category": "V"
+      },
+      {
+        "value": "Other",
+        "label": "Other",
+        "sourceValue": "99",
+        "category": "Z"
+      }
+    ],
+    "results": [
+      {
+        "value": "Division_First",
+        "label": "1st Division",
+        "resultType": "Division",
+        "resultGrade": "First",
+        "sourceValue": "1"
+      },
+      {
+        "value": "Division_Second",
+        "label": "2nd Division",
+        "resultType": "Division",
+        "resultGrade": "Second",
+        "sourceValue": "2"
+      },
+      {
+        "value": "Division_Third",
+        "label": "3rd Division",
+        "resultType": "Division",
+        "resultGrade": "Third",
+        "sourceValue": "3"
+      },
+      {
+        "value": "GPA_4",
+        "label": "GPA(out of 4)",
+        "resultType": "GPA",
+        "scale": 4,
+        "sourceValue": "4"
+      },
+      {
+        "value": "GPA_5",
+        "label": "GPA(out of 5)",
+        "resultType": "GPA",
+        "scale": 5,
+        "sourceValue": "5"
+      },
+      {
+        "value": "Passed",
+        "label": "Passed",
+        "resultType": "Passed",
+        "sourceValue": "6"
+      }
+    ]
+  },
+  "graduation": {
+    "examinations": [
+      {
+        "value": "Honours / Degree",
+        "label": "Honours / Degree (BA, BSc, BSS, BBA)",
+        "degreeLevel": "Honours"
+      },
+      {
+        "value": "Fazil",
+        "label": "Fazil",
+        "degreeLevel": "Fazil"
+      },
+      {
+        "value": "B.Sc Engineering",
+        "label": "B.Sc Engineering",
+        "degreeLevel": "Honours",
+        "sourceValue": "1"
+      },
+      {
+        "value": "Other Equivalent Degree",
+        "label": "Other Equivalent Degree",
+        "degreeLevel": "Other"
+      }
+    ],
+    "results": [
+      {
+        "value": "Class_First",
+        "label": "1st Class",
+        "resultType": "Class",
+        "resultGrade": "First",
+        "sourceValue": "1"
+      },
+      {
+        "value": "Class_Second",
+        "label": "2nd Class",
+        "resultType": "Class",
+        "resultGrade": "Second",
+        "sourceValue": "2"
+      },
+      {
+        "value": "CGPA_4",
+        "label": "CGPA(out of 4)",
+        "resultType": "CGPA",
+        "scale": 4,
+        "sourceValue": "4"
+      },
+      {
+        "value": "CGPA_5",
+        "label": "CGPA(out of 5)",
+        "resultType": "CGPA",
+        "scale": 5,
+        "sourceValue": "5"
+      },
+      {
+        "value": "Passed",
+        "label": "Passed",
+        "resultType": "Passed",
+        "sourceValue": "6"
+      }
+    ],
+    "courseDurations": [
+      {
+        "value": "03",
+        "label": "03 Years"
+      },
+      {
+        "value": "04",
+        "label": "04 Years"
+      },
+      {
+        "value": "05",
+        "label": "05 Years"
+      }
+    ]
+  },
+  "masters": {
+    "examinations": [
+      {
+        "value": "M.A",
+        "label": "M.A",
+        "degreeLevel": "Masters",
+        "sourceValue": "1"
+      },
+      {
+        "value": "M.S.S",
+        "label": "M.S.S",
+        "degreeLevel": "Masters",
+        "sourceValue": "2"
+      },
+      {
+        "value": "M.Sc",
+        "label": "M.Sc",
+        "degreeLevel": "Masters",
+        "sourceValue": "3"
+      },
+      {
+        "value": "M.Com",
+        "label": "M.Com",
+        "degreeLevel": "Masters",
+        "sourceValue": "4"
+      },
+      {
+        "value": "M.B.A",
+        "label": "M.B.A",
+        "degreeLevel": "Masters",
+        "sourceValue": "5"
+      },
+      {
+        "value": "L.L.M",
+        "label": "L.L.M",
+        "degreeLevel": "Masters",
+        "sourceValue": "6"
+      },
+      {
+        "value": "Kamil",
+        "label": "Kamil",
+        "degreeLevel": "Kamil",
+        "sourceValue": "8"
+      },
+      {
+        "value": "Masters Equivalent",
+        "label": "Masters Equivalent",
+        "degreeLevel": "Masters",
+        "sourceValue": "10"
+      }
+    ],
+    "results": [
+      {
+        "value": "Class_First",
+        "label": "1st Class",
+        "resultType": "Class",
+        "resultGrade": "First",
+        "sourceValue": "1"
+      },
+      {
+        "value": "Class_Second",
+        "label": "2nd Class",
+        "resultType": "Class",
+        "resultGrade": "Second",
+        "sourceValue": "2"
+      },
+      {
+        "value": "Class_Third",
+        "label": "3rd Class",
+        "resultType": "Class",
+        "resultGrade": "Third",
+        "sourceValue": "3"
+      },
+      {
+        "value": "CGPA_4",
+        "label": "CGPA(out of 4)",
+        "resultType": "CGPA",
+        "scale": 4,
+        "sourceValue": "4"
+      },
+      {
+        "value": "CGPA_5",
+        "label": "CGPA(out of 5)",
+        "resultType": "CGPA",
+        "scale": 5,
+        "sourceValue": "5"
+      }
+    ],
+    "courseDurations": [
+      {
+        "value": "01",
+        "label": "01 Year"
+      },
+      {
+        "value": "1.5",
+        "label": "1.5 Years"
+      },
+      {
+        "value": "02",
+        "label": "02 Years"
+      },
+      {
+        "value": "2.5",
+        "label": "2.5 Years"
+      },
+      {
+        "value": "03+",
+        "label": "3+ Years"
+      },
+      {
+        "value": "03",
+        "label": "03 Years"
+      }
+    ]
+  },
+  "universities": [
+    {
+      "value": "Ad-din Womens Medical College, Dhaka",
+      "label": "Ad-din Womens Medical College, Dhaka",
+      "sourceValue": "101"
+    },
+    {
+      "value": "Ahsania Mission University of Science and Technology",
+      "label": "Ahsania Mission University of Science and Technology",
+      "sourceValue": "102"
+    },
+    {
+      "value": "Ahsanullah University of Science and Technology",
+      "label": "Ahsanullah University of Science and Technology",
+      "sourceValue": "103"
+    },
+    {
+      "value": "America Bangladesh University",
+      "label": "America Bangladesh University",
+      "sourceValue": "104"
+    },
+    {
+      "value": "American International University Bangladesh",
+      "label": "American International University Bangladesh",
+      "sourceValue": "105"
+    },
+    {
+      "value": "Anwer Khan Modern Medical College, Dhaka",
+      "label": "Anwer Khan Modern Medical College, Dhaka",
+      "sourceValue": "106"
+    },
+    {
+      "value": "Anwer Khan Modern University",
+      "label": "Anwer Khan Modern University",
+      "sourceValue": "107"
+    },
+    {
+      "value": "ASA University Bangladesh",
+      "label": "ASA University Bangladesh",
+      "sourceValue": "108"
+    },
+    {
+      "value": "Asian University for Women",
+      "label": "Asian University for Women",
+      "sourceValue": "109"
+    },
+    {
+      "value": "Asian University of Bangladesh",
+      "label": "Asian University of Bangladesh",
+      "sourceValue": "110"
+    },
+    {
+      "value": "Atish Dipankar University of Science & Technology",
+      "label": "Atish Dipankar University of Science & Technology",
+      "sourceValue": "111"
+    },
+    {
+      "value": "Bandarban University",
+      "label": "Bandarban University",
+      "sourceValue": "112"
+    },
+    {
+      "value": "Bangabandhu Sheikh Mujib Medical University",
+      "label": "Bangabandhu Sheikh Mujib Medical University",
+      "sourceValue": "113"
+    },
+    {
+      "value": "Bangabandhu Sheikh Mujibur Rahman Agricultural University",
+      "label": "Bangabandhu Sheikh Mujibur Rahman Agricultural University",
+      "sourceValue": "114"
+    },
+    {
+      "value": "Bangabandhu Sheikh Mujibur Rahman Aviation And Aerospace University",
+      "label": "Bangabandhu Sheikh Mujibur Rahman Aviation And Aerospace University",
+      "sourceValue": "115"
+    },
+    {
+      "value": "Bangabandhu Sheikh Mujibur Rahman Digital University",
+      "label": "Bangabandhu Sheikh Mujibur Rahman Digital University",
+      "sourceValue": "116"
+    },
+    {
+      "value": "Bangabandhu Sheikh Mujibur Rahman Maritime University",
+      "label": "Bangabandhu Sheikh Mujibur Rahman Maritime University",
+      "sourceValue": "117"
+    },
+    {
+      "value": "Bangabandhu Sheikh Mujibur Rahman Univerisity, Kishoreganj",
+      "label": "Bangabandhu Sheikh Mujibur Rahman Univerisity, Kishoreganj",
+      "sourceValue": "119"
+    },
+    {
+      "value": "Bangamata Sheikh Fojilatunnesa Mujib Science and Technology University",
+      "label": "Bangamata Sheikh Fojilatunnesa Mujib Science and Technology University",
+      "sourceValue": "120"
+    },
+    {
+      "value": "Bangladesh Agricultural University,Mymensingh",
+      "label": "Bangladesh Agricultural University,Mymensingh",
+      "sourceValue": "121"
+    },
+    {
+      "value": "Bangladesh Airlines Training Centre (BATC)",
+      "label": "Bangladesh Airlines Training Centre (BATC)",
+      "sourceValue": "122"
+    },
+    {
+      "value": "Bangladesh Army International University of Science & Technology(BAIUST) ,Comilla",
+      "label": "Bangladesh Army International University of Science & Technology(BAIUST) ,Comilla",
+      "sourceValue": "123"
+    },
+    {
+      "value": "Bangladesh Army University of Engineering and Technology (BAUET), Qadirabad",
+      "label": "Bangladesh Army University of Engineering and Technology (BAUET), Qadirabad",
+      "sourceValue": "124"
+    },
+    {
+      "value": "Bangladesh Army University of Science and Technology(BAUST), Saidpur",
+      "label": "Bangladesh Army University of Science and Technology(BAUST), Saidpur",
+      "sourceValue": "125"
+    },
+    {
+      "value": "Bangladesh Islami University",
+      "label": "Bangladesh Islami University",
+      "sourceValue": "126"
+    },
+    {
+      "value": "Bangladesh Medical College",
+      "label": "Bangladesh Medical College",
+      "sourceValue": "127"
+    },
+    {
+      "value": "Bangladesh Open University",
+      "label": "Bangladesh Open University",
+      "sourceValue": "128"
+    },
+    {
+      "value": "Bangladesh University",
+      "label": "Bangladesh University",
+      "sourceValue": "129"
+    },
+    {
+      "value": "Bangladesh University of Business & Technology (BUBT)",
+      "label": "Bangladesh University of Business & Technology (BUBT)",
+      "sourceValue": "130"
+    },
+    {
+      "value": "Bangladesh University of Engineering & Technology",
+      "label": "Bangladesh University of Engineering & Technology",
+      "sourceValue": "131"
+    },
+    {
+      "value": "Bangladesh University of Health Sciences",
+      "label": "Bangladesh University of Health Sciences",
+      "sourceValue": "132"
+    },
+    {
+      "value": "Bangladesh University of Professionals",
+      "label": "Bangladesh University of Professionals",
+      "sourceValue": "133"
+    },
+    {
+      "value": "Bangladesh University of Textiles",
+      "label": "Bangladesh University of Textiles",
+      "sourceValue": "134"
+    },
+    {
+      "value": "Barisal University",
+      "label": "Barisal University",
+      "sourceValue": "135"
+    },
+    {
+      "value": "Barishal Engineering College",
+      "label": "Barishal Engineering College",
+      "sourceValue": "136"
+    },
+    {
+      "value": "Begum Rokeya University, Rangpur",
+      "label": "Begum Rokeya University, Rangpur",
+      "sourceValue": "137"
+    },
+    {
+      "value": "BGC Trust Medical College, Chittagong",
+      "label": "BGC Trust Medical College, Chittagong",
+      "sourceValue": "138"
+    },
+    {
+      "value": "BGC Trust University Bangladesh, Chittagong",
+      "label": "BGC Trust University Bangladesh, Chittagong",
+      "sourceValue": "139"
+    },
+    {
+      "value": "BGMEA University of Fashion & Technology(BUFT)",
+      "label": "BGMEA University of Fashion & Technology(BUFT)",
+      "sourceValue": "140"
+    },
+    {
+      "value": "BRAC University",
+      "label": "BRAC University",
+      "sourceValue": "141"
+    },
+    {
+      "value": "Britannia University",
+      "label": "Britannia University",
+      "sourceValue": "142"
+    },
+    {
+      "value": "Canadian University of Bangladesh",
+      "label": "Canadian University of Bangladesh",
+      "sourceValue": "143"
+    },
+    {
+      "value": "CCN University of Science & Technology",
+      "label": "CCN University of Science & Technology",
+      "sourceValue": "144"
+    },
+    {
+      "value": "Central Medical College, Comilla",
+      "label": "Central Medical College, Comilla",
+      "sourceValue": "145"
+    },
+    {
+      "value": "Central University of Science and Technology",
+      "label": "Central University of Science and Technology",
+      "sourceValue": "146"
+    },
+    {
+      "value": "Central Women's University",
+      "label": "Central Women's University",
+      "sourceValue": "147"
+    },
+    {
+      "value": "Chandpur Science and Technology University",
+      "label": "Chandpur Science and Technology University",
+      "sourceValue": "148"
+    },
+    {
+      "value": "Chittagong Independent University",
+      "label": "Chittagong Independent University",
+      "sourceValue": "149"
+    },
+    {
+      "value": "Chittagong Medical College",
+      "label": "Chittagong Medical College",
+      "sourceValue": "150"
+    },
+    {
+      "value": "Chittagong Medical University",
+      "label": "Chittagong Medical University",
+      "sourceValue": "151"
+    },
+    {
+      "value": "Chittagong University of Engineering & Technology",
+      "label": "Chittagong University of Engineering & Technology",
+      "sourceValue": "152"
+    },
+    {
+      "value": "Chittagong Veterinary and Animal Sciences University",
+      "label": "Chittagong Veterinary and Animal Sciences University",
+      "sourceValue": "153"
+    },
+    {
+      "value": "Chottagram Ma-O-Shishu Hospital Medical College",
+      "label": "Chottagram Ma-O-Shishu Hospital Medical College",
+      "sourceValue": "154"
+    },
+    {
+      "value": "City University",
+      "label": "City University",
+      "sourceValue": "155"
+    },
+    {
+      "value": "Comilla Medical College",
+      "label": "Comilla Medical College",
+      "sourceValue": "156"
+    },
+    {
+      "value": "Comilla University",
+      "label": "Comilla University",
+      "sourceValue": "157"
+    },
+    {
+      "value": "Community Based Medical College (cbmc), Mymensingh",
+      "label": "Community Based Medical College (cbmc), Mymensingh",
+      "sourceValue": "158"
+    },
+    {
+      "value": "Community Medical College, Dhaka",
+      "label": "Community Medical College, Dhaka",
+      "sourceValue": "159"
+    },
+    {
+      "value": "Cox's Bazar International University",
+      "label": "Cox's Bazar International University",
+      "sourceValue": "160"
+    },
+    {
+      "value": "Cox's Bazar Medical College",
+      "label": "Cox's Bazar Medical College",
+      "sourceValue": "161"
+    },
+    {
+      "value": "Daffodil International University",
+      "label": "Daffodil International University",
+      "sourceValue": "162"
+    },
+    {
+      "value": "Darul Ihsan University",
+      "label": "Darul Ihsan University",
+      "sourceValue": "163"
+    },
+    {
+      "value": "Delta Medical College, Dhaka",
+      "label": "Delta Medical College, Dhaka",
+      "sourceValue": "164"
+    },
+    {
+      "value": "Dhaka International University",
+      "label": "Dhaka International University",
+      "sourceValue": "165"
+    },
+    {
+      "value": "Dhaka Medical College",
+      "label": "Dhaka Medical College",
+      "sourceValue": "166"
+    },
+    {
+      "value": "Dhaka National Medical College",
+      "label": "Dhaka National Medical College",
+      "sourceValue": "167"
+    },
+    {
+      "value": "Dhaka University",
+      "label": "Dhaka University",
+      "sourceValue": "168"
+    },
+    {
+      "value": "Dhaka University of Engineering & Technology",
+      "label": "Dhaka University of Engineering & Technology",
+      "sourceValue": "169"
+    },
+    {
+      "value": "Dinajpur Medical College",
+      "label": "Dinajpur Medical College",
+      "sourceValue": "170"
+    },
+    {
+      "value": "Durra Samad Rahman Red Crescent Women's Medical College, Sylhet",
+      "label": "Durra Samad Rahman Red Crescent Women's Medical College, Sylhet",
+      "sourceValue": "171"
+    },
+    {
+      "value": "East Delta University , Chittagong",
+      "label": "East Delta University , Chittagong",
+      "sourceValue": "172"
+    },
+    {
+      "value": "East West University",
+      "label": "East West University",
+      "sourceValue": "173"
+    },
+    {
+      "value": "Eastern Medical College, Comilla",
+      "label": "Eastern Medical College, Comilla",
+      "sourceValue": "174"
+    },
+    {
+      "value": "Eastern University",
+      "label": "Eastern University",
+      "sourceValue": "175"
+    },
+    {
+      "value": "Enam Medical College, Savar, Dhaka",
+      "label": "Enam Medical College, Savar, Dhaka",
+      "sourceValue": "176"
+    },
+    {
+      "value": "European University of Bangladesh",
+      "label": "European University of Bangladesh",
+      "sourceValue": "177"
+    },
+    {
+      "value": "Exim Bank Agricultural University, Bangladesh",
+      "label": "Exim Bank Agricultural University, Bangladesh",
+      "sourceValue": "178"
+    },
+    {
+      "value": "Fareast International University",
+      "label": "Fareast International University",
+      "sourceValue": "179"
+    },
+    {
+      "value": "Faridpur Engineering College",
+      "label": "Faridpur Engineering College",
+      "sourceValue": "180"
+    },
+    {
+      "value": "Faridpur Medical College",
+      "label": "Faridpur Medical College",
+      "sourceValue": "181"
+    },
+    {
+      "value": "Feni Medical College,Feni",
+      "label": "Feni Medical College,Feni",
+      "sourceValue": "182"
+    },
+    {
+      "value": "Feni University",
+      "label": "Feni University",
+      "sourceValue": "183"
+    },
+    {
+      "value": "First Capital University of Bangladesh",
+      "label": "First Capital University of Bangladesh",
+      "sourceValue": "184"
+    },
+    {
+      "value": "German University Bangladesh",
+      "label": "German University Bangladesh",
+      "sourceValue": "185"
+    },
+    {
+      "value": "Global University Bangladesh",
+      "label": "Global University Bangladesh",
+      "sourceValue": "186"
+    },
+    {
+      "value": "Gono Bishwabidyalay, Savar, Dhaka",
+      "label": "Gono Bishwabidyalay, Savar, Dhaka",
+      "sourceValue": "187"
+    },
+    {
+      "value": "Gopalganj Science and Technology University",
+      "label": "Gopalganj Science and Technology University",
+      "sourceValue": "118"
+    },
+    {
+      "value": "Green Life Medical College, Dhaka",
+      "label": "Green Life Medical College, Dhaka",
+      "sourceValue": "188"
+    },
+    {
+      "value": "Green University of Bangladesh",
+      "label": "Green University of Bangladesh",
+      "sourceValue": "189"
+    },
+    {
+      "value": "Hajee Mohammad Danesh Science & Technology University",
+      "label": "Hajee Mohammad Danesh Science & Technology University",
+      "sourceValue": "190"
+    },
+    {
+      "value": "Hamdard University Bangladesh",
+      "label": "Hamdard University Bangladesh",
+      "sourceValue": "191"
+    },
+    {
+      "value": "Hobiganj Agricultural University",
+      "label": "Hobiganj Agricultural University",
+      "sourceValue": "192"
+    },
+    {
+      "value": "Holy Family Red Crescent Medical College, Dhaka",
+      "label": "Holy Family Red Crescent Medical College, Dhaka",
+      "sourceValue": "193"
+    },
+    {
+      "value": "IBAIS University",
+      "label": "IBAIS University",
+      "sourceValue": "194"
+    },
+    {
+      "value": "Ibn Sina Medical College, Dhaka",
+      "label": "Ibn Sina Medical College, Dhaka",
+      "sourceValue": "195"
+    },
+    {
+      "value": "Ibrahim Medical College, Dhaka",
+      "label": "Ibrahim Medical College, Dhaka",
+      "sourceValue": "196"
+    },
+    {
+      "value": "Independent University, Bangladesh",
+      "label": "Independent University, Bangladesh",
+      "sourceValue": "197"
+    },
+    {
+      "value": "International Islamic University, Chittagong",
+      "label": "International Islamic University, Chittagong",
+      "sourceValue": "198"
+    },
+    {
+      "value": "International Medical College, Gazipur",
+      "label": "International Medical College, Gazipur",
+      "sourceValue": "199"
+    },
+    {
+      "value": "International Standard University",
+      "label": "International Standard University",
+      "sourceValue": "200"
+    },
+    {
+      "value": "International University of Business Agriculture & Technology",
+      "label": "International University of Business Agriculture & Technology",
+      "sourceValue": "201"
+    },
+    {
+      "value": "Ishakha International University, Bangladesh",
+      "label": "Ishakha International University, Bangladesh",
+      "sourceValue": "202"
+    },
+    {
+      "value": "Islami Bank Medical College, Rajshahi",
+      "label": "Islami Bank Medical College, Rajshahi",
+      "sourceValue": "203"
+    },
+    {
+      "value": "Islamic Arabic University",
+      "label": "Islamic Arabic University",
+      "sourceValue": "204"
+    },
+    {
+      "value": "Islamic University",
+      "label": "Islamic University",
+      "sourceValue": "205"
+    },
+    {
+      "value": "Islamic University of Technology",
+      "label": "Islamic University of Technology",
+      "sourceValue": "206"
+    },
+    {
+      "value": "Islamic University of Technology, Gazipur",
+      "label": "Islamic University of Technology, Gazipur",
+      "sourceValue": "207"
+    },
+    {
+      "value": "Islamic University, Bangladesh",
+      "label": "Islamic University, Bangladesh",
+      "sourceValue": "208"
+    },
+    {
+      "value": "Islamic University, Kushtia",
+      "label": "Islamic University, Kushtia",
+      "sourceValue": "209"
+    },
+    {
+      "value": "Jagannath University",
+      "label": "Jagannath University",
+      "sourceValue": "210"
+    },
+    {
+      "value": "Jahangirnagar University",
+      "label": "Jahangirnagar University",
+      "sourceValue": "211"
+    },
+    {
+      "value": "Jahurul Islam Medical College, Kishoregonj",
+      "label": "Jahurul Islam Medical College, Kishoregonj",
+      "sourceValue": "212"
+    },
+    {
+      "value": "Jalalabad Ragib-Rabeya Medical College, Sylhet",
+      "label": "Jalalabad Ragib-Rabeya Medical College, Sylhet",
+      "sourceValue": "213"
+    },
+    {
+      "value": "Jatiya Kabi Kazi Nazrul Islam University",
+      "label": "Jatiya Kabi Kazi Nazrul Islam University",
+      "sourceValue": "214"
+    },
+    {
+      "value": "Jessore Medical College",
+      "label": "Jessore Medical College",
+      "sourceValue": "215"
+    },
+    {
+      "value": "Jessore Science & Technology University",
+      "label": "Jessore Science & Technology University",
+      "sourceValue": "216"
+    },
+    {
+      "value": "Jessore University of Science & Technology",
+      "label": "Jessore University of Science & Technology",
+      "sourceValue": "217"
+    },
+    {
+      "value": "Khawja Yunus Ali Medical College, Sirajganj",
+      "label": "Khawja Yunus Ali Medical College, Sirajganj",
+      "sourceValue": "218"
+    },
+    {
+      "value": "Khulna Agricultural University",
+      "label": "Khulna Agricultural University",
+      "sourceValue": "219"
+    },
+    {
+      "value": "Khulna Khan Bahadur Ahsanullah University",
+      "label": "Khulna Khan Bahadur Ahsanullah University",
+      "sourceValue": "220"
+    },
+    {
+      "value": "Khulna Medical College",
+      "label": "Khulna Medical College",
+      "sourceValue": "221"
+    },
+    {
+      "value": "Khulna University",
+      "label": "Khulna University",
+      "sourceValue": "222"
+    },
+    {
+      "value": "Khulna University of Engineering and Technology",
+      "label": "Khulna University of Engineering and Technology",
+      "sourceValue": "223"
+    },
+    {
+      "value": "Khwaja Yunus Ali University",
+      "label": "Khwaja Yunus Ali University",
+      "sourceValue": "224"
+    },
+    {
+      "value": "Kumudini Medical College, Tangail",
+      "label": "Kumudini Medical College, Tangail",
+      "sourceValue": "225"
+    },
+    {
+      "value": "Kushtia Medical College",
+      "label": "Kushtia Medical College",
+      "sourceValue": "226"
+    },
+    {
+      "value": "Labaid Medical College, Dhanmondi, Dhaka",
+      "label": "Labaid Medical College, Dhanmondi, Dhaka",
+      "sourceValue": "227"
+    },
+    {
+      "value": "Leading University, Sylhet",
+      "label": "Leading University, Sylhet",
+      "sourceValue": "228"
+    },
+    {
+      "value": "MAG Osmani Medical College",
+      "label": "MAG Osmani Medical College",
+      "sourceValue": "229"
+    },
+    {
+      "value": "Manarat International University",
+      "label": "Manarat International University",
+      "sourceValue": "230"
+    },
+    {
+      "value": "Maulana Bhasani Medical College",
+      "label": "Maulana Bhasani Medical College",
+      "sourceValue": "231"
+    },
+    {
+      "value": "Mawlana Bhashani Science & Technology University",
+      "label": "Mawlana Bhashani Science & Technology University",
+      "sourceValue": "232"
+    },
+    {
+      "value": "Medical College for Women and Hospital, Dhaka",
+      "label": "Medical College for Women and Hospital, Dhaka",
+      "sourceValue": "233"
+    },
+    {
+      "value": "Metropolitan University, Sylhet",
+      "label": "Metropolitan University, Sylhet",
+      "sourceValue": "234"
+    },
+    {
+      "value": "Microland University of Science and Technology",
+      "label": "Microland University of Science and Technology",
+      "sourceValue": "235"
+    },
+    {
+      "value": "Military Institute of Science and Technology (MIST)",
+      "label": "Military Institute of Science and Technology (MIST)",
+      "sourceValue": "236"
+    },
+    {
+      "value": "Mymensingh Engineering College",
+      "label": "Mymensingh Engineering College",
+      "sourceValue": "237"
+    },
+    {
+      "value": "Mymensingh Medical College",
+      "label": "Mymensingh Medical College",
+      "sourceValue": "238"
+    },
+    {
+      "value": "N.P.I University of Bangladesh",
+      "label": "N.P.I University of Bangladesh",
+      "sourceValue": "239"
+    },
+    {
+      "value": "National University",
+      "label": "National University",
+      "sourceValue": "240"
+    },
+    {
+      "value": "Nightingale Medical College, Dhaka",
+      "label": "Nightingale Medical College, Dhaka",
+      "sourceValue": "241"
+    },
+    {
+      "value": "Noakhali Medical College",
+      "label": "Noakhali Medical College",
+      "sourceValue": "242"
+    },
+    {
+      "value": "Noakhali Science & Technology University",
+      "label": "Noakhali Science & Technology University",
+      "sourceValue": "243"
+    },
+    {
+      "value": "North Bengal International University",
+      "label": "North Bengal International University",
+      "sourceValue": "244"
+    },
+    {
+      "value": "North Bengal Medical College, Sirajganj",
+      "label": "North Bengal Medical College, Sirajganj",
+      "sourceValue": "245"
+    },
+    {
+      "value": "North East Medical College, Sylhet",
+      "label": "North East Medical College, Sylhet",
+      "sourceValue": "246"
+    },
+    {
+      "value": "North East University Bangladesh",
+      "label": "North East University Bangladesh",
+      "sourceValue": "247"
+    },
+    {
+      "value": "North South University",
+      "label": "North South University",
+      "sourceValue": "248"
+    },
+    {
+      "value": "North Western University",
+      "label": "North Western University",
+      "sourceValue": "249"
+    },
+    {
+      "value": "Northern International Medical College, Dhaka",
+      "label": "Northern International Medical College, Dhaka",
+      "sourceValue": "250"
+    },
+    {
+      "value": "Northern Private Medical College, Rangpur",
+      "label": "Northern Private Medical College, Rangpur",
+      "sourceValue": "251"
+    },
+    {
+      "value": "Northern University Bangladesh",
+      "label": "Northern University Bangladesh",
+      "sourceValue": "252"
+    },
+    {
+      "value": "Northern University of Business & Technology, Khulna",
+      "label": "Northern University of Business & Technology, Khulna",
+      "sourceValue": "253"
+    },
+    {
+      "value": "Notre Dame University Bangladesh",
+      "label": "Notre Dame University Bangladesh",
+      "sourceValue": "254"
+    },
+    {
+      "value": "Pabna Medical College",
+      "label": "Pabna Medical College",
+      "sourceValue": "255"
+    },
+    {
+      "value": "Pabna University of Science and Technology",
+      "label": "Pabna University of Science and Technology",
+      "sourceValue": "256"
+    },
+    {
+      "value": "Patuakhali Science And Technology University",
+      "label": "Patuakhali Science And Technology University",
+      "sourceValue": "257"
+    },
+    {
+      "value": "Popular Medical College & Hospital, Dhaka",
+      "label": "Popular Medical College & Hospital, Dhaka",
+      "sourceValue": "258"
+    },
+    {
+      "value": "Port City International University",
+      "label": "Port City International University",
+      "sourceValue": "259"
+    },
+    {
+      "value": "Premier University, Chittagong",
+      "label": "Premier University, Chittagong",
+      "sourceValue": "260"
+    },
+    {
+      "value": "Presidency University",
+      "label": "Presidency University",
+      "sourceValue": "261"
+    },
+    {
+      "value": "Prime Medical College, Rangpur",
+      "label": "Prime Medical College, Rangpur",
+      "sourceValue": "262"
+    },
+    {
+      "value": "Prime University",
+      "label": "Prime University",
+      "sourceValue": "263"
+    },
+    {
+      "value": "Primeasia University",
+      "label": "Primeasia University",
+      "sourceValue": "264"
+    },
+    {
+      "value": "Pundra University of Science & Technology",
+      "label": "Pundra University of Science & Technology",
+      "sourceValue": "265"
+    },
+    {
+      "value": "Queens University",
+      "label": "Queens University",
+      "sourceValue": "266"
+    },
+    {
+      "value": "R.T.M Al-Kabir Technical University",
+      "label": "R.T.M Al-Kabir Technical University",
+      "sourceValue": "267"
+    },
+    {
+      "value": "Rabindra Maitree University, Kushtia",
+      "label": "Rabindra Maitree University, Kushtia",
+      "sourceValue": "268"
+    },
+    {
+      "value": "Rabindra University, Bangladesh",
+      "label": "Rabindra University, Bangladesh",
+      "sourceValue": "269"
+    },
+    {
+      "value": "Rajshahi Medical College",
+      "label": "Rajshahi Medical College",
+      "sourceValue": "270"
+    },
+    {
+      "value": "Rajshahi Medical University",
+      "label": "Rajshahi Medical University",
+      "sourceValue": "271"
+    },
+    {
+      "value": "Rajshahi Science & Technology University (RSTU), Natore",
+      "label": "Rajshahi Science & Technology University (RSTU), Natore",
+      "sourceValue": "272"
+    },
+    {
+      "value": "Rajshahi University",
+      "label": "Rajshahi University",
+      "sourceValue": "273"
+    },
+    {
+      "value": "Rajshahi University of Engineering & Technology",
+      "label": "Rajshahi University of Engineering & Technology",
+      "sourceValue": "274"
+    },
+    {
+      "value": "Ranada Prasad Shaha University",
+      "label": "Ranada Prasad Shaha University",
+      "sourceValue": "275"
+    },
+    {
+      "value": "Rangamati Science and Technology University",
+      "label": "Rangamati Science and Technology University",
+      "sourceValue": "276"
+    },
+    {
+      "value": "Rangpur Community Hospital Medical College",
+      "label": "Rangpur Community Hospital Medical College",
+      "sourceValue": "277"
+    },
+    {
+      "value": "Rangpur Medical College",
+      "label": "Rangpur Medical College",
+      "sourceValue": "278"
+    },
+    {
+      "value": "Rangpur University",
+      "label": "Rangpur University",
+      "sourceValue": "279"
+    },
+    {
+      "value": "Royal University of Dhaka",
+      "label": "Royal University of Dhaka",
+      "sourceValue": "280"
+    },
+    {
+      "value": "Rupayan A.K.M Shamsuzzoha University",
+      "label": "Rupayan A.K.M Shamsuzzoha University",
+      "sourceValue": "281"
+    },
+    {
+      "value": "Sahabuddin Medical College and Hospital",
+      "label": "Sahabuddin Medical College and Hospital",
+      "sourceValue": "282"
+    },
+    {
+      "value": "Samaj Vittik Medical College, Mirzanagar, Savar",
+      "label": "Samaj Vittik Medical College, Mirzanagar, Savar",
+      "sourceValue": "283"
+    },
+    {
+      "value": "Satkhira Medical College",
+      "label": "Satkhira Medical College",
+      "sourceValue": "284"
+    },
+    {
+      "value": "Shah Makhdum Management University, Rajshahi",
+      "label": "Shah Makhdum Management University, Rajshahi",
+      "sourceValue": "285"
+    },
+    {
+      "value": "Shahabuddin Medical College, Dhaka",
+      "label": "Shahabuddin Medical College, Dhaka",
+      "sourceValue": "286"
+    },
+    {
+      "value": "Shaheed Nazrul Islam Medical College",
+      "label": "Shaheed Nazrul Islam Medical College",
+      "sourceValue": "287"
+    },
+    {
+      "value": "Shaheed Suhrawardy Medical College",
+      "label": "Shaheed Suhrawardy Medical College",
+      "sourceValue": "288"
+    },
+    {
+      "value": "Shaheed Ziaur Rahman Medical College",
+      "label": "Shaheed Ziaur Rahman Medical College",
+      "sourceValue": "289"
+    },
+    {
+      "value": "Shahjalal University of Science & Technology",
+      "label": "Shahjalal University of Science & Technology",
+      "sourceValue": "290"
+    },
+    {
+      "value": "Shanto Mariam University of Creative Technology",
+      "label": "Shanto Mariam University of Creative Technology",
+      "sourceValue": "291"
+    },
+    {
+      "value": "Sheikh Fazilatunnesa Mujib University",
+      "label": "Sheikh Fazilatunnesa Mujib University",
+      "sourceValue": "292"
+    },
+    {
+      "value": "Sheikh Hasina University",
+      "label": "Sheikh Hasina University",
+      "sourceValue": "293"
+    },
+    {
+      "value": "Sheikh Sayera Khatun Medical College, Gopalganj",
+      "label": "Sheikh Sayera Khatun Medical College, Gopalganj",
+      "sourceValue": "294"
+    },
+    {
+      "value": "Sher-e-Bangla Agricultural University",
+      "label": "Sher-e-Bangla Agricultural University",
+      "sourceValue": "295"
+    },
+    {
+      "value": "Sher-E-Bangla Medical College",
+      "label": "Sher-E-Bangla Medical College",
+      "sourceValue": "296"
+    },
+    {
+      "value": "Sir Salimullah Medical College",
+      "label": "Sir Salimullah Medical College",
+      "sourceValue": "297"
+    },
+    {
+      "value": "Sonargaon University",
+      "label": "Sonargaon University",
+      "sourceValue": "298"
+    },
+    {
+      "value": "South Asian University",
+      "label": "South Asian University",
+      "sourceValue": "299"
+    },
+    {
+      "value": "Southeast University",
+      "label": "Southeast University",
+      "sourceValue": "300"
+    },
+    {
+      "value": "Southern Medical College, Chittagong",
+      "label": "Southern Medical College, Chittagong",
+      "sourceValue": "301"
+    },
+    {
+      "value": "Southern University Bangladesh",
+      "label": "Southern University Bangladesh",
+      "sourceValue": "302"
+    },
+    {
+      "value": "Southern University of Bangladesh, Chittagong",
+      "label": "Southern University of Bangladesh, Chittagong",
+      "sourceValue": "303"
+    },
+    {
+      "value": "Stamford University, Bangladesh",
+      "label": "Stamford University, Bangladesh",
+      "sourceValue": "304"
+    },
+    {
+      "value": "State University Of Bangladesh",
+      "label": "State University Of Bangladesh",
+      "sourceValue": "305"
+    },
+    {
+      "value": "Sylhet Agricultural University",
+      "label": "Sylhet Agricultural University",
+      "sourceValue": "306"
+    },
+    {
+      "value": "Sylhet Engineering College",
+      "label": "Sylhet Engineering College",
+      "sourceValue": "307"
+    },
+    {
+      "value": "Sylhet International University, Sylhet",
+      "label": "Sylhet International University, Sylhet",
+      "sourceValue": "308"
+    },
+    {
+      "value": "Sylhet Medical University",
+      "label": "Sylhet Medical University",
+      "sourceValue": "309"
+    },
+    {
+      "value": "Sylhet Women`s Medical College, Sylhet",
+      "label": "Sylhet Women`s Medical College, Sylhet",
+      "sourceValue": "310"
+    },
+    {
+      "value": "Tagore University of Creative Arts, Uttara, Dhaka, Bangladesh",
+      "label": "Tagore University of Creative Arts, Uttara, Dhaka, Bangladesh",
+      "sourceValue": "311"
+    },
+    {
+      "value": "Tairunnessa Memorial Medical College, Gazipur",
+      "label": "Tairunnessa Memorial Medical College, Gazipur",
+      "sourceValue": "312"
+    },
+    {
+      "value": "The International University of Scholars",
+      "label": "The International University of Scholars",
+      "sourceValue": "313"
+    },
+    {
+      "value": "The Millennium University",
+      "label": "The Millennium University",
+      "sourceValue": "314"
+    },
+    {
+      "value": "The Peoples University of Bangladesh",
+      "label": "The Peoples University of Bangladesh",
+      "sourceValue": "315"
+    },
+    {
+      "value": "The University of Asia Pacific",
+      "label": "The University of Asia Pacific",
+      "sourceValue": "316"
+    },
+    {
+      "value": "Times University, Bangladesh",
+      "label": "Times University, Bangladesh",
+      "sourceValue": "317"
+    },
+    {
+      "value": "TMSS Medical College,Bogra",
+      "label": "TMSS Medical College,Bogra",
+      "sourceValue": "318"
+    },
+    {
+      "value": "Trust University, Barishal",
+      "label": "Trust University, Barishal",
+      "sourceValue": "319"
+    },
+    {
+      "value": "United International University",
+      "label": "United International University",
+      "sourceValue": "320"
+    },
+    {
+      "value": "University of Asia Pacific",
+      "label": "University of Asia Pacific",
+      "sourceValue": "321"
+    },
+    {
+      "value": "University of Barisal",
+      "label": "University of Barisal",
+      "sourceValue": "322"
+    },
+    {
+      "value": "University of Brahmanbaria",
+      "label": "University of Brahmanbaria",
+      "sourceValue": "323"
+    },
+    {
+      "value": "University of Chittagong",
+      "label": "University of Chittagong",
+      "sourceValue": "324"
+    },
+    {
+      "value": "University of Creative Technology, Chittagong",
+      "label": "University of Creative Technology, Chittagong",
+      "sourceValue": "325"
+    },
+    {
+      "value": "University of Development Alternative",
+      "label": "University of Development Alternative",
+      "sourceValue": "326"
+    },
+    {
+      "value": "University of Dhaka",
+      "label": "University of Dhaka",
+      "sourceValue": "327"
+    },
+    {
+      "value": "University of Global Village",
+      "label": "University of Global Village",
+      "sourceValue": "328"
+    },
+    {
+      "value": "University of Information Technology & Sciences",
+      "label": "University of Information Technology & Sciences",
+      "sourceValue": "329"
+    },
+    {
+      "value": "University of Liberal Arts Bangladesh",
+      "label": "University of Liberal Arts Bangladesh",
+      "sourceValue": "330"
+    },
+    {
+      "value": "University of Rajshahi",
+      "label": "University of Rajshahi",
+      "sourceValue": "331"
+    },
+    {
+      "value": "University of Science & Technology, Chittagong",
+      "label": "University of Science & Technology, Chittagong",
+      "sourceValue": "332"
+    },
+    {
+      "value": "University of Skill Enrichment and Technology",
+      "label": "University of Skill Enrichment and Technology",
+      "sourceValue": "333"
+    },
+    {
+      "value": "University of South Asia",
+      "label": "University of South Asia",
+      "sourceValue": "334"
+    },
+    {
+      "value": "Uttara Adhunik Medical College,Dhaka",
+      "label": "Uttara Adhunik Medical College,Dhaka",
+      "sourceValue": "335"
+    },
+    {
+      "value": "Uttara University",
+      "label": "Uttara University",
+      "sourceValue": "336"
+    },
+    {
+      "value": "Varendra University",
+      "label": "Varendra University",
+      "sourceValue": "337"
+    },
+    {
+      "value": "Victoria University of Bangladesh",
+      "label": "Victoria University of Bangladesh",
+      "sourceValue": "338"
+    },
+    {
+      "value": "World University of Bangladesh",
+      "label": "World University of Bangladesh",
+      "sourceValue": "339"
+    },
+    {
+      "value": "Z. H. Sikder Women`s Medical College",
+      "label": "Z. H. Sikder Women`s Medical College",
+      "sourceValue": "340"
+    },
+    {
+      "value": "Z.H Sikder University of Science & Technology",
+      "label": "Z.H Sikder University of Science & Technology",
+      "sourceValue": "341"
+    },
+    {
+      "value": "Z.N.R.F. University of Management Sciences",
+      "label": "Z.N.R.F. University of Management Sciences",
+      "sourceValue": "342"
+    },
+    {
+      "value": "Other",
+      "label": "Other",
+      "sourceValue": "999"
+    }
+  ],
+  "higherStudySubjects": [
+    {
+      "value": "Accounting",
+      "label": "Accounting",
+      "sourceValue": "101",
+      "category": "G"
+    },
+    {
+      "value": "Accounting and Information Systems",
+      "label": "Accounting and Information Systems",
+      "sourceValue": "268",
+      "category": "B"
+    },
+    {
+      "value": "Aeronautical Engineering",
+      "label": "Aeronautical Engineering",
+      "sourceValue": "328",
+      "category": "E"
+    },
+    {
+      "value": "Agr.Co-operative & Marketing",
+      "label": "Agr.Co-operative & Marketing",
+      "sourceValue": "226",
+      "category": "A"
+    },
+    {
+      "value": "Agriculture",
+      "label": "Agriculture",
+      "sourceValue": "201",
+      "category": "G"
+    },
+    {
+      "value": "Agriculture Chemistry",
+      "label": "Agriculture Chemistry",
+      "sourceValue": "202",
+      "category": "A"
+    },
+    {
+      "value": "Agriculture Co-operatives",
+      "label": "Agriculture Co-operatives",
+      "sourceValue": "203",
+      "category": "A"
+    },
+    {
+      "value": "Agriculture Economics",
+      "label": "Agriculture Economics",
+      "sourceValue": "204",
+      "category": "A"
+    },
+    {
+      "value": "Agriculture Engineering",
+      "label": "Agriculture Engineering",
+      "sourceValue": "205",
+      "category": "A"
+    },
+    {
+      "value": "Agriculture Extension",
+      "label": "Agriculture Extension",
+      "sourceValue": "221",
+      "category": "A"
+    },
+    {
+      "value": "Agriculture Finance",
+      "label": "Agriculture Finance",
+      "sourceValue": "206",
+      "category": "A"
+    },
+    {
+      "value": "Agriculture Marketing",
+      "label": "Agriculture Marketing",
+      "sourceValue": "207",
+      "category": "A"
+    },
+    {
+      "value": "Agriculture Science",
+      "label": "Agriculture Science",
+      "sourceValue": "208",
+      "category": "A"
+    },
+    {
+      "value": "Agriculture Soil Science",
+      "label": "Agriculture Soil Science",
+      "sourceValue": "209",
+      "category": "A"
+    },
+    {
+      "value": "Agriculture Statistics",
+      "label": "Agriculture Statistics",
+      "sourceValue": "225",
+      "category": "A"
+    },
+    {
+      "value": "Agriculture Water Management",
+      "label": "Agriculture Water Management",
+      "sourceValue": "220",
+      "category": "A"
+    },
+    {
+      "value": "Agro Forestry",
+      "label": "Agro Forestry",
+      "sourceValue": "223",
+      "category": "A"
+    },
+    {
+      "value": "Agronnomy",
+      "label": "Agronnomy",
+      "sourceValue": "214",
+      "category": "A"
+    },
+    {
+      "value": "Agronomy & Aquaculture",
+      "label": "Agronomy & Aquaculture",
+      "sourceValue": "211",
+      "category": "A"
+    },
+    {
+      "value": "Agronomy & Aquaculture Extension",
+      "label": "Agronomy & Aquaculture Extension",
+      "sourceValue": "212",
+      "category": "A"
+    },
+    {
+      "value": "Akaid",
+      "label": "Akaid",
+      "sourceValue": "169",
+      "category": "F"
+    },
+    {
+      "value": "Anatomology",
+      "label": "Anatomology",
+      "sourceValue": "215",
+      "category": "A"
+    },
+    {
+      "value": "Anatomy & Histology",
+      "label": "Anatomy & Histology",
+      "sourceValue": "213",
+      "category": "A"
+    },
+    {
+      "value": "Animal Breeding & Genetic",
+      "label": "Animal Breeding & Genetic",
+      "sourceValue": "216",
+      "category": "A"
+    },
+    {
+      "value": "Animal Husbandry",
+      "label": "Animal Husbandry",
+      "sourceValue": "210",
+      "category": "A"
+    },
+    {
+      "value": "Animal Nutrition",
+      "label": "Animal Nutrition",
+      "sourceValue": "218",
+      "category": "A"
+    },
+    {
+      "value": "Animal Science",
+      "label": "Animal Science",
+      "sourceValue": "217",
+      "category": "A"
+    },
+    {
+      "value": "Anthropology",
+      "label": "Anthropology",
+      "sourceValue": "102",
+      "category": "G"
+    },
+    {
+      "value": "Applied Chemistry",
+      "label": "Applied Chemistry",
+      "sourceValue": "103",
+      "category": "G"
+    },
+    {
+      "value": "Applied Mathematics",
+      "label": "Applied Mathematics",
+      "sourceValue": "105",
+      "category": "G"
+    },
+    {
+      "value": "Applied Physics",
+      "label": "Applied Physics",
+      "sourceValue": "104",
+      "category": "G"
+    },
+    {
+      "value": "Arabic",
+      "label": "Arabic",
+      "sourceValue": "106",
+      "category": "F"
+    },
+    {
+      "value": "Archaeology",
+      "label": "Archaeology",
+      "sourceValue": "107",
+      "category": "G"
+    },
+    {
+      "value": "Architecture",
+      "label": "Architecture",
+      "sourceValue": "301",
+      "category": "E"
+    },
+    {
+      "value": "Bangla",
+      "label": "Bangla",
+      "sourceValue": "108",
+      "category": "G"
+    },
+    {
+      "value": "Banking",
+      "label": "Banking",
+      "sourceValue": "109",
+      "category": "G"
+    },
+    {
+      "value": "Banking and Insurance",
+      "label": "Banking and Insurance",
+      "sourceValue": "267",
+      "category": "B"
+    },
+    {
+      "value": "Bio-Technology",
+      "label": "Bio-Technology",
+      "sourceValue": "227",
+      "category": "A"
+    },
+    {
+      "value": "Biochemistry",
+      "label": "Biochemistry",
+      "sourceValue": "110",
+      "category": "G"
+    },
+    {
+      "value": "Botany",
+      "label": "Botany",
+      "sourceValue": "111",
+      "category": "G"
+    },
+    {
+      "value": "Business Administration",
+      "label": "Business Administration",
+      "sourceValue": "112",
+      "category": "G"
+    },
+    {
+      "value": "Business Studies",
+      "label": "Business Studies",
+      "sourceValue": "250",
+      "category": "A"
+    },
+    {
+      "value": "Chemical Engineering",
+      "label": "Chemical Engineering",
+      "sourceValue": "302",
+      "category": "E"
+    },
+    {
+      "value": "Chemistry",
+      "label": "Chemistry",
+      "sourceValue": "113",
+      "category": "G"
+    },
+    {
+      "value": "Civil Engineering",
+      "label": "Civil Engineering",
+      "sourceValue": "303",
+      "category": "E"
+    },
+    {
+      "value": "Clinical Psychology",
+      "label": "Clinical Psychology",
+      "sourceValue": "115",
+      "category": "G"
+    },
+    {
+      "value": "Communication Disorders",
+      "label": "Communication Disorders",
+      "sourceValue": "183",
+      "category": "G"
+    },
+    {
+      "value": "Computer Engineering",
+      "label": "Computer Engineering",
+      "sourceValue": "184",
+      "category": "G"
+    },
+    {
+      "value": "Computer Science",
+      "label": "Computer Science",
+      "sourceValue": "114",
+      "category": "G"
+    },
+    {
+      "value": "Computer Science & Engineering",
+      "label": "Computer Science & Engineering",
+      "sourceValue": "185",
+      "category": "G"
+    },
+    {
+      "value": "Computer Science & Information Technology",
+      "label": "Computer Science & Information Technology",
+      "sourceValue": "186",
+      "category": "G"
+    },
+    {
+      "value": "Corp Botany",
+      "label": "Corp Botany",
+      "sourceValue": "228",
+      "category": "A"
+    },
+    {
+      "value": "Criminology",
+      "label": "Criminology",
+      "sourceValue": "182",
+      "category": "G"
+    },
+    {
+      "value": "Criminology & Police Science",
+      "label": "Criminology & Police Science",
+      "sourceValue": "179",
+      "category": "G"
+    },
+    {
+      "value": "Dairy Science",
+      "label": "Dairy Science",
+      "sourceValue": "229",
+      "category": "A"
+    },
+    {
+      "value": "Development Studies",
+      "label": "Development Studies",
+      "sourceValue": "117",
+      "category": "G"
+    },
+    {
+      "value": "Disaster Science and Management",
+      "label": "Disaster Science and Management",
+      "sourceValue": "408",
+      "category": "G"
+    },
+    {
+      "value": "Doc.of Veterinary Science",
+      "label": "Doc.of Veterinary Science",
+      "sourceValue": "230",
+      "category": "A"
+    },
+    {
+      "value": "Drama & Music",
+      "label": "Drama & Music",
+      "sourceValue": "116",
+      "category": "G"
+    },
+    {
+      "value": "Drawing and Printing",
+      "label": "Drawing and Printing",
+      "sourceValue": "174",
+      "category": "G"
+    },
+    {
+      "value": "Economics",
+      "label": "Economics",
+      "sourceValue": "118",
+      "category": "G"
+    },
+    {
+      "value": "Education",
+      "label": "Education",
+      "sourceValue": "119",
+      "category": "G"
+    },
+    {
+      "value": "Electrical & Electronics Engineering",
+      "label": "Electrical & Electronics Engineering",
+      "sourceValue": "306",
+      "category": "E"
+    },
+    {
+      "value": "Electrical Engineering",
+      "label": "Electrical Engineering",
+      "sourceValue": "305",
+      "category": "E"
+    },
+    {
+      "value": "Electronic Engineering",
+      "label": "Electronic Engineering",
+      "sourceValue": "307",
+      "category": "E"
+    },
+    {
+      "value": "Electronics & Communication Engineering",
+      "label": "Electronics & Communication Engineering",
+      "sourceValue": "397",
+      "category": "E"
+    },
+    {
+      "value": "Electronics & Telecommunication Engineering",
+      "label": "Electronics & Telecommunication Engineering",
+      "sourceValue": "400",
+      "category": "E"
+    },
+    {
+      "value": "English",
+      "label": "English",
+      "sourceValue": "120",
+      "category": "G"
+    },
+    {
+      "value": "Environmental Engineering",
+      "label": "Environmental Engineering",
+      "sourceValue": "327",
+      "category": "E"
+    },
+    {
+      "value": "Environmental science",
+      "label": "Environmental science",
+      "sourceValue": "189",
+      "category": "G"
+    },
+    {
+      "value": "Ethics",
+      "label": "Ethics",
+      "sourceValue": "176",
+      "category": "G"
+    },
+    {
+      "value": "Farm Power & Machinery",
+      "label": "Farm Power & Machinery",
+      "sourceValue": "237",
+      "category": "A"
+    },
+    {
+      "value": "Farm Structure",
+      "label": "Farm Structure",
+      "sourceValue": "239",
+      "category": "A"
+    },
+    {
+      "value": "Fikha",
+      "label": "Fikha",
+      "sourceValue": "171",
+      "category": "F"
+    },
+    {
+      "value": "Finance",
+      "label": "Finance",
+      "sourceValue": "121",
+      "category": "G"
+    },
+    {
+      "value": "Finance and Banking",
+      "label": "Finance and Banking",
+      "sourceValue": "192",
+      "category": "G"
+    },
+    {
+      "value": "Fine Arts",
+      "label": "Fine Arts",
+      "sourceValue": "122",
+      "category": "G"
+    },
+    {
+      "value": "Fisheries",
+      "label": "Fisheries",
+      "sourceValue": "231",
+      "category": "A"
+    },
+    {
+      "value": "Fisheries & Aquaculture",
+      "label": "Fisheries & Aquaculture",
+      "sourceValue": "232",
+      "category": "A"
+    },
+    {
+      "value": "Fisheries Biology",
+      "label": "Fisheries Biology",
+      "sourceValue": "233",
+      "category": "A"
+    },
+    {
+      "value": "Fisheries Management",
+      "label": "Fisheries Management",
+      "sourceValue": "234",
+      "category": "A"
+    },
+    {
+      "value": "Fisheries Technology",
+      "label": "Fisheries Technology",
+      "sourceValue": "235",
+      "category": "A"
+    },
+    {
+      "value": "Folklore",
+      "label": "Folklore",
+      "sourceValue": "123",
+      "category": "G"
+    },
+    {
+      "value": "Food and Process Engineering",
+      "label": "Food and Process Engineering",
+      "sourceValue": "330",
+      "category": "E"
+    },
+    {
+      "value": "Food Tech. & Rural Industry",
+      "label": "Food Tech. & Rural Industry",
+      "sourceValue": "238",
+      "category": "A"
+    },
+    {
+      "value": "Food Technology and Nutrition Science",
+      "label": "Food Technology and Nutrition Science",
+      "sourceValue": "413",
+      "category": "G"
+    },
+    {
+      "value": "Food Technology and Nutritional Science",
+      "label": "Food Technology and Nutritional Science",
+      "sourceValue": "406",
+      "category": "G"
+    },
+    {
+      "value": "Forestry",
+      "label": "Forestry",
+      "sourceValue": "177",
+      "category": "G"
+    },
+    {
+      "value": "Genetic and Breeding",
+      "label": "Genetic and Breeding",
+      "sourceValue": "167",
+      "category": "G"
+    },
+    {
+      "value": "Genetic Engineering",
+      "label": "Genetic Engineering",
+      "sourceValue": "308",
+      "category": "E"
+    },
+    {
+      "value": "Genetic Engineering and Biotechnology",
+      "label": "Genetic Engineering and Biotechnology",
+      "sourceValue": "190",
+      "category": "G"
+    },
+    {
+      "value": "Geography",
+      "label": "Geography",
+      "sourceValue": "124",
+      "category": "G"
+    },
+    {
+      "value": "Geography and Environmental Science",
+      "label": "Geography and Environmental Science",
+      "sourceValue": "125",
+      "category": "G"
+    },
+    {
+      "value": "Geology/Geology and Mining",
+      "label": "Geology/Geology and Mining",
+      "sourceValue": "188",
+      "category": "G"
+    },
+    {
+      "value": "Glass and Ceramic Engineering",
+      "label": "Glass and Ceramic Engineering",
+      "sourceValue": "407",
+      "category": "E"
+    },
+    {
+      "value": "Government and Politics",
+      "label": "Government and Politics",
+      "sourceValue": "195",
+      "category": "G"
+    },
+    {
+      "value": "Graphics",
+      "label": "Graphics",
+      "sourceValue": "170",
+      "category": "G"
+    },
+    {
+      "value": "Hadith",
+      "label": "Hadith",
+      "sourceValue": "128",
+      "category": "F"
+    },
+    {
+      "value": "History",
+      "label": "History",
+      "sourceValue": "126",
+      "category": "G"
+    },
+    {
+      "value": "History of Music",
+      "label": "History of Music",
+      "sourceValue": "173",
+      "category": "G"
+    },
+    {
+      "value": "Home Economics",
+      "label": "Home Economics",
+      "sourceValue": "127",
+      "category": "G"
+    },
+    {
+      "value": "Horticulture",
+      "label": "Horticulture",
+      "sourceValue": "241",
+      "category": "A"
+    },
+    {
+      "value": "Human Resource Management",
+      "label": "Human Resource Management",
+      "sourceValue": "271",
+      "category": "B"
+    },
+    {
+      "value": "Industrial Arts",
+      "label": "Industrial Arts",
+      "sourceValue": "175",
+      "category": "G"
+    },
+    {
+      "value": "Industrial Engineering",
+      "label": "Industrial Engineering",
+      "sourceValue": "309",
+      "category": "E"
+    },
+    {
+      "value": "Information and Communication Engineering",
+      "label": "Information and Communication Engineering",
+      "sourceValue": "401",
+      "category": "E"
+    },
+    {
+      "value": "Information and Communication Technology",
+      "label": "Information and Communication Technology",
+      "sourceValue": "132",
+      "category": "G"
+    },
+    {
+      "value": "Information Science and Library Management",
+      "label": "Information Science and Library Management",
+      "sourceValue": "135",
+      "category": "G"
+    },
+    {
+      "value": "Information Technology",
+      "label": "Information Technology",
+      "sourceValue": "187",
+      "category": "G"
+    },
+    {
+      "value": "International Business",
+      "label": "International Business",
+      "sourceValue": "269",
+      "category": "B"
+    },
+    {
+      "value": "International Law",
+      "label": "International Law",
+      "sourceValue": "168",
+      "category": "G"
+    },
+    {
+      "value": "International Relations",
+      "label": "International Relations",
+      "sourceValue": "129",
+      "category": "G"
+    },
+    {
+      "value": "Islamic History and Culture",
+      "label": "Islamic History and Culture",
+      "sourceValue": "130",
+      "category": "G"
+    },
+    {
+      "value": "Islamic Studies",
+      "label": "Islamic Studies",
+      "sourceValue": "131",
+      "category": "F"
+    },
+    {
+      "value": "Language/Linguistic",
+      "label": "Language/Linguistic",
+      "sourceValue": "136",
+      "category": "G"
+    },
+    {
+      "value": "Law/Jurisprudence",
+      "label": "Law/Jurisprudence",
+      "sourceValue": "134",
+      "category": "G"
+    },
+    {
+      "value": "Leather Engineering",
+      "label": "Leather Engineering",
+      "sourceValue": "310",
+      "category": "E"
+    },
+    {
+      "value": "Livestock",
+      "label": "Livestock",
+      "sourceValue": "242",
+      "category": "A"
+    },
+    {
+      "value": "Management",
+      "label": "Management",
+      "sourceValue": "137",
+      "category": "G"
+    },
+    {
+      "value": "Management Information Systems",
+      "label": "Management Information Systems",
+      "sourceValue": "266",
+      "category": "B"
+    },
+    {
+      "value": "Marine Engineering",
+      "label": "Marine Engineering",
+      "sourceValue": "311",
+      "category": "E"
+    },
+    {
+      "value": "Marine Science",
+      "label": "Marine Science",
+      "sourceValue": "141",
+      "category": "G"
+    },
+    {
+      "value": "Marketing",
+      "label": "Marketing",
+      "sourceValue": "138",
+      "category": "G"
+    },
+    {
+      "value": "Mass Comm. & Journalism",
+      "label": "Mass Comm. & Journalism",
+      "sourceValue": "133",
+      "category": "G"
+    },
+    {
+      "value": "Materials Science & Engineering",
+      "label": "Materials Science & Engineering",
+      "sourceValue": "191",
+      "category": "G"
+    },
+    {
+      "value": "Mathematics",
+      "label": "Mathematics",
+      "sourceValue": "139",
+      "category": "G"
+    },
+    {
+      "value": "Mechanical Engineering",
+      "label": "Mechanical Engineering",
+      "sourceValue": "312",
+      "category": "E"
+    },
+    {
+      "value": "Medical Physics and Biomedical Engineering",
+      "label": "Medical Physics and Biomedical Engineering",
+      "sourceValue": "403",
+      "category": "E"
+    },
+    {
+      "value": "Medical Technology",
+      "label": "Medical Technology",
+      "sourceValue": "142",
+      "category": "G"
+    },
+    {
+      "value": "Metallurgical Engineering",
+      "label": "Metallurgical Engineering",
+      "sourceValue": "313",
+      "category": "E"
+    },
+    {
+      "value": "Meteorology",
+      "label": "Meteorology",
+      "sourceValue": "405",
+      "category": "G"
+    },
+    {
+      "value": "Microbiology",
+      "label": "Microbiology",
+      "sourceValue": "140",
+      "category": "G"
+    },
+    {
+      "value": "Microbiology & Hygenic",
+      "label": "Microbiology & Hygenic",
+      "sourceValue": "243",
+      "category": "A"
+    },
+    {
+      "value": "Microwave Engineering",
+      "label": "Microwave Engineering",
+      "sourceValue": "325",
+      "category": "E"
+    },
+    {
+      "value": "Mineral Engineering",
+      "label": "Mineral Engineering",
+      "sourceValue": "314",
+      "category": "E"
+    },
+    {
+      "value": "Mining Engineering",
+      "label": "Mining Engineering",
+      "sourceValue": "315",
+      "category": "E"
+    },
+    {
+      "value": "Modern Arabic",
+      "label": "Modern Arabic",
+      "sourceValue": "172",
+      "category": "F"
+    },
+    {
+      "value": "Naval Architecture & Marine Engineering",
+      "label": "Naval Architecture & Marine Engineering",
+      "sourceValue": "316",
+      "category": "E"
+    },
+    {
+      "value": "Nuclear Engineering",
+      "label": "Nuclear Engineering",
+      "sourceValue": "411",
+      "category": "E"
+    },
+    {
+      "value": "Nutrition & Food Science",
+      "label": "Nutrition & Food Science",
+      "sourceValue": "410",
+      "category": "G"
+    },
+    {
+      "value": "Oceanography",
+      "label": "Oceanography",
+      "sourceValue": "409",
+      "category": "G"
+    },
+    {
+      "value": "Organization Strategy and Leadership",
+      "label": "Organization Strategy and Leadership",
+      "sourceValue": "272",
+      "category": "B"
+    },
+    {
+      "value": "Pali",
+      "label": "Pali",
+      "sourceValue": "143",
+      "category": "G"
+    },
+    {
+      "value": "Paratrology",
+      "label": "Paratrology",
+      "sourceValue": "246",
+      "category": "A"
+    },
+    {
+      "value": "Peace & Conflict",
+      "label": "Peace & Conflict",
+      "sourceValue": "153",
+      "category": "G"
+    },
+    {
+      "value": "Persian",
+      "label": "Persian",
+      "sourceValue": "144",
+      "category": "G"
+    },
+    {
+      "value": "Petroleum & Mining Engineering",
+      "label": "Petroleum & Mining Engineering",
+      "sourceValue": "412",
+      "category": "E"
+    },
+    {
+      "value": "Pharmaceutical Chemistry",
+      "label": "Pharmaceutical Chemistry",
+      "sourceValue": "154",
+      "category": "G"
+    },
+    {
+      "value": "Pharmacy",
+      "label": "Pharmacy",
+      "sourceValue": "145",
+      "category": "G"
+    },
+    {
+      "value": "Philosophy",
+      "label": "Philosophy",
+      "sourceValue": "146",
+      "category": "G"
+    },
+    {
+      "value": "Physical Planning",
+      "label": "Physical Planning",
+      "sourceValue": "317",
+      "category": "E"
+    },
+    {
+      "value": "Physics",
+      "label": "Physics",
+      "sourceValue": "147",
+      "category": "G"
+    },
+    {
+      "value": "Plant Pathology",
+      "label": "Plant Pathology",
+      "sourceValue": "245",
+      "category": "A"
+    },
+    {
+      "value": "Political Science",
+      "label": "Political Science",
+      "sourceValue": "148",
+      "category": "G"
+    },
+    {
+      "value": "Population Science",
+      "label": "Population Science",
+      "sourceValue": "152",
+      "category": "G"
+    },
+    {
+      "value": "Population Science and Human Resource Development (RU)",
+      "label": "Population Science and Human Resource Development (RU)",
+      "sourceValue": "196",
+      "category": "G"
+    },
+    {
+      "value": "Poultry Science",
+      "label": "Poultry Science",
+      "sourceValue": "247",
+      "category": "A"
+    },
+    {
+      "value": "Printing and Publication Studies",
+      "label": "Printing and Publication Studies",
+      "sourceValue": "193",
+      "category": "G"
+    },
+    {
+      "value": "Production Economics",
+      "label": "Production Economics",
+      "sourceValue": "244",
+      "category": "A"
+    },
+    {
+      "value": "Psychology",
+      "label": "Psychology",
+      "sourceValue": "149",
+      "category": "G"
+    },
+    {
+      "value": "Public Administration",
+      "label": "Public Administration",
+      "sourceValue": "150",
+      "category": "G"
+    },
+    {
+      "value": "Public Finance",
+      "label": "Public Finance",
+      "sourceValue": "151",
+      "category": "G"
+    },
+    {
+      "value": "Regional Planning",
+      "label": "Regional Planning",
+      "sourceValue": "318",
+      "category": "E"
+    },
+    {
+      "value": "Rural Sociology",
+      "label": "Rural Sociology",
+      "sourceValue": "248",
+      "category": "A"
+    },
+    {
+      "value": "Sanskrit",
+      "label": "Sanskrit",
+      "sourceValue": "155",
+      "category": "G"
+    },
+    {
+      "value": "Social Welfare/Social Work",
+      "label": "Social Welfare/Social Work",
+      "sourceValue": "156",
+      "category": "G"
+    },
+    {
+      "value": "Social Works",
+      "label": "Social Works",
+      "sourceValue": "194",
+      "category": "G"
+    },
+    {
+      "value": "Sociology",
+      "label": "Sociology",
+      "sourceValue": "157",
+      "category": "G"
+    },
+    {
+      "value": "Software Engineering",
+      "label": "Software Engineering",
+      "sourceValue": "329",
+      "category": "E"
+    },
+    {
+      "value": "Soil Water and Environment Science",
+      "label": "Soil Water and Environment Science",
+      "sourceValue": "158",
+      "category": "G"
+    },
+    {
+      "value": "Statistics",
+      "label": "Statistics",
+      "sourceValue": "159",
+      "category": "G"
+    },
+    {
+      "value": "Structural Engineering",
+      "label": "Structural Engineering",
+      "sourceValue": "319",
+      "category": "E"
+    },
+    {
+      "value": "Surgery & Obstate",
+      "label": "Surgery & Obstate",
+      "sourceValue": "249",
+      "category": "A"
+    },
+    {
+      "value": "Tafsir",
+      "label": "Tafsir",
+      "sourceValue": "160",
+      "category": "F"
+    },
+    {
+      "value": "Telecommunication Engineering",
+      "label": "Telecommunication Engineering",
+      "sourceValue": "323",
+      "category": "E"
+    },
+    {
+      "value": "Television, Film and Photography",
+      "label": "Television, Film and Photography",
+      "sourceValue": "180",
+      "category": "G"
+    },
+    {
+      "value": "Textile Engineering",
+      "label": "Textile Engineering",
+      "sourceValue": "320",
+      "category": "E"
+    },
+    {
+      "value": "Tourism and Hospitality Management",
+      "label": "Tourism and Hospitality Management",
+      "sourceValue": "270",
+      "category": "B"
+    },
+    {
+      "value": "Town Planning",
+      "label": "Town Planning",
+      "sourceValue": "321",
+      "category": "E"
+    },
+    {
+      "value": "Urban & Regional Planning",
+      "label": "Urban & Regional Planning",
+      "sourceValue": "322",
+      "category": "E"
+    },
+    {
+      "value": "Urban Development",
+      "label": "Urban Development",
+      "sourceValue": "162",
+      "category": "G"
+    },
+    {
+      "value": "Urdu",
+      "label": "Urdu",
+      "sourceValue": "161",
+      "category": "G"
+    },
+    {
+      "value": "Water & Environment Science",
+      "label": "Water & Environment Science",
+      "sourceValue": "165",
+      "category": "na"
+    },
+    {
+      "value": "Water Resource Engineering",
+      "label": "Water Resource Engineering",
+      "sourceValue": "398",
+      "category": "E"
+    },
+    {
+      "value": "Women and Gender Studies",
+      "label": "Women and Gender Studies",
+      "sourceValue": "181",
+      "category": "G"
+    },
+    {
+      "value": "Women Studies",
+      "label": "Women Studies",
+      "sourceValue": "164",
+      "category": "G"
+    },
+    {
+      "value": "World Religion",
+      "label": "World Religion",
+      "sourceValue": "163",
+      "category": "G"
+    },
+    {
+      "value": "Zoology",
+      "label": "Zoology",
+      "sourceValue": "166",
+      "category": "G"
+    },
+    {
+      "value": "Other",
+      "label": "Other",
+      "sourceValue": "999",
+      "category": "Z"
+    }
+  ]
+}

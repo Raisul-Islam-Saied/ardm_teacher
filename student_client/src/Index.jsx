@@ -37,6 +37,7 @@ import { systemSettingsApi } from './services/studentApiService';
 import DetailView from "./views/DetailView";
 import FullForm from "./views/FullForm";
 import LoginView from "./views/LoginView";
+import BulkPromotionView from "./views/BulkPromotionView";
 import TeacherProfileView from "./views/TeacherProfileView";
 import {
   AnimatedCount,
@@ -106,7 +107,19 @@ const Index = () => {
       icon: GraduationCap,
       iconBg: 'bg-emerald-500/15 text-emerald-400 border-emerald-400/30',
       path: '/teacher'
-    }
+    },
+    ...(currentUser?.role === 'Admin'
+      ? [
+          {
+            id: 'promote',
+            label: 'প্রমোশন (Promotion)',
+            subLabel: 'বাল্ক ক্লাস, রোল ও সেশন আপডেট',
+            icon: Layers,
+            iconBg: 'bg-indigo-500/15 text-indigo-300 border-indigo-400/30',
+            path: '/promote'
+          }
+        ]
+      : [])
   ];
 
   if (authLoading) {
@@ -229,6 +242,14 @@ const Index = () => {
                 >
                   <GraduationCap size={14} /> শিক্ষক
                 </button>
+                {currentUser?.role === 'Admin' && (
+                  <button
+                    onClick={() => navigate('/promote')}
+                    className="px-4 py-2 rounded-xl text-indigo-700 hover:bg-indigo-50 text-xs font-black flex items-center gap-1.5 transition"
+                  >
+                    <Layers size={14} /> প্রমোশন
+                  </button>
+                )}
               </nav>
 
               {/* Right Actions: Sync & Profile Pill */}
@@ -557,6 +578,20 @@ const Index = () => {
         />
       )}
 
+      {/* ==================== ROUTE: /promote ==================== */}
+      {tab === 'promote' && (
+        <BulkPromotionView
+          students={students}
+          currentUser={currentUser}
+          showToast={showToast}
+          onBack={() => navigate('/')}
+          onComplete={async () => {
+            await loadData(false);
+            navigate('/');
+          }}
+        />
+      )}
+
       {/* ==================== ROUTE: /search ==================== */}
       {tab === 'search' && !studentId && (
         <div className="max-w-4xl mx-auto pt-6 px-4 lg:px-6 min-h-screen flex flex-col">
@@ -735,7 +770,7 @@ const Index = () => {
       )}
 
       {/* ==================== MOBILE BOTTOM NAV (Hidden on Desktop) ==================== */}
-      {!studentId && tab !== 'add' && tab !== 'profile' && (
+      {!studentId && tab !== 'add' && tab !== 'profile' && tab !== 'promote' && (
         <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200/70 h-20 px-6 flex justify-between items-end pb-3 z-40 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
           <NavTab
             icon={Home}

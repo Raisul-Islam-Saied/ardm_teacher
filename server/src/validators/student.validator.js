@@ -181,6 +181,18 @@ const createStudentValidator = [
         .matches(/^\d{10}$/).withMessage('স্টুডেন্ট আইডি দিলে তা অবশ্যই ১০ ডিজিটের সংখ্যা হতে হবে'),
 
     body('migratedFromSheet').optional().isBoolean().withMessage('migratedFromSheet অবশ্যই true অথবা false হতে হবে'),
+    body('legacyAcademicRecord').optional().custom((record) => {
+        if (!record || typeof record !== 'object' || Array.isArray(record)) {
+            throw new Error('পুরনো শিক্ষার্থীর একাডেমিক তথ্য সঠিক অবজেক্ট হতে হবে');
+        }
+        const session = String(record.session || '').trim();
+        const classBn = String(record.classBn || '').replace(/\u09DF/g, '\u09AF\u09BC').trim();
+        const roll = Number(record.roll);
+        if (!/^20\d{2}$/.test(session) || !VALID_CLASS_BN.includes(classBn) || !Number.isInteger(roll) || roll < 1 || roll > 500) {
+            throw new Error('পুরনো শিক্ষার্থীর সেশন, শ্রেণি ও রোল যাচাই করুন');
+        }
+        return true;
+    }),
 
     body('session')
         .customSanitizer(sanitizeClean)

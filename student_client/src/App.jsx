@@ -7,9 +7,10 @@ import Mantainance from "./Mantainance";
 import Result from "./Result";
 import ResultAnalysisDashboard from "./ResultAnalysisDashboard";
 import { systemSettingsApi } from "./services/studentApiService";
-import TeacherRegistry from "./TeacherRegistry";
 import TopperFinder from "./TopperFinder";
 import PasswordRecoveryView from "./views/PasswordRecoveryView";
+import TeacherDirectoryView from './views/TeacherDirectoryView';
+import TeacherProfileDetailView from './views/TeacherProfileDetailView';
 
 function App() {
   const [maintenanceMode, setMaintenanceMode] = useState(
@@ -45,6 +46,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Index />} />
         <Route path="/profile" element={<Index />} />
+        <Route path="/promote" element={<Index />} />
         <Route path="/search" element={<Index />} />
         <Route path="/admission" element={<Index />} />
         <Route path="/admission/:step" element={<Index />} />
@@ -55,7 +57,8 @@ function App() {
         
         <Route path="/student" element={<Info />} />
         <Route path="/result" element={<Result />} />
-        <Route path="/teacher" element={<TeacherRegistry />} />
+        <Route path="/teacher" element={<TeacherDirectoryView />} />
+        <Route path="/teacher/:id" element={<TeacherProfileDetailView />} />
         <Route path="/topper-finder" element={<TopperFinder />} />
         <Route path="/result-analysis" element={<ResultAnalysisDashboard />} />
         <Route path="/:Id" element={<Info />} />

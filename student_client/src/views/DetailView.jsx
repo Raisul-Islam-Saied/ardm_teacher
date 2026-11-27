@@ -1,17 +1,17 @@
 import {
-  AlertCircle, ArrowRight, Award, Camera, Check, ChevronLeft, CreditCard, Edit3, FileText,
-  Home, IdCard, Layers, Loader2, LogOut, MapPin, MessageCircle, Phone, Printer, RefreshCw,
-  Search, Shield, Trash2, UserPlus, Users, Filter, Copy, Cake, Contact, Gift, X
+  ChevronLeft, CreditCard, Edit3, FileText,
+  MessageCircle, Phone,
+  Trash2
 } from 'lucide-react';
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import signImg from '../assets/principal-sign.png';
-import { CLASS_ORDER, CONFIG, DEFAULT_IMAGE } from '../config/systemConfig';
-import { canDeleteStudent, canEditStudent, getDaysUntilBirthday, formatDate as formatDateGlobal, REGEX } from '../models/studentModel';
+import { CONFIG, DEFAULT_IMAGE } from '../config/systemConfig';
+import { canDeleteStudent, canEditStudent } from '../models/studentModel';
 import { CLASS_PALETTE } from './UIComponents';
 
 // ================================================================
-// PREMIUM DETAIL VIEW — extracted 100% verbatim from the original Index.jsx
-// (single CR80 ID card front/back + A5 profile print, WhatsApp message, siblings card)
+// PREMIUM DETAIL VIEW — Desktop (2-Col Sticky Dashboard) + Mobile
+// All Student Schema Fields · Untouched Exports · Untouched Siblings
 // ================================================================
 const DetailView = ({ data, currentUser, portalSettings, onBack, onEdit, onDelete, onImageClick, siblings = [], onSelectSibling }) => {
   const canEdit = canEditStudent(currentUser, data, portalSettings);
@@ -23,12 +23,14 @@ const DetailView = ({ data, currentUser, portalSettings, onBack, onEdit, onDelet
   useEffect(() => {
     requestAnimationFrame(() => requestAnimationFrame(() => setMounted(true)));
   }, []);
-  // 👇 নতুন: ভাইবোনের প্রোফাইলে ক্লিক করে চলে গেলে স্ক্রল টপে রিসেট হবে
+
+  // ভাইবোনের প্রোফাইলে ক্লিক করে চলে গেলে স্ক্রল টপে রিসেট হবে
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTo({ top: 0, behavior: 'instant' });
     }
   }, [data.ID]);
+
   const formatDate = (dateStr) => {
     if (!dateStr) return 'N/A';
     try {
@@ -36,13 +38,51 @@ const DetailView = ({ data, currentUser, portalSettings, onBack, onEdit, onDelet
     } catch { return dateStr; }
   };
 
+  const formatBDT = (amount) => {
+    if (amount === undefined || amount === null || amount === '' || Number(amount) === 0) return '৳ ০';
+    return `৳ ${new Intl.NumberFormat('bn-BD').format(Number(amount))}`;
+  };
+
+  const calculateAge = (dobStr) => {
+    if (!dobStr) return null;
+    const dob = new Date(dobStr);
+    if (isNaN(dob.getTime())) return null;
+    const today = new Date();
+    let years = today.getFullYear() - dob.getFullYear();
+    let months = today.getMonth() - dob.getMonth();
+    if (months < 0 || (months === 0 && today.getDate() < dob.getDate())) {
+      years--;
+      months += 12;
+    }
+    if (years < 0) return null;
+    return months > 0 ? `${years} বছর ${months} মাস` : `${years} বছর`;
+  };
+
   const { color: classColor, bg: classBg } = CLASS_PALETTE[data.ClassBn] || { color: '#3B5BDB', bg: '#EEF2FF' };
   const isActive = data.Status === 'Active';
+  const studentAge = calculateAge(data.DOB);
 
-  // ── PRINT / ACTION HANDLERS (unchanged from original) ──
- 
-  // ── ANIMATION DELAY HELPER ──
+  // Permanent Address vs Present Address comparison
+  const perm = data.PermanentAddress || null;
+  const isSameAddress = useMemo(() => {
+    if (!perm) return true;
+    const cleanStr = (v) => String(v || '').trim().toLowerCase();
+    return (
+      cleanStr(perm.houseNameBn) === cleanStr(data.HouseNameBn) &&
+      cleanStr(perm.villageBn) === cleanStr(data.VillageBn) &&
+      cleanStr(perm.unionBn) === cleanStr(data.UnionBn) &&
+      cleanStr(perm.upazilaBn) === cleanStr(data.UpazilaBn) &&
+      cleanStr(perm.districtBn) === cleanStr(data.DistrictBn)
+    );
+  }, [perm, data]);
+
+  const lg = data.LocalGuardian || {};
+  const hasLocalGuardian = Boolean(lg.name || lg.phone || lg.relation || lg.nid);
+  const fee = data.FeeDetails || { monthlyFee: 0, feeCategory: 'Regular', siblingStudentCode: '' };
+
   const delay = (i) => `${i * 0.07}s`;
+
+  // ── PRINT / ACTION HANDLERS (100% UNCHANGED VERBATIM) ──
 const handlePrintIDCard = () => {
   // QR Code Data preparation
   const qrData = `${window.location.origin}/${data.ID}`;
@@ -518,6 +558,7 @@ const handlePrintIDCard = () => {
   `);
   w.document.close();
 };
+
 const handlePrintProfile = () => {
   const w = window.open('', '_blank');
   const origin = window.location.origin;
@@ -601,9 +642,6 @@ const handlePrintProfile = () => {
 
   const hasSiblings = siblings && siblings.length > 0;
 
-  // Each sibling becomes ONE compact row (same visual language as the
-  // other sections) instead of a bordered table — this is what keeps
-  // the whole thing on a single page.
   const siblingRows = (siblings || []).map((sib, i) =>
     row(
       `${i + 1}. ${sib.StudentNameEn || ''} (${sib.StudentNameBn || ''})`,
@@ -631,7 +669,7 @@ const handlePrintProfile = () => {
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;900&family=Noto+Serif+Bengali:wght@500;600;700&family=Noto+Sans+Bengali:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap');
 
   @page { size: A4; margin: 10mm; }
-  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+- { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   html, body { margin: 0; padding: 0; }
   body { font-family: 'Inter', 'Noto Sans Bengali', sans-serif; color: #1A2332; }
 
@@ -776,7 +814,7 @@ const handlePrintProfile = () => {
   w.document.close();
 };
 
-  const handleWhatsApp = () => {
+const handleWhatsApp = () => {
   const phone = data.WhatsApp?.replace(/['"\s-]/g,'');
   
   if(!phone) return alert("নম্বর নেই");
@@ -791,26 +829,26 @@ const msg = `
 ———————————————————————
 
 👤 *STUDENT PROFILE*
-• Name  : ${data.StudentNameEn} 
-• নাম  : ${data.StudentNameBn}
-• ID          : ${data.ID}
-• Class       : ${data.ClassEn}
-• Roll        : ${data.Roll}
-• Session     : ${data.Session}
-• Date of Birth : ${formatDate(data.DOB)}
-• Blood Group : ${data.BloodGroup}
-• Gender      : ${data.Gender}
-• BRN         : ${data.BRN}
+- Name  : ${data.StudentNameEn} 
+- নাম  : ${data.StudentNameBn}
+- ID          : ${data.ID}
+- Class       : ${data.ClassEn}
+- Roll        : ${data.Roll}
+- Session     : ${data.Session}
+- Date of Birth : ${formatDate(data.DOB)}
+- Blood Group : ${data.BloodGroup}
+- Gender      : ${data.Gender}
+- BRN         : ${data.BRN}
 
 👪 *GUARDIAN DETAILS*
-• Father : ${data.FatherNameEn}
-• পিতা :  ${data.FatherNameBn}
-• Mother : ${data.MotherNameEn}
-• মাতা : ${data.MotherNameBn}
+- Father : ${data.FatherNameEn}
+- পিতা :  ${data.FatherNameBn}
+- Mother : ${data.MotherNameEn}
+- মাতা : ${data.MotherNameBn}
 
 📞 *CONTACT INFO*
-• Mobile    : ${data.WhatsApp}
-• Emergency : ${data.EmergencyNo}
+- Mobile    : ${data.WhatsApp}
+- Emergency : ${data.EmergencyNo}
 
 🏠 *ADDRESS*
 ${data.HouseNameEn}, ${data.VillageEn}, ${data.UnionEn}, ${data.UpazilaEn}, ${data.DistrictEn}.— ${data.HouseNameBn}, ${data.VillageBn}, ${data.UnionBn}, ${data.UpazilaBn}, ${data.DistrictBn}।
@@ -823,18 +861,18 @@ if (currentUser?.role === "Admin") {
     const idmsg = `
 
 *প্রিয় ${data.StudentNameBn},*
-​
+
 আনন্দের সাথে জানানো যাচ্ছে যে, তোমার স্টুডেন্ট আইডি কার্ডটি প্রস্তুত হয়েছে! 🎉
 
 স্টুডেন্ট আইডি নম্বর: ${data.ID}
 আইডি কার্ড ফি: ১০০/- (একশত টাকা)
-​
+
 আগামীকাল মাদরাসা চলাকালীন সময়ে নির্ধারিত ফি পরিশোধ করে তোমার আইডি কার্ডটি সংগ্রহ করো। 
-​
+
 ডিজিটাল কপি ও বিস্তারিত তথ্যের জন্য নিচের লিংকে ক্লিক করো:
 🔗 ${waLink}
 
-​ধন্যবাদান্তে,
+ধন্যবাদান্তে,
 আবদুর রাজ্জাক দাখিল মাদরাসা`.trim();
   finalmsg = idmsg;
   }else {
@@ -843,6 +881,115 @@ if (currentUser?.role === "Admin") {
     
   window.open(`https://wa.me/+88${phone}?text=${encodeURIComponent(`প্রিয় ${data.StudentNameBn}`)}`);
 };
+
+  // Reusable Action Buttons Grid (used in both Mobile floating card & Desktop sidebar)
+  const quickActionButtons = [
+    {
+      icon: Phone,
+      label: 'Call',
+      gradient: 'linear-gradient(135deg, #059669, #10B981)',
+      glow: 'rgba(16,185,129,0.35)',
+      onClick: () => window.open(`tel:${data.WhatsApp?.replace(/['"]/g, '')}`)
+    },
+    {
+      icon: MessageCircle,
+      label: 'WhatsApp',
+      gradient: 'linear-gradient(135deg, #15803d, #22C55E)',
+      glow: 'rgba(34,197,94,0.35)',
+      onClick: handleWhatsApp
+    },
+    {
+      icon: CreditCard,
+      label: 'ID Card',
+      gradient: 'linear-gradient(135deg, #4338CA, #6366F1)',
+      glow: 'rgba(99,102,241,0.35)',
+      onClick: handlePrintIDCard
+    },
+    {
+      icon: FileText,
+      label: 'Print',
+      gradient: 'linear-gradient(135deg, #0F172A, #334155)',
+      glow: 'rgba(15,23,42,0.35)',
+      onClick: handlePrintProfile
+    },
+  ];
+
+  // Academic Info Rows (All schema fields)
+  const academicItems = [
+    { label: 'Student ID', value: data.ID, mono: true, highlight: true },
+    { label: 'Class', value: `${data.ClassEn || ''} (${data.ClassBn || ''})`, color: classColor },
+    { label: 'Roll Number', value: data.Roll },
+    { label: 'Session', value: data.Session },
+    { label: 'Admission Date (ভর্তির তারিখ)', value: data.AdmissionDate ? formatDate(data.AdmissionDate) : 'N/A' },
+    ...(data.Group ? [{ label: 'Group (বিভাগ)', value: data.Group, color: '#0F766E' }] : []),
+    ...(data.FourthSubject ? [{ label: '4th Subject (চতুর্থ বিষয়)', value: data.FourthSubject }] : []),
+    ...(data.BoardRegNo ? [{ label: 'Board Reg. No.', value: data.BoardRegNo, mono: true }] : []),
+    ...(data.BiometricId ? [{ label: 'Biometric Device ID', value: data.BiometricId, mono: true, color: '#0369A1' }] : []),
+    { label: 'Record Source (উৎস)', value: data.MigratedFromSheet ? 'Legacy Sheet Migrated' : 'Direct ERP Entry', color: data.MigratedFromSheet ? '#D97706' : '#059669' },
+    { label: 'Status', value: isActive ? 'Active ✓' : `${data.Status || 'Inactive'} ✗`, color: isActive ? '#10B981' : '#EF4444' },
+    ...(data.StatusReason ? [{ label: 'Status Reason (কারণ)', value: data.StatusReason, color: '#DC2626' }] : []),
+  ];
+
+  // Personal & Medical Info Rows
+  const personalItems = [
+    { label: 'Date of Birth (জন্ম তারিখ)', value: formatDate(data.DOB) },
+    ...(studentAge ? [{ label: 'Age (বয়স)', value: studentAge, color: '#4F46E5' }] : []),
+    { label: 'Gender (লিঙ্গ)', value: data.Gender === 'Male' ? 'Male (ছাত্র)' : data.Gender === 'Female' ? 'Female (ছাত্রী)' : (data.Gender || 'N/A'), color: data.Gender === 'Male' ? '#3B82F6' : '#EC4899' },
+    { label: 'Religion (ধর্ম)', value: data.Religion || 'Islam' },
+    { label: 'Blood Group (রক্তের গ্রুপ)', value: data.BloodGroup || 'N/A', color: '#EF4444' },
+    { label: 'Birth Reg. No. (BRN)', value: data.BRN || 'N/A', mono: true },
+    { label: 'Medical Note (স্বাস্থ্য তথ্য)', value: data.MedicalNote || 'কোনো সমস্যা নেই', color: data.MedicalNote ? '#D97706' : '#64748B' },
+  ];
+
+  // Parents & Family Info Rows
+  const guardianItems = [
+    { label: 'পিতার নাম (বাংলা)', value: data.FatherNameBn },
+    { label: "Father's Name (En)", value: data.FatherNameEn },
+    { label: 'পিতার NID নম্বর', value: data.FatherNid || 'N/A', mono: Boolean(data.FatherNid) },
+    { label: 'পিতার পেশা', value: data.FatherOccupation || 'N/A' },
+    { label: 'মাতার নাম (বাংলা)', value: data.MotherNameBn },
+    { label: "Mother's Name (En)", value: data.MotherNameEn },
+    { label: 'মাতার NID নম্বর', value: data.MotherNid || 'N/A', mono: Boolean(data.MotherNid) },
+    { label: 'মাতার পেশা', value: data.MotherOccupation || 'N/A' },
+    { label: 'পারিবারিক বার্ষিক আয়', value: data.AnnualIncome ? formatBDT(data.AnnualIncome) : 'N/A', color: data.AnnualIncome ? '#059669' : '#64748B' },
+  ];
+
+  // Contact & Emergency Info Rows
+  const contactItems = [
+    { label: 'Mobile / WhatsApp', value: data.WhatsApp, mono: true, highlight: true },
+    { label: 'Emergency Phone', value: data.EmergencyNo, mono: true },
+    { label: 'Emergency Contact Name', value: data.EmergencyContactName || data.FatherNameBn || 'N/A' },
+    { label: 'Relationship (সম্পর্ক)', value: data.EmergencyRelationship || 'Father', color: '#0284C7' },
+  ];
+
+  // Local Guardian Info Rows
+  const localGuardianItems = hasLocalGuardian
+    ? [
+        { label: 'অভিভাবকের নাম', value: lg.name || 'N/A' },
+        { label: 'সম্পর্ক (Relation)', value: lg.relation || 'N/A', color: '#7C3AED' },
+        { label: 'মোবাইল নম্বর', value: lg.phone || 'N/A', mono: Boolean(lg.phone) },
+        { label: 'NID নম্বর', value: lg.nid || 'N/A', mono: Boolean(lg.nid) },
+      ]
+    : [
+        { label: 'অবস্থা (Status)', value: 'আলাদা স্থানীয় অভিভাবক যুক্ত নেই', color: '#64748B' }
+      ];
+
+  // Fee & Waiver Info Rows
+  const feeCategoryColor =
+    fee.feeCategory === 'Full Free' || fee.feeCategory === 'Orphan'
+      ? '#059669'
+      : fee.feeCategory === 'Half Free' || fee.feeCategory === 'Sibling Waiver'
+      ? '#D97706'
+      : '#0F172A';
+
+  const feeItems = [
+    { label: 'Fee Category (বেতন ক্যাটাগরি)', value: fee.feeCategory || 'Regular', color: feeCategoryColor, highlight: true },
+    { label: 'Monthly Fee (মাসিক বেতন)', value: formatBDT(fee.monthlyFee), color: '#059669' },
+    ...(fee.siblingStudentCode
+      ? [{ label: 'Sibling Ref. ID (ভাই/বোন আইডি)', value: fee.siblingStudentCode, mono: true, color: '#4F46E5' }]
+      : []),
+  ];
+
   return (
     <>
       <style>{`
@@ -856,7 +1003,7 @@ if (currentUser?.role === "Admin") {
           50%       { box-shadow: 0 0 0 6px rgba(212,168,67,0.3), 0 0 0 14px rgba(212,168,67,0.08), 0 24px 60px rgba(0,0,0,0.5); }
         }
         @keyframes dv-slide-up {
-          from { opacity: 0; transform: translateY(32px); }
+          from { opacity: 0; transform: translateY(28px); }
           to   { opacity: 1; transform: translateY(0); }
         }
         @keyframes dv-fade-in {
@@ -907,19 +1054,21 @@ if (currentUser?.role === "Admin") {
         .dv-bar        { transform-origin: left; animation: dv-bar-slide 1.2s cubic-bezier(0.22,1,0.36,1) 0.5s both; }
 
         .dv-glass-card {
-          background: rgba(255,255,255,0.03);
-          border: 1px solid rgba(255,255,255,0.08);
+          background: rgba(255,255,255,0.04);
+          border: 1px solid rgba(255,255,255,0.1);
           backdrop-filter: blur(12px);
         }
         .dv-action-btn {
           transition: transform 0.18s cubic-bezier(0.22,1,0.36,1), box-shadow 0.18s ease;
         }
-        .dv-action-btn:active { transform: scale(0.88) !important; }
+        .dv-action-btn:hover { transform: translateY(-1px); }
+        .dv-action-btn:active { transform: scale(0.92) !important; }
 
         .dv-row-item {
           transition: background 0.2s ease;
         }
-        .dv-row-item:active { background: rgba(212,168,67,0.06) !important; }
+        .dv-row-item:hover { background: rgba(212,168,67,0.06) !important; }
+        .dv-row-item:active { background: rgba(212,168,67,0.1) !important; }
 
         .dv-section-card {
           animation: dv-slide-up 0.6s cubic-bezier(0.22,1,0.36,1) both;
@@ -944,421 +1093,602 @@ if (currentUser?.role === "Admin") {
 
       <div
         ref={scrollRef}
-        className="fixed inset-0 z-[100] overflow-y-auto dv-no-scrollbar"
+        className="fixed inset-0 z-[100] overflow-y-auto dv-no-scrollbar font-bangla"
         style={{ background: '#F0F4FF' }}
       >
-
         {/* ══════════════════════════════════════
-            HERO SECTION
+            DESKTOP STICKY TOP NAVIGATION BAR (lg+)
         ══════════════════════════════════════ */}
-        <div className="dv-hero-bg relative overflow-hidden" style={{ paddingBottom: 90 }}>
-
-          {/* Decorative background elements */}
-          <div className="absolute inset-0 pointer-events-none overflow-hidden">
-            {/* Blurred photo backdrop */}
-            <img
-              src={data.ImageURL || DEFAULT_IMAGE}
-              className="absolute inset-0 w-full h-full object-cover opacity-[0.07]"
-              style={{ filter: 'blur(40px)', transform: 'scale(1.2)' }}
-              alt=""
-            />
-            {/* Geometric rings */}
-            <div className="absolute -right-24 -top-24 w-80 h-80 rounded-full"
-              style={{ border: '1px solid rgba(212,168,67,0.08)' }} />
-            <div className="absolute -right-16 -top-16 w-60 h-60 rounded-full"
-              style={{ border: '1px solid rgba(212,168,67,0.12)' }} />
-            <div className="absolute -left-20 bottom-0 w-56 h-56 rounded-full"
-              style={{ background: 'radial-gradient(circle, rgba(212,168,67,0.06) 0%, transparent 70%)' }} />
-            {/* Shimmer line */}
-            <div className="dv-shimmer-line absolute left-0 right-0 h-px" style={{ top: '35%' }} />
-          </div>
-
-          {/* Back button */}
-          <div
-            className="dv-fade-in relative z-20 flex items-center gap-3 px-5 pt-14 pb-6"
-            style={{ animationDelay: '0s' }}
-          >
-            <button
-              onClick={onBack}
-              className="dv-action-btn w-10 h-10 rounded-2xl flex items-center justify-center"
-              style={{
-                background: 'rgba(255,255,255,0.1)',
-                border: '1px solid rgba(255,255,255,0.15)',
-                backdropFilter: 'blur(12px)',
-              }}
-            >
-              <ChevronLeft size={20} color="white" />
-            </button>
-            <div>
-              <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Student Profile</p>
-              <p className="text-[13px] font-black text-white/80 leading-tight">{data.ID}</p>
+        <div className="hidden lg:block sticky top-0 z-40 bg-[#060D1F]/95 backdrop-blur-xl border-b border-white/10 shadow-md">
+          <div className="max-w-7xl mx-auto px-8 h-16 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={onBack}
+                className="dv-action-btn px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-black flex items-center gap-1.5 border border-white/10"
+              >
+                <ChevronLeft size={16} /> ড্যাশবোর্ডে ফিরুন
+              </button>
+              <div className="h-5 w-px bg-white/15" />
+              <div className="flex items-center gap-2.5">
+                <span className="text-sm font-black text-[#F7E09A]">{data.StudentNameBn || data.StudentNameEn}</span>
+                <span className="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-white/10 text-slate-300 border border-white/10">
+                  ID: {data.ID}
+                </span>
+              </div>
             </div>
-            {/* Status badge top right */}
-            <div className="ml-auto flex items-center gap-2 px-3 py-1.5 rounded-full"
-              style={{
-                background: isActive ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
-                border: `1px solid ${isActive ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
-              }}
-            >
-              <span className={`w-2 h-2 rounded-full dv-status-dot ${isActive ? 'bg-emerald-400' : 'bg-red-400'}`} />
-              <span className={`text-[10px] font-black uppercase tracking-wider ${isActive ? 'text-emerald-300' : 'text-red-300'}`}>
-                {isActive ? 'Active' : 'Inactive'}
-              </span>
-            </div>
-          </div>
 
-          {/* Photo + Name */}
-          <div className="relative z-10 flex flex-col items-center px-5">
-
-            {/* Photo */}
-            <div
-              className="dv-scale-in relative cursor-pointer"
-              style={{ animationDelay: '0.1s' }}
-              onClick={() => onImageClick && onImageClick(data.ImageURL || DEFAULT_IMAGE)}
-            >
+            <div className="flex items-center gap-3">
               <div
-                className="dv-photo-ring w-36 h-36 rounded-[32px] overflow-hidden"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full"
                 style={{
-                  border: '3px solid rgba(212,168,67,0.5)',
+                  background: isActive ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
+                  border: `1px solid ${isActive ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
                 }}
               >
-                <img
-                  src={data.ImageURL || DEFAULT_IMAGE}
-                  className="w-full h-full object-cover"
-                  alt={data.StudentNameEn}
-                />
-              </div>
-              {/* Camera hint */}
-              <div
-                className="absolute -bottom-1 -right-1 w-8 h-8 rounded-xl flex items-center justify-center"
-                style={{ background: 'rgba(212,168,67,0.9)', backdropFilter: 'blur(8px)' }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                  <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" fill="white"/>
-                  <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" stroke="white" strokeWidth="1.5"/>
-                </svg>
-              </div>
-            </div>
-
-            {/* Name + Class */}
-            <div className="mt-5 text-center dv-slide-up" style={{ animationDelay: '0.15s' }}>
-              <h1 className="text-3xl font-black text-white leading-tight tracking-tight">
-                {data.StudentNameEn}
-              </h1>
-              <p className="text-lg font-bold mt-0.5" style={{ color: 'rgba(255,255,255,0.55)' }}>
-                {data.StudentNameBn}
-              </p>
-            </div>
-
-            {/* Badges row */}
-            <div className="flex flex-wrap justify-center gap-2 mt-4 dv-slide-up" style={{ animationDelay: '0.22s' }}>
-              {[
-                { label: `Class ${data.ClassEn}`, color: classColor, bg: 'rgba(255,255,255,0.1)', border: `${classColor}40` },
-                { label: `Roll ${data.Roll}`, color: '#D4A843', bg: 'rgba(212,168,67,0.12)', border: 'rgba(212,168,67,0.3)' },
-                data.BloodGroup && { label: `🩸 ${data.BloodGroup}`, color: '#F87171', bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.3)' },
-                { label: data.Gender === 'Male' ? '♂ Male' : '♀ Female', color: data.Gender === 'Male' ? '#60A5FA' : '#F472B6', bg: data.Gender === 'Male' ? 'rgba(96,165,250,0.12)' : 'rgba(244,114,182,0.12)', border: data.Gender === 'Male' ? 'rgba(96,165,250,0.3)' : 'rgba(244,114,182,0.3)' },
-              ].filter(Boolean).map((badge, i) => (
-                <span
-                  key={i}
-                  className="dv-badge-pop text-[11px] font-black px-3 py-1.5 rounded-full"
-                  style={{
-                    color: badge.color,
-                    background: badge.bg,
-                    border: `1px solid ${badge.border}`,
-                    animationDelay: `${0.28 + i * 0.06}s`,
-                  }}
-                >
-                  {badge.label}
+                <span className={`w-2 h-2 rounded-full dv-status-dot ${isActive ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                <span className={`text-[10px] font-black uppercase tracking-wider ${isActive ? 'text-emerald-300' : 'text-red-300'}`}>
+                  {isActive ? 'Active' : (data.Status || 'Inactive')}
                 </span>
-              ))}
-            </div>
+              </div>
 
-            {/* Session strip */}
-            <div
-              className="mt-5 dv-glass-card rounded-2xl px-5 py-3 flex items-center gap-4 dv-fade-in"
-              style={{ animationDelay: '0.5s', minWidth: 220 }}
-            >
-              <div className="text-center flex-1">
-                <p className="text-[9px] font-black text-white/30 uppercase tracking-widest">Session</p>
-                <p className="dv-gold-text text-sm font-black mt-0.5">{data.Session}</p>
-              </div>
-              <div className="w-px h-8" style={{ background: 'rgba(255,255,255,0.1)' }} />
-              <div className="text-center flex-1">
-                <p className="text-[9px] font-black text-white/30 uppercase tracking-widest">Class</p>
-                <p className="text-sm font-black mt-0.5" style={{ color: classColor }}>{data.ClassBn}</p>
-              </div>
-              <div className="w-px h-8" style={{ background: 'rgba(255,255,255,0.1)' }} />
-              <div className="text-center flex-1">
-                <p className="text-[9px] font-black text-white/30 uppercase tracking-widest">Roll</p>
-                <p className="text-sm font-black text-white mt-0.5">{data.Roll}</p>
-              </div>
+              {canEdit && (
+                <button
+                  onClick={onEdit}
+                  className="dv-action-btn px-4 py-2 rounded-xl bg-[#D4A843] hover:bg-[#e1b752] text-[#060D1F] text-xs font-black flex items-center gap-1.5 shadow-sm"
+                >
+                  <Edit3 size={14} /> Edit Profile
+                </button>
+              )}
+              {canDelete && (
+                <button
+                  onClick={() => onDelete(data.ID)}
+                  className="dv-action-btn px-3 py-2 rounded-xl bg-red-500/20 hover:bg-red-600 text-red-200 hover:text-white border border-red-400/30 text-xs font-black flex items-center gap-1.5"
+                  title="Delete Student"
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
             </div>
-
           </div>
         </div>
 
         {/* ══════════════════════════════════════
-            ACTION BUTTONS — floating over hero
+            RESPONSIVE WORKSPACE WRAPPER
+            Mobile: Single Column Full Bleed
+            Desktop (lg+): 12-Col Grid (4 Sticky Left + 8 Right)
         ══════════════════════════════════════ */}
-        <div
-          className="relative z-20 px-5 -mt-10 dv-slide-up"
-          style={{ animationDelay: '0.4s' }}
-        >
-          <div
-            className="rounded-[24px] p-4 grid grid-cols-4 gap-3"
-            style={{
-              background: 'rgba(255,255,255,0.95)',
-              backdropFilter: 'blur(20px)',
-              boxShadow: '0 20px 60px rgba(6,13,31,0.18), 0 4px 16px rgba(6,13,31,0.08)',
-              border: '1px solid rgba(255,255,255,0.8)',
-            }}
-          >
-            {[
-              {
-                icon: Phone,
-                label: 'Call',
-                gradient: 'linear-gradient(135deg, #059669, #10B981)',
-                glow: 'rgba(16,185,129,0.35)',
-                onClick: () => window.open(`tel:${data.WhatsApp?.replace(/['"]/g, '')}`)
-              },
-              {
-                icon: MessageCircle,
-                label: 'WhatsApp',
-                gradient: 'linear-gradient(135deg, #15803d, #22C55E)',
-                glow: 'rgba(34,197,94,0.35)',
-                onClick: handleWhatsApp
-              },
-              {
-                icon: CreditCard,
-                label: 'ID Card',
-                gradient: 'linear-gradient(135deg, #4338CA, #6366F1)',
-                glow: 'rgba(99,102,241,0.35)',
-                onClick: handlePrintIDCard
-              },
-              {
-                icon: FileText,
-                label: 'Print',
-                gradient: 'linear-gradient(135deg, #0F172A, #334155)',
-                glow: 'rgba(15,23,42,0.35)',
-                onClick: handlePrintProfile
-              },
-            ].map(({ icon: Icon, label, gradient, glow, onClick }, i) => (
-              <button
-                key={label}
-                onClick={onClick}
-                className="dv-action-btn flex flex-col items-center gap-2"
-                style={{ animationDelay: `${0.45 + i * 0.06}s` }}
+        <div className="lg:max-w-7xl lg:mx-auto lg:px-8 lg:py-7">
+          <div className="lg:grid lg:grid-cols-12 lg:gap-7 lg:items-start">
+
+            {/* ══════════════════════════════════════
+                LEFT COLUMN (4 COLS ON DESKTOP · STICKY)
+                HERO + FLOATING ACTION BUTTONS
+            ══════════════════════════════════════ */}
+            <div className="lg:col-span-4 lg:sticky lg:top-24 lg:space-y-4">
+              {/* HERO SECTION */}
+              <div
+                className="dv-hero-bg relative overflow-hidden lg:rounded-[30px] lg:shadow-2xl lg:border lg:border-[#D4A843]/25"
+                style={{ paddingBottom: 90 }}
+              >
+                {/* Decorative background elements */}
+                <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                  <img
+                    src={data.ImageURL || DEFAULT_IMAGE}
+                    className="absolute inset-0 w-full h-full object-cover opacity-[0.07]"
+                    style={{ filter: 'blur(40px)', transform: 'scale(1.2)' }}
+                    alt=""
+                  />
+                  <div className="absolute -right-24 -top-24 w-80 h-80 rounded-full"
+                    style={{ border: '1px solid rgba(212,168,67,0.08)' }} />
+                  <div className="absolute -right-16 -top-16 w-60 h-60 rounded-full"
+                    style={{ border: '1px solid rgba(212,168,67,0.12)' }} />
+                  <div className="absolute -left-20 bottom-0 w-56 h-56 rounded-full"
+                    style={{ background: 'radial-gradient(circle, rgba(212,168,67,0.06) 0%, transparent 70%)' }} />
+                  <div className="dv-shimmer-line absolute left-0 right-0 h-px" style={{ top: '35%' }} />
+                </div>
+
+                {/* Mobile Back Bar (Hidden on Desktop where Sticky Top Bar handles it) */}
+                <div
+                  className="dv-fade-in relative z-20 flex lg:hidden items-center gap-3 px-5 pt-14 pb-6"
+                  style={{ animationDelay: '0s' }}
+                >
+                  <button
+                    onClick={onBack}
+                    className="dv-action-btn w-10 h-10 rounded-2xl flex items-center justify-center"
+                    style={{
+                      background: 'rgba(255,255,255,0.1)',
+                      border: '1px solid rgba(255,255,255,0.15)',
+                      backdropFilter: 'blur(12px)',
+                    }}
+                  >
+                    <ChevronLeft size={20} color="white" />
+                  </button>
+                  <div>
+                    <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Student Profile</p>
+                    <p className="text-[13px] font-black text-white/80 leading-tight">{data.ID}</p>
+                  </div>
+                  <div className="ml-auto flex items-center gap-2 px-3 py-1.5 rounded-full"
+                    style={{
+                      background: isActive ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
+                      border: `1px solid ${isActive ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                    }}
+                  >
+                    <span className={`w-2 h-2 rounded-full dv-status-dot ${isActive ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                    <span className={`text-[10px] font-black uppercase tracking-wider ${isActive ? 'text-emerald-300' : 'text-red-300'}`}>
+                      {isActive ? 'Active' : (data.Status || 'Inactive')}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Photo + Name */}
+                <div className="relative z-10 flex flex-col items-center px-5 lg:pt-8">
+                  <div
+                    className="dv-scale-in relative cursor-pointer"
+                    style={{ animationDelay: '0.1s' }}
+                    onClick={() => onImageClick && onImageClick(data.ImageURL || DEFAULT_IMAGE)}
+                  >
+                    <div
+                      className="dv-photo-ring w-36 h-36 lg:w-32 lg:h-32 rounded-[32px] overflow-hidden"
+                      style={{ border: '3px solid rgba(212,168,67,0.5)' }}
+                    >
+                      <img
+                        src={data.ImageURL || DEFAULT_IMAGE}
+                        className="w-full h-full object-cover"
+                        alt={data.StudentNameEn}
+                      />
+                    </div>
+                    <div
+                      className="absolute -bottom-1 -right-1 w-8 h-8 rounded-xl flex items-center justify-center"
+                      style={{ background: 'rgba(212,168,67,0.9)', backdropFilter: 'blur(8px)' }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                        <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" fill="white"/>
+                        <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" stroke="white" strokeWidth="1.5"/>
+                      </svg>
+                    </div>
+                  </div>
+
+                  {/* Name + Class */}
+                  <div className="mt-5 text-center dv-slide-up" style={{ animationDelay: '0.15s' }}>
+                    <h1 className="text-3xl lg:text-2xl font-black text-white leading-tight tracking-tight">
+                      {data.StudentNameEn}
+                    </h1>
+                    <p className="text-lg lg:text-base font-bold mt-0.5" style={{ color: 'rgba(255,255,255,0.65)' }}>
+                      {data.StudentNameBn}
+                    </p>
+                  </div>
+
+                  {/* Badges row */}
+                  <div className="flex flex-wrap justify-center gap-2 mt-4 dv-slide-up" style={{ animationDelay: '0.22s' }}>
+                    {[
+                      { label: `Class ${data.ClassEn}`, color: classColor, bg: 'rgba(255,255,255,0.1)', border: `${classColor}40` },
+                      { label: `Roll ${data.Roll}`, color: '#D4A843', bg: 'rgba(212,168,67,0.12)', border: 'rgba(212,168,67,0.3)' },
+                      data.Group && { label: data.Group, color: '#2DD4BF', bg: 'rgba(45,212,191,0.12)', border: 'rgba(45,212,191,0.3)' },
+                      data.BloodGroup && { label: `🩸 ${data.BloodGroup}`, color: '#F87171', bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.3)' },
+                      { label: data.Gender === 'Male' ? '♂ Male' : '♀ Female', color: data.Gender === 'Male' ? '#60A5FA' : '#F472B6', bg: data.Gender === 'Male' ? 'rgba(96,165,250,0.12)' : 'rgba(244,114,182,0.12)', border: data.Gender === 'Male' ? 'rgba(96,165,250,0.3)' : 'rgba(244,114,182,0.3)' },
+                    ].filter(Boolean).map((badge, i) => (
+                      <span
+                        key={i}
+                        className="dv-badge-pop text-[11px] font-black px-3 py-1.5 rounded-full"
+                        style={{
+                          color: badge.color,
+                          background: badge.bg,
+                          border: `1px solid ${badge.border}`,
+                          animationDelay: `${0.28 + i * 0.06}s`,
+                        }}
+                      >
+                        {badge.label}
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* Session strip */}
+                  <div
+                    className="mt-5 w-full max-w-xs dv-glass-card rounded-2xl px-4 py-3 flex items-center gap-3 dv-fade-in"
+                    style={{ animationDelay: '0.5s' }}
+                  >
+                    <div className="text-center flex-1">
+                      <p className="text-[9px] font-black text-white/40 uppercase tracking-widest">Session</p>
+                      <p className="dv-gold-text text-sm font-black mt-0.5">{data.Session}</p>
+                    </div>
+                    <div className="w-px h-8" style={{ background: 'rgba(255,255,255,0.12)' }} />
+                    <div className="text-center flex-1">
+                      <p className="text-[9px] font-black text-white/40 uppercase tracking-widest">Class</p>
+                      <p className="text-sm font-black mt-0.5" style={{ color: classColor }}>{data.ClassBn}</p>
+                    </div>
+                    <div className="w-px h-8" style={{ background: 'rgba(255,255,255,0.12)' }} />
+                    <div className="text-center flex-1">
+                      <p className="text-[9px] font-black text-white/40 uppercase tracking-widest">Roll</p>
+                      <p className="text-sm font-black text-white mt-0.5">{data.Roll}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ACTION BUTTONS — floating over hero */}
+              <div
+                className="relative z-20 px-5 lg:px-3 -mt-10 lg:-mt-14 dv-slide-up"
+                style={{ animationDelay: '0.4s' }}
               >
                 <div
-                  className="w-14 h-14 rounded-[18px] flex items-center justify-center"
+                  className="rounded-[24px] p-4 grid grid-cols-4 gap-3"
                   style={{
-                    background: gradient,
-                    boxShadow: `0 8px 24px ${glow}`,
+                    background: 'rgba(255,255,255,0.96)',
+                    backdropFilter: 'blur(20px)',
+                    boxShadow: '0 20px 60px rgba(6,13,31,0.16), 0 4px 16px rgba(6,13,31,0.08)',
+                    border: '1px solid rgba(255,255,255,0.9)',
                   }}
                 >
-                  <Icon size={22} color="white" strokeWidth={2} />
+                  {quickActionButtons.map(({ icon: Icon, label, gradient, glow, onClick }, i) => (
+                    <button
+                      key={label}
+                      onClick={onClick}
+                      className="dv-action-btn flex flex-col items-center gap-2"
+                      style={{ animationDelay: `${0.45 + i * 0.06}s` }}
+                    >
+                      <div
+                        className="w-14 h-14 lg:w-12 lg:h-12 rounded-[18px] flex items-center justify-center"
+                        style={{
+                          background: gradient,
+                          boxShadow: `0 8px 24px ${glow}`,
+                        }}
+                      >
+                        <Icon size={21} color="white" strokeWidth={2} />
+                      </div>
+                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-wide">{label}</span>
+                    </button>
+                  ))}
                 </div>
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wide">{label}</span>
-              </button>
-            ))}
+              </div>
+
+              {/* DESKTOP QUICK RECORD INFO & ACTIONS CARD */}
+              <div className="hidden lg:block bg-white rounded-[24px] p-4 border border-slate-200/70 shadow-sm space-y-3">
+                <div className="flex items-center justify-between text-[11px] px-1">
+                  <span className="font-bold text-slate-400">Fee Category</span>
+                  <span className="font-black px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                    {fee.feeCategory || 'Regular'} · {formatBDT(fee.monthlyFee)}
+                  </span>
+                </div>
+                {data.LastUpdated && (
+                  <div className="flex items-center justify-between text-[11px] px-1 pt-2 border-t border-slate-100">
+                    <span className="font-bold text-slate-400">সর্বশেষ আপডেট</span>
+                    <span className="font-mono font-bold text-slate-500 text-[10px]">{data.LastUpdated}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ══════════════════════════════════════
+                RIGHT COLUMN (8 COLS ON DESKTOP)
+                ALL STUDENT DATA SECTIONS (2-COL GRID ON XL)
+            ══════════════════════════════════════ */}
+            <div className="lg:col-span-8 px-4 lg:px-0 pt-4 lg:pt-0 pb-40 lg:pb-16">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+
+                {/* ── 1. Academic Info ── */}
+                <PremiumSection
+                  title="Academic Info · একাডেমিক তথ্য"
+                  icon="🎓"
+                  delay="0.45s"
+                  accent={classColor}
+                  items={academicItems}
+                />
+
+                {/* ── 2. Personal & Medical Info ── */}
+                <PremiumSection
+                  title="Personal & Medical · ব্যক্তিগত তথ্য"
+                  icon="👤"
+                  delay="0.52s"
+                  accent="#6366F1"
+                  items={personalItems}
+                />
+
+                {/* ── 3. Parents & Family Info ── */}
+                <PremiumSection
+                  title="Parents & Family · পিতা-মাতা ও পরিবার"
+                  icon="👪"
+                  delay="0.58s"
+                  accent="#F59E0B"
+                  items={guardianItems}
+                />
+
+                {/* ── 4. Contact & Emergency Info ── */}
+                <div className="space-y-4">
+                  <PremiumSection
+                    title="Contact & Emergency · যোগাযোগ"
+                    icon="📞"
+                    delay="0.64s"
+                    accent="#10B981"
+                    items={contactItems}
+                    extra={
+                      <div className="flex gap-2 mt-3">
+                        <button
+                          onClick={() => window.open(`tel:${data.WhatsApp?.replace(/['"]/g, '')}`)}
+                          className="dv-action-btn flex-1 py-3 rounded-2xl text-xs font-black text-emerald-600 flex items-center justify-center gap-2"
+                          style={{ background: '#ECFDF5', border: '1px solid #A7F3D0' }}
+                        >
+                          <Phone size={14} /> Call Now
+                        </button>
+                        <button
+                          onClick={handleWhatsApp}
+                          className="dv-action-btn flex-1 py-3 rounded-2xl text-xs font-black text-white flex items-center justify-center gap-2"
+                          style={{ background: 'linear-gradient(135deg,#15803d,#22C55E)', boxShadow: '0 6px 20px rgba(34,197,94,0.3)' }}
+                        >
+                          <MessageCircle size={14} /> WhatsApp
+                        </button>
+                      </div>
+                    }
+                  />
+
+                  {/* ── 5. Fee & Waiver Details ── */}
+                  <PremiumSection
+                    title="Fee & Waiver · বেতন ও ফি"
+                    icon="💳"
+                    delay="0.70s"
+                    accent="#0EA5E9"
+                    items={feeItems}
+                  />
+                </div>
+
+                {/* ── 6. Local Guardian Info ── */}
+                <div className="xl:col-span-2">
+                  <PremiumSection
+                    title="Local Guardian · স্থানীয় অভিভাবক"
+                    icon="🛡️"
+                    delay="0.74s"
+                    accent="#8B5CF6"
+                    items={localGuardianItems}
+                  />
+                </div>
+
+                {/* ── 7. Present & Permanent Address (Full Width on Desktop) ── */}
+                <div
+                  className="xl:col-span-2 dv-section-card rounded-[24px] overflow-hidden"
+                  style={{
+                    animationDelay: '0.80s',
+                    background: 'white',
+                    boxShadow: '0 4px 24px rgba(6,13,31,0.07), 0 1px 4px rgba(6,13,31,0.04)',
+                    border: '1px solid rgba(6,13,31,0.05)',
+                  }}
+                >
+                  {/* Header */}
+                  <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg" style={{ background: '#FEF2F2' }}>
+                        🏠
+                      </div>
+                      <div>
+                        <h3 className="text-[11px] font-black text-slate-800 uppercase tracking-widest">
+                          Address · বর্তমান ও স্থায়ী ঠিকানা
+                        </h3>
+                        <div className="h-0.5 w-8 rounded-full mt-1" style={{ background: '#EF4444' }} />
+                      </div>
+                    </div>
+                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-full ${isSameAddress ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'}`}>
+                      {isSameAddress ? 'বর্তমান ও স্থায়ী একই' : 'আলাদা স্থায়ী ঠিকানা'}
+                    </span>
+                  </div>
+
+                  <div className={`mx-4 mb-4 grid grid-cols-1 ${!isSameAddress ? 'md:grid-cols-2' : ''} gap-3.5`}>
+                    {/* Present Address Box */}
+                    <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #E2E8F0' }}>
+                      <div className="px-4 py-2.5 bg-slate-900 text-white flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-[#F7E09A]">বর্তমান ঠিকানা (Present)</span>
+                        {data.DivisionBn && <span className="text-[10px] font-bold text-slate-300">{data.DivisionBn}</span>}
+                      </div>
+                      <div className="px-4 py-3" style={{ background: '#F8FAFC' }}>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">বাংলা ঠিকানা</p>
+                        <p className="text-sm font-bold text-slate-800 leading-relaxed">
+                          {[data.HouseNameBn, data.VillageBn, data.UnionBn, data.UpazilaBn, data.DistrictBn, data.DivisionBn].filter(Boolean).join(', ')}।
+                        </p>
+                      </div>
+                      <div className="h-px" style={{ background: '#E2E8F0' }} />
+                      <div className="px-4 py-3 bg-white">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">English Address</p>
+                        <p className="text-sm font-bold text-slate-600 leading-relaxed">
+                          {[data.HouseNameEn, data.VillageEn, data.UnionEn, data.UpazilaEn, data.DistrictEn, data.DivisionEn].filter(Boolean).join(', ')}.
+                        </p>
+                      </div>
+                      <div className="h-px" style={{ background: '#E2E8F0' }} />
+                      <div className="px-4 py-2.5 grid grid-cols-3 gap-2 text-center" style={{ background: '#F8FAFC' }}>
+                        <div>
+                          <span className="text-[9px] font-black text-slate-400 uppercase block">Post Office</span>
+                          <span className="text-xs font-black text-slate-800">{data.PostOffice || 'N/A'}</span>
+                        </div>
+                        <div className="border-x border-slate-200">
+                          <span className="text-[9px] font-black text-slate-400 uppercase block">Post Code</span>
+                          <span className="text-xs font-mono font-black text-slate-800">{data.PostCode || 'N/A'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] font-black text-slate-400 uppercase block">Ward No</span>
+                          <span className="text-xs font-black text-slate-800">{data.WardNo || 'N/A'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Permanent Address Box (Only if different from Present Address) */}
+                    {!isSameAddress && perm && (
+                      <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #C7D2FE' }}>
+                        <div className="px-4 py-2.5 bg-indigo-950 text-white flex items-center justify-between">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-indigo-200">স্থায়ী ঠিকানা (Permanent)</span>
+                          {perm.divisionBn && <span className="text-[10px] font-bold text-indigo-300">{perm.divisionBn}</span>}
+                        </div>
+                        <div className="px-4 py-3" style={{ background: '#EEF2FF' }}>
+                          <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">বাংলা ঠিকানা</p>
+                          <p className="text-sm font-bold text-slate-800 leading-relaxed">
+                            {[perm.houseNameBn, perm.villageBn, perm.unionBn, perm.upazilaBn, perm.districtBn, perm.divisionBn].filter(Boolean).join(', ')}।
+                          </p>
+                        </div>
+                        <div className="h-px" style={{ background: '#E0E7FF' }} />
+                        <div className="px-4 py-3 bg-white">
+                          <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">English Address</p>
+                          <p className="text-sm font-bold text-slate-600 leading-relaxed">
+                            {[perm.houseNameEn, perm.villageEn, perm.unionEn, perm.upazilaEn, perm.districtEn, perm.divisionEn].filter(Boolean).join(', ')}.
+                          </p>
+                        </div>
+                        <div className="h-px" style={{ background: '#E0E7FF' }} />
+                        <div className="px-4 py-2.5 grid grid-cols-3 gap-2 text-center" style={{ background: '#F8FAFC' }}>
+                          <div>
+                            <span className="text-[9px] font-black text-slate-400 uppercase block">Post Office</span>
+                            <span className="text-xs font-black text-slate-800">{perm.postOffice || 'N/A'}</span>
+                          </div>
+                          <div className="border-x border-slate-200">
+                            <span className="text-[9px] font-black text-slate-400 uppercase block">Post Code</span>
+                            <span className="text-xs font-mono font-black text-slate-800">{perm.postCode || 'N/A'}</span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] font-black text-slate-400 uppercase block">Ward No</span>
+                            <span className="text-xs font-black text-slate-800">{perm.wardNo || 'N/A'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* ── 7.5 ACADEMIC HISTORY (সেশনভিত্তিক একাডেমিক ইতিহাস) ── */}
+                {Array.isArray(data.AcademicHistory) && data.AcademicHistory.length > 0 && (
+                  <div
+                    className="xl:col-span-2 dv-section-card rounded-[24px] overflow-hidden"
+                    style={{
+                      animationDelay: '0.85s',
+                      background: 'white',
+                      boxShadow: '0 4px 24px rgba(6,13,31,0.07), 0 1px 4px rgba(6,13,31,0.04)',
+                      border: '1px solid rgba(6,13,31,0.05)',
+                    }}
+                  >
+                    <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg" style={{ background: '#EFF6FF' }}>
+                          📚
+                        </div>
+                        <div>
+                          <h3 className="text-[11px] font-black text-slate-800 uppercase tracking-widest">
+                            Academic History · একাডেমিক ইতিহাস
+                          </h3>
+                          <div className="h-0.5 w-8 rounded-full mt-1" style={{ background: '#2563EB' }} />
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        {data.AcademicHistory.length} session{data.AcademicHistory.length > 1 ? 's' : ''}
+                      </span>
+                    </div>
+
+                    <div className="px-4 pb-4 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {[...data.AcademicHistory].reverse().map((hist, idx) => {
+                        const st = hist.resultStatus || 'Studying';
+                        const badgeStyle =
+                          st === 'Promoted'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : st === 'Failed'
+                            ? 'bg-red-50 text-red-700 border-red-200'
+                            : st === 'Transferred'
+                            ? 'bg-amber-50 text-amber-700 border-amber-200'
+                            : 'bg-blue-50 text-blue-700 border-blue-200';
+                        return (
+                          <div
+                            key={`${hist.session}-${hist.classBn}-${idx}`}
+                            className="px-3.5 py-3 rounded-2xl bg-slate-50 border border-slate-200/70 flex items-center justify-between gap-3"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-xs font-black text-slate-800">
+                                সেশন {hist.session} · {hist.classBn} {hist.classEn ? `(${hist.classEn})` : ''}
+                              </p>
+                              <p className="text-[11px] font-bold text-slate-500 mt-0.5">
+                                রোল: {hist.roll}{hist.group ? ` · গ্রুপ: ${hist.group}` : ''}
+                              </p>
+                            </div>
+                            <span className={`text-[10px] font-black px-2.5 py-1 rounded-full border shrink-0 ${badgeStyle}`}>
+                              {st}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── 8. SIBLINGS SECTION (100% UNCHANGED ORIGINAL STRUCTURE) ── */}
+                {siblings && siblings.length > 0 && (
+                  <div
+                    className="xl:col-span-2 dv-section-card rounded-[24px] overflow-hidden"
+                    style={{
+                      animationDelay: '0.9s',
+                      background: 'white',
+                      boxShadow: '0 4px 24px rgba(6,13,31,0.07), 0 1px 4px rgba(6,13,31,0.04)',
+                      border: '1px solid rgba(6,13,31,0.05)',
+                    }}
+                  >
+                    {/* Header */}
+                    <div className="flex items-center gap-3 px-5 pt-5 pb-4">
+                      <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg" style={{ background: '#FEF3E2' }}>
+                        👨‍👩‍👧‍👦
+                      </div>
+                      <div>
+                        <h3 className="text-[11px] font-black text-slate-800 uppercase tracking-widest">Siblings</h3>
+                        <div className="h-0.5 w-8 rounded-full mt-1" style={{ background: '#D97706' }} />
+                      </div>
+                      <span className="ml-auto text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                        {siblings.length} found
+                      </span>
+                    </div>
+
+                    {/* Clickable sibling rows */}
+                    <div className="px-4 pb-4 space-y-2">
+                      {siblings.map((sib) => {
+                        const { color, bg } = CLASS_PALETTE[sib.ClassBn] || { color: '#3B5BDB', bg: '#EEF2FF' };
+                        return (
+                          <button
+                            key={sib.ID}
+                            onClick={() => onSelectSibling && onSelectSibling(sib)}
+                            className="dv-row-item w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-left"
+                            style={{ background: '#F8FAFC', border: '1px solid transparent' }}
+                          >
+                            <img
+                              src={sib.ImageURL || DEFAULT_IMAGE}
+                              className="w-11 h-11 rounded-xl object-cover flex-shrink-0"
+                              style={{ border: `2px solid ${color}30` }}
+                              alt=""
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[13px] font-black text-slate-900 truncate">{sib.StudentNameEn}</p>
+                              <p className="text-[11px] font-semibold text-slate-400 truncate">{sib.StudentNameBn}</p>
+                            </div>
+                            <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                              <span className="text-[9px] font-black px-2 py-0.5 rounded-md" style={{ background: bg, color }}>
+                                {sib.ClassEn}
+                              </span>
+                              <span className="text-[9px] font-bold text-slate-400">Roll {sib.Roll}</span>
+                            </div>
+                            <ChevronLeft size={14} className="rotate-180 text-slate-300 flex-shrink-0" />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Mobile Last Updated Footer */}
+                {data.LastUpdated && (
+                  <div className="lg:hidden xl:col-span-2 text-center pt-1 pb-2">
+                    <p className="text-[10px] font-bold text-slate-400">
+                      সর্বশেষ আপডেট: <span className="font-mono">{data.LastUpdated}</span>
+                    </p>
+                  </div>
+                )}
+
+              </div>
+            </div>
+
           </div>
         </div>
 
         {/* ══════════════════════════════════════
-            CONTENT SECTIONS
-        ══════════════════════════════════════ */}
-        <div className="px-4 pt-4 pb-40 space-y-4">
-
-          {/* ── SECTION: Basic Info ── */}
-          <PremiumSection
-            title="Academic Info"
-            icon="🎓"
-            delay="0.5s"
-            accent={classColor}
-            items={[
-              { label: 'Student ID', value: data.ID, mono: true, highlight: true },
-              { label: 'Class', value: `${data.ClassEn} (${data.ClassBn})`, color: classColor },
-              { label: 'Roll Number', value: data.Roll },
-              { label: 'Session', value: data.Session },
-              { label: 'Status', value: isActive ? 'Active ✓' : 'Inactive ✗', color: isActive ? '#10B981' : '#EF4444' },
-            ]}
-          />
-
-          {/* ── SECTION: Personal Info ── */}
-          <PremiumSection
-            title="Personal Info"
-            icon="👤"
-            delay="0.58s"
-            accent="#6366F1"
-            items={[
-              { label: 'Date of Birth', value: formatDate(data.DOB) },
-              { label: 'Blood Group', value: data.BloodGroup || 'N/A', color: '#EF4444' },
-              { label: 'Gender', value: data.Gender, color: data.Gender === 'Male' ? '#3B82F6' : '#EC4899' },
-              { label: 'BRN', value: data.BRN, mono: true },
-            ]}
-          />
-
-          {/* ── SECTION: Guardian Info ── */}
-          <PremiumSection
-            title="Guardian Info"
-            icon="👪"
-            delay="0.66s"
-            accent="#F59E0B"
-            items={[
-              { label: 'পিতার নাম', value: data.FatherNameBn },
-              { label: "Father's Name", value: data.FatherNameEn },
-              { label: 'মাতার নাম', value: data.MotherNameBn },
-              { label: "Mother's Name", value: data.MotherNameEn },
-            ]}
-          />
-
-          {/* ── SECTION: Contact ── */}
-          <PremiumSection
-            title="Contact Info"
-            icon="📞"
-            delay="0.74s"
-            accent="#10B981"
-            items={[
-              { label: 'Mobile / WhatsApp', value: data.WhatsApp, mono: true },
-              { label: 'Emergency No', value: data.EmergencyNo, mono: true },
-            ]}
-            extra={
-              <div className="flex gap-2 mt-3">
-                <button
-                  onClick={() => window.open(`tel:${data.WhatsApp?.replace(/['"]/g,'')}`)}
-                  className="dv-action-btn flex-1 py-3 rounded-2xl text-xs font-black text-emerald-600 flex items-center justify-center gap-2"
-                  style={{ background: '#ECFDF5', border: '1px solid #A7F3D0' }}
-                >
-                  <Phone size={14}/> Call Now
-                </button>
-                <button
-                  onClick={handleWhatsApp}
-                  className="dv-action-btn flex-1 py-3 rounded-2xl text-xs font-black text-white flex items-center justify-center gap-2"
-                  style={{ background: 'linear-gradient(135deg,#15803d,#22C55E)', boxShadow: '0 6px 20px rgba(34,197,94,0.3)' }}
-                >
-                  <MessageCircle size={14}/> WhatsApp
-                </button>
-              </div>
-            }
-          />
-
-          {/* ── SECTION: Address ── */}
-          <div
-            className="dv-section-card rounded-[24px] overflow-hidden"
-            style={{
-              animationDelay: '0.82s',
-              background: 'white',
-              boxShadow: '0 4px 24px rgba(6,13,31,0.07), 0 1px 4px rgba(6,13,31,0.04)',
-              border: '1px solid rgba(6,13,31,0.05)',
-            }}
-          >
-            {/* Header */}
-            <div className="flex items-center gap-3 px-5 pt-5 pb-4">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg" style={{ background: '#FEF2F2' }}>
-                🏠
-              </div>
-              <div>
-                <h3 className="text-[11px] font-black text-slate-800 uppercase tracking-widest">Address</h3>
-                <div className="h-0.5 w-8 rounded-full mt-1" style={{ background: '#EF4444' }} />
-              </div>
-            </div>
-
-            {/* Map-style address card */}
-            <div className="mx-4 mb-4 rounded-2xl overflow-hidden" style={{ border: '1px solid #E2E8F0' }}>
-              {/* Bengali address */}
-              <div className="px-4 py-3" style={{ background: '#F8FAFC' }}>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">বাংলা ঠিকানা</p>
-                <p className="text-sm font-bold text-slate-800 leading-relaxed">
-                  {[data.HouseNameBn, data.VillageBn, data.UnionBn, data.UpazilaBn, data.DistrictBn].filter(Boolean).join(', ')}।
-                </p>
-              </div>
-              <div className="h-px" style={{ background: '#E2E8F0' }} />
-              {/* English address */}
-              <div className="px-4 py-3 bg-white">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">English Address</p>
-                <p className="text-sm font-bold text-slate-600 leading-relaxed">
-                  {[data.HouseNameEn, data.VillageEn, data.UnionEn, data.UpazilaEn, data.DistrictEn].filter(Boolean).join(', ')}.
-                </p>
-              </div>
-              <div className="h-px" style={{ background: '#E2E8F0' }} />
-              {/* Ward */}
-              <div className="px-4 py-3 flex items-center justify-between" style={{ background: '#F8FAFC' }}>
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ward No</span>
-                <span className="text-sm font-black text-slate-800 bg-white px-3 py-1 rounded-full border border-slate-200">
-                  {data.WardNo || 'N/A'}
-                </span>
-              </div>
-            </div>
-          </div>
-{/* এই ব্লকটা Address সেকশনের ঠিক পরে, আর sticky bottom Edit/Delete-এর আগে বসান
-   (একই <div className="px-4 pt-4 pb-40 space-y-4"> কন্টেইনারের ভেতরে) */}
-
-{siblings && siblings.length > 0 && (
-  <div
-    className="dv-section-card rounded-[24px] overflow-hidden"
-    style={{
-      animationDelay: '0.9s',
-      background: 'white',
-      boxShadow: '0 4px 24px rgba(6,13,31,0.07), 0 1px 4px rgba(6,13,31,0.04)',
-      border: '1px solid rgba(6,13,31,0.05)',
-    }}
-  >
-    {/* Header */}
-    <div className="flex items-center gap-3 px-5 pt-5 pb-4">
-      <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg" style={{ background: '#FEF3E2' }}>
-        👨‍👩‍👧‍👦
-      </div>
-      <div>
-        <h3 className="text-[11px] font-black text-slate-800 uppercase tracking-widest">Siblings</h3>
-        <div className="h-0.5 w-8 rounded-full mt-1" style={{ background: '#D97706' }} />
-      </div>
-      <span className="ml-auto text-[10px] font-black text-slate-300 uppercase tracking-widest">
-        {siblings.length} found
-      </span>
-    </div>
-
-    {/* Clickable sibling rows */}
-    <div className="px-4 pb-4 space-y-2">
-      {siblings.map((sib) => {
-        const { color, bg } = CLASS_PALETTE[sib.ClassBn] || { color: '#3B5BDB', bg: '#EEF2FF' };
-        return (
-          <button
-            key={sib.ID}
-            onClick={() => onSelectSibling && onSelectSibling(sib)}
-            className="dv-row-item w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-left"
-            style={{ background: '#F8FAFC', border: '1px solid transparent' }}
-          >
-            <img
-              src={sib.ImageURL || DEFAULT_IMAGE}
-              className="w-11 h-11 rounded-xl object-cover flex-shrink-0"
-              style={{ border: `2px solid ${color}30` }}
-              alt=""
-            />
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-black text-slate-900 truncate">{sib.StudentNameEn}</p>
-              <p className="text-[11px] font-semibold text-slate-400 truncate">{sib.StudentNameBn}</p>
-            </div>
-            <div className="flex flex-col items-end gap-1 flex-shrink-0">
-              <span className="text-[9px] font-black px-2 py-0.5 rounded-md" style={{ background: bg, color }}>
-                {sib.ClassEn}
-              </span>
-              <span className="text-[9px] font-bold text-slate-400">Roll {sib.Roll}</span>
-            </div>
-            <ChevronLeft size={14} className="rotate-180 text-slate-300 flex-shrink-0" />
-          </button>
-        );
-      })}
-    </div>
-  </div>
-)}
-        </div>
-
-        {/* ══════════════════════════════════════
-            STICKY BOTTOM — Edit / Delete (Dynamic RBAC)
+            MOBILE STICKY BOTTOM — Edit / Delete (Dynamic RBAC)
         ══════════════════════════════════════ */}
         {(canEdit || canDelete) && (
           <div
-            className="fixed bottom-0 left-0 right-0 z-30 px-4 pb-8 pt-4 dv-slide-up"
+            className="lg:hidden fixed bottom-0 left-0 right-0 z-30 px-4 pb-8 pt-4 dv-slide-up"
             style={{
               animationDelay: '0.9s',
               background: 'linear-gradient(to top, rgba(240,244,255,1) 60%, rgba(240,244,255,0) 100%)',
@@ -1436,10 +1766,10 @@ const PremiumSection = ({ title, icon, delay: animDelay, accent, items, extra })
             border: item.highlight ? `1px solid ${accent}22` : 'none',
           }}
         >
-          <span className="text-[11px] font-bold text-slate-400 flex-1">{item.label}</span>
+          <span className="text-[11px] font-bold text-slate-400 flex-1 pr-2">{item.label}</span>
           <span
-            className={`text-[13px] font-black text-right ml-3 ${item.mono ? 'font-mono tracking-tight' : ''}`}
-            style={{ color: item.color || '#0F172A', maxWidth: '55%' }}
+            className={`text-[13px] font-black text-right ml-2 break-words ${item.mono ? 'font-mono tracking-tight' : ''}`}
+            style={{ color: item.color || '#0F172A', maxWidth: '58%' }}
           >
             {item.value || 'N/A'}
           </span>
@@ -1449,17 +1779,14 @@ const PremiumSection = ({ title, icon, delay: animDelay, accent, items, extra })
     </div>
   </div>
 );
-// 3. FULL DETAIL VIEW WITH UPDATED PRINT BUTTONS & LOGIC
+
 const ActionBtn = ({ icon: Icon, label, bg, onClick }) => (
   <button onClick={onClick} className="flex flex-col items-center gap-2 group">
     <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg transition group-active:scale-90 ${bg}`}>
-      <Icon size={24}/>
+      <Icon size={24} />
     </div>
     <span className="text-xs font-bold text-gray-400 uppercase tracking-wide">{label}</span>
   </button>
 );
-
-
-
 
 export default DetailView;

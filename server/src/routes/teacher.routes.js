@@ -42,7 +42,7 @@ router.patch('/:id/reset-password', restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN), 
 
 router
     .route('/')
-    .get(restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN), getAllTeachers)
+    .get(restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.TEACHER), getAllTeachers)
     .post(
         restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN),
         createTeacherValidator,
