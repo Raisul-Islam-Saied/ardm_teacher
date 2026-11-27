@@ -43,8 +43,8 @@ export const USER_ROLES = {
   "kg@ardm.com":      { role: "Class", classBn: "কেজি",    classEn: "KG" },
 
   "class1@ardm.com":  { role: "Class", classBn: "১ম", classEn: "One" },
-  "class2@ardm.com":  { role: "Class", classBn: "২য়", classEn: "Two" },
-  "class3@ardm.com":  { role: "Class", classBn: "৩য়", classEn: "Three" },
+  "class2@ardm.com":  { role: "Class", classBn: "২য়", classEn: "Two" },
+  "class3@ardm.com":  { role: "Class", classBn: "৩য়", classEn: "Three" },
   "class4@ardm.com":  { role: "Class", classBn: "৪র্থ", classEn: "Four" },
   "class5@ardm.com":  { role: "Class", classBn: "৫ম", classEn: "Five" },
   "class6@ardm.com":  { role: "Class", classBn: "৬ষ্ঠ", classEn: "Six" },

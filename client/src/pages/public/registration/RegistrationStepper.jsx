@@ -276,7 +276,9 @@ export default function RegistrationStepper({
 
             {(idPreview || rankPreview) && (
                 <div className="mt-6 rounded-xl border border-gold/20 bg-black/10 p-3 text-xs">
-                    {idPreview && <p className="font-mono text-gold-soft">ID: {idPreview}</p>}
+                    {idPreview?.fullId && (
+                        <p className="font-mono text-gold-soft">ID: {idPreview.fullId}</p>
+                    )}
                     {rankPreview?.designationBng && (
                         <p className="mt-1 font-bengali text-white/70">{rankPreview.designationBng}</p>
                     )}

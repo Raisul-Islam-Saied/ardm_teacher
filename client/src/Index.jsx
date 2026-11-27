@@ -2654,7 +2654,7 @@ useEffect(() => {
         
         const classMap = {
           'প্লে': '99', 'নার্সারি': '00', 'কেজি': '98',
-          '১ম': '01', '২য়': '02', '৩য়': '03', '৪র্থ': '04', '৫ম': '05',
+          '১ম': '01', '২য়': '02', '৩য়': '03', '৪র্থ': '04', '৫ম': '05',
           '৬ষ্ঠ': '06', '৭ম': '07', '৮ম': '08', '৯ম': '09', '১০ম': '10'
         };
         const classCode = classMap[form.classBn] || '00';
@@ -2917,7 +2917,7 @@ if (Object.keys(e).length > 0) {
                   onChange={e=>update('classBn', e.target.value)}
                >
                   <option value="">Select...</option>
-                  {['প্লে', 'নার্সারি', 'কেজি', '১ম', '২য়', '৩য়', '৪র্থ', '৫ম', '৬ষ্ঠ', '৭ম', '৮ম', '৯ম', '১০ম'].map(c=><option key={c} value={c}>{c}</option>)}
+                  {['প্লে', 'নার্সারি', 'কেজি', '১ম', '২য়', '৩য়', '৪র্থ', '৫ম', '৬ষ্ঠ', '৭ম', '৮ম', '৯ম', '১০ম'].map(c=><option key={c} value={c}>{c}</option>)}
                </select>
                {errors.classBn && (
   <p className="text-red-500 text-xs font-bold mt-1">

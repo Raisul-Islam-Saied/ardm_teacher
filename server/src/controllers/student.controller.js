@@ -22,6 +22,12 @@ const ApiError = require('../utils/ApiError');
 const ApiResponse = require('../utils/ApiResponse');
 
 const normalizeClassBn = (s) => String(s || '').replace(/\u09DF/g, '\u09AF\u09BC').trim();
+const getClassBnVariants = (classBn) => {
+    const canonical = normalizeClassBn(classBn);
+    const legacy = canonical
+        .replace(/\u09AF\u09BC/g, '\u09DF');
+    return [...new Set([canonical, legacy].filter(Boolean))];
+};
 
 const assertStudentActionPermission = async (user, action, targetClassBn = null) => {
     if (!user) {
@@ -49,13 +55,17 @@ const assertStudentActionPermission = async (user, action, targetClassBn = null)
         // ২. ক্লাস টিচার (নিজের শ্রেণি বনাম অন্যের শ্রেণি)
         const isOwnClass = !normalizedTarget || assignedClass === normalizedTarget;
         const scopeKey = isOwnClass ? 'ownClass' : 'otherClass';
-        const allowed = Boolean(sp.classTeacherPermissions?.[scopeKey]?.[action]);
+        const scopeAllowed = Boolean(sp.classTeacherPermissions?.[scopeKey]?.[action]);
+        const teacherAllowed = !isOwnClass || Boolean(user.canEditAssignedClass);
+        const allowed = scopeAllowed && teacherAllowed;
 
         if (!allowed) {
             throw new ApiError(
                 403,
                 isOwnClass
-                    ? `আপনার নিজের শ্রেণির (${user.assignedClass}) ক্ষেত্রে এই কার্যক্রমের অনুমতি বন্ধ রাখা হয়েছে!`
+                    ? (!user.canEditAssignedClass
+                        ? `আপনার অ্যাকাউন্টে নিজের নির্ধারিত শ্রেণির (${user.assignedClass}) তথ্য ব্যবস্থাপনার অনুমতি সক্রিয় নেই!`
+                        : `আপনার নিজের শ্রেণির (${user.assignedClass}) ক্ষেত্রে এই কার্যক্রমের অনুমতি বন্ধ রাখা হয়েছে!`)
                     : `আপনি শুধুমাত্র আপনার নির্ধারিত শ্রেণির (${user.assignedClass}) শিক্ষার্থীর তথ্য ব্যবস্থাপনা করতে পারবেন!`
             );
         }
@@ -234,7 +244,10 @@ const getAllStudents = asyncHandler(async (req, res) => {
     }
 
     if (session) filter.session = session;
-    if (classBn && classBn !== 'All') filter.classBn = classBn;
+    if (classBn && classBn !== 'All') {
+        const variants = getClassBnVariants(classBn);
+        filter.classBn = variants.length > 1 ? { $in: variants } : variants[0];
+    }
     if (gender) filter.gender = gender;
     if (bloodGroup) filter.bloodGroup = bloodGroup;
     if (feeCategory) filter['feeDetails.feeCategory'] = feeCategory;

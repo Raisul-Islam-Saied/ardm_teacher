@@ -183,6 +183,17 @@ studentSchema.index(
 );
 
 studentSchema.pre('validate', async function (next) {
+    if (this.classBn) {
+        this.classBn = this.classBn.replace(/\u09DF/g, '\u09AF\u09BC').trim();
+    }
+    if (Array.isArray(this.academicHistory)) {
+        this.academicHistory.forEach((history) => {
+            if (history?.classBn) {
+                history.classBn = history.classBn.replace(/\u09DF/g, '\u09AF\u09BC').trim();
+            }
+        });
+    }
+
     const classMeta = STUDENT_CLASSES.find(c => c.classBn === this.classBn);
     if (classMeta) {
         this.classEn = classMeta.classEn;
