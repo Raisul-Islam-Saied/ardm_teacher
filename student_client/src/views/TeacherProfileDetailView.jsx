@@ -28,7 +28,6 @@ import {
     Phone,
     Settings,
     Shield,
-    Sparkles,
     User,
     Wallet,
     X
@@ -36,6 +35,7 @@ import {
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { DEFAULT_IMAGE } from '../config/systemConfig';
+import TeacherAdminControlsPanel from '../components/TeacherAdminControlsPanel';
 import TeacherMonthlyAttendancePanel from '../components/TeacherMonthlyAttendancePanel';
 import TeacherSalaryHistoryPanel from '../components/TeacherSalaryHistoryPanel';
 import { toUiUser } from '../models/studentModel';
@@ -116,7 +116,11 @@ const TeacherProfileDetailView = () => {
     };
   }, [id]);
 
-  const isAdmin = currentUser?.role === 'Admin';
+  const isAdmin = Boolean(
+    ['Admin', 'SuperAdmin'].includes(currentUser?.role)
+    || ['Admin', 'SuperAdmin'].includes(currentUser?.erpRole)
+    || currentUser?.isSuperAdmin
+  );
   const isSelf = Boolean(currentUser?._id && teacher?._id && String(currentUser._id) === String(teacher._id));
   const canViewSensitive = isAdmin || isSelf;
 
@@ -529,15 +533,6 @@ const TeacherProfileDetailView = () => {
                       >
                         <Icon size={15} className="shrink-0" />
                         <span className="max-w-full leading-4">{tab.label}</span>
-                        {tab.id === 'settings' && (
-                          <span
-                            className={`text-[9px] px-1.5 py-0.5 rounded-md font-bold ${
-                              active ? 'bg-white/15 text-[#F7E09A]' : 'bg-slate-100 text-slate-400'
-                            }`}
-                          >
-                            শীঘ্রই
-                          </span>
-                        )}
                       </button>
                     );
                   })}
@@ -931,13 +926,11 @@ const TeacherProfileDetailView = () => {
                 </Suspense>
               )}
 
-              {activeTab === 'settings' && (
-                <UpcomingTabPanel
-                  icon={Settings}
-                  accent="navy"
-                  title="অ্যাকাউন্ট কন্ট্রোল ও সেটিংস (Admin Settings)"
-                  description="এই ট্যাবে শিক্ষকের অ্যাকাউন্ট স্ট্যাটাস, রেজিস্ট্রেশন অনুমোদন এবং শ্রেণি-শিক্ষক নিয়ন্ত্রণ যুক্ত করা হবে।"
-                  highlights={['অ্যাকাউন্ট সক্রিয় / নিষ্ক্রিয়', 'রেজিস্ট্রেশন অনুমোদন ও অবস্থা', 'শ্রেণি শিক্ষক ও রোল কন্ট্রোল']}
+              {activeTab === 'settings' && isAdmin && (
+                <TeacherAdminControlsPanel
+                  teacher={teacher}
+                  currentUser={currentUser}
+                  onUpdated={setTeacher}
                 />
               )}
             </main>
@@ -1106,48 +1099,6 @@ const AddressCard = ({ title, addr, theme }) => {
           </div>
         </div>
       </div>
-    </div>
-  );
-};
-
-// ── UPCOMING PLACEHOLDER TAB PANEL ──
-const UpcomingTabPanel = ({ icon: Icon, accent, title, description, highlights = [] }) => {
-  const palette = {
-    emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    amber: 'bg-amber-50 text-amber-700 border-amber-200',
-    indigo: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-    navy: 'bg-slate-100 text-[#060D1F] border-slate-300'
-  };
-
-  return (
-    <div className="bg-white rounded-[28px] p-8 sm:p-10 shadow-sm border border-slate-200/80 text-center">
-      <div
-        className={`w-16 h-16 rounded-3xl border mx-auto flex items-center justify-center mb-4 ${
-          palette[accent] || palette.navy
-        }`}
-      >
-        <Icon size={28} />
-      </div>
-      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#060D1F] text-[#F7E09A] text-[10px] font-black uppercase tracking-widest">
-        <Sparkles size={11} /> পরবর্তী ধাপে সক্রিয় হবে
-      </span>
-      <h3 className="text-lg font-black text-slate-900 mt-3">{title}</h3>
-      <p className="text-xs sm:text-sm font-semibold text-slate-500 max-w-md mx-auto mt-1.5 leading-relaxed">
-        {description}
-      </p>
-
-      {highlights.length > 0 && (
-        <div className="mt-6 flex flex-wrap justify-center gap-2">
-          {highlights.map((h, i) => (
-            <span
-              key={i}
-              className="px-3.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-black text-slate-600"
-            >
-              • {h}
-            </span>
-          ))}
-        </div>
-      )}
     </div>
   );
 };

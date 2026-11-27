@@ -278,7 +278,17 @@ const getPublicRegistryCardByUid = asyncHandler(async (req, res) => {
 // ৪. অ্যাডমিন কর্তৃক Pending শিক্ষকের রেজিস্ট্রেশন অনুমোদন ও মূল বেতন নির্ধারণ
 const approvePendingTeacher = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { basicSalary, biometricDeviceId, customLeaveQuota, paymentMethod } = req.body;
+    const {
+        basicSalary,
+        biometricDeviceId,
+        customLeaveQuota,
+        paymentMethod,
+        employmentType,
+        bankDetails,
+        assignedClass,
+        canEditAssignedClass,
+        role
+    } = req.body;
 
     const parsedSalary = Number(basicSalary);
     if (basicSalary === undefined || !Number.isFinite(parsedSalary) || parsedSalary < 0) {
@@ -290,7 +300,14 @@ const approvePendingTeacher = asyncHandler(async (req, res) => {
         throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
     }
 
-    if (biometricDeviceId !== undefined && biometricDeviceId !== '') {
+    if (
+        req.user.role !== ROLES.SUPER_ADMIN
+        && (teacher.role === ROLES.SUPER_ADMIN || role === ROLES.SUPER_ADMIN)
+    ) {
+        throw new ApiError(403, 'সুপার অ্যাডমিন অ্যাকাউন্ট পরিবর্তন বা নির্ধারণের অনুমতি শুধু সুপার অ্যাডমিনের রয়েছে।');
+    }
+
+    if (biometricDeviceId !== undefined && biometricDeviceId !== null && biometricDeviceId !== '') {
         const parsedBioId = Number(biometricDeviceId);
         if (!Number.isInteger(parsedBioId) || parsedBioId < 1) {
             throw new ApiError(400, 'বায়োমেট্রিক ডিভাইস আইডি অবশ্যই ১ বা তার বেশি পূর্ণসংখ্যা হতে হবে।');
@@ -305,7 +322,7 @@ const approvePendingTeacher = asyncHandler(async (req, res) => {
         teacher.biometricDeviceId = parsedBioId;
     }
 
-    if (customLeaveQuota !== undefined && customLeaveQuota !== '') {
+    if (customLeaveQuota !== undefined && customLeaveQuota !== null && customLeaveQuota !== '') {
         const parsedQuota = Number(customLeaveQuota);
         if (!Number.isFinite(parsedQuota) || parsedQuota < 0 || parsedQuota > 15) {
             throw new ApiError(400, 'ছুটির কোটা ০ থেকে ১৫ এর মধ্যে হতে হবে।');
@@ -318,6 +335,21 @@ const approvePendingTeacher = asyncHandler(async (req, res) => {
             throw new ApiError(400, 'পেমেন্ট মেথড সঠিক নয়।');
         }
         teacher.paymentMethod = paymentMethod;
+    }
+
+    if (employmentType) teacher.employmentType = employmentType;
+    if (assignedClass !== undefined) {
+        teacher.assignedClass = assignedClass;
+        teacher.canEditAssignedClass = Boolean(assignedClass && canEditAssignedClass);
+    } else if (canEditAssignedClass !== undefined) {
+        teacher.canEditAssignedClass = Boolean(teacher.assignedClass && canEditAssignedClass);
+    }
+    if (role) teacher.role = role;
+    if (bankDetails && typeof bankDetails === 'object') {
+        const existingBankDetails = teacher.bankDetails?.toObject
+            ? teacher.bankDetails.toObject()
+            : teacher.bankDetails || {};
+        teacher.bankDetails = { ...existingBankDetails, ...bankDetails };
     }
 
     teacher.basicSalary = parsedSalary;
@@ -334,7 +366,7 @@ const approvePendingTeacher = asyncHandler(async (req, res) => {
         action: 'APPROVE_TEACHER_REGISTRATION',
         module: 'Teacher',
         targetId: String(teacher._id),
-        description: `${teacher.fullNameBng}-এর নিবন্ধন অনুমোদন করা হয়েছে (বেতন: ${parsedSalary} টাকা, Rank: #${updated.rankingMetrics.overallMadrasahRank})`
+        description: `${teacher.fullNameBng}-এর নিবন্ধন অনুমোদন করা হয়েছে (বেতন: ${parsedSalary} টাকা, শ্রেণি: ${updated.assignedClass || 'নেই'}, অ্যাক্সেস: ${updated.role}, Rank: #${updated.rankingMetrics.overallMadrasahRank})`
     });
 
     res.status(200).json(new ApiResponse(200, 'শিক্ষকের নিবন্ধন অনুমোদিত হয়েছে এবং র‍্যাংক নির্ধারিত হয়েছে!', updated));

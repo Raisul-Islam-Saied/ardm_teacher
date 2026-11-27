@@ -161,6 +161,18 @@ export const teacherPortalApi = {
         return res.data?.data || null;
     },
 
+    /** PATCH /teachers/:id (Admin / SuperAdmin) */
+    async updateTeacher(id, payload) {
+        const res = await axiosClient.patch(`/teachers/${encodeURIComponent(id)}`, payload);
+        return res.data?.data?.teacher || res.data?.data || res.data;
+    },
+
+    /** PATCH /teachers/:id/approve (Admin / SuperAdmin) */
+    async approveTeacher(id, payload) {
+        const res = await axiosClient.patch(`/teachers/${encodeURIComponent(id)}/approve`, payload);
+        return res.data?.data?.teacher || res.data?.data || res.data;
+    },
+
     /** POST /teachers/recalculate-ranks (Admin) */
     async recalculateRanks() {
         const res = await axiosClient.post('/teachers/recalculate-ranks');

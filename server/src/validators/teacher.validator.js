@@ -537,8 +537,49 @@ const updateTeacherValidator = [
     body('registrationStatus').optional({ checkFalsy: true }).isIn(['Approved', 'Pending', 'Rejected']).withMessage('রেজিস্ট্রেশন স্ট্যাটাস সঠিক নয়')
 ];
 
+const approvePendingTeacherValidator = [
+    body('basicSalary')
+        .exists().withMessage('মূল বেতন আবশ্যক')
+        .bail()
+        .isFloat({ min: 0 }).withMessage('মূল বেতন ০ বা তার বেশি হতে হবে')
+        .toFloat(),
+    body('biometricDeviceId')
+        .optional({ checkFalsy: true })
+        .customSanitizer(sanitizeDigits)
+        .isInt({ min: 1 }).withMessage('বায়োমেট্রিক ডিভাইস আইডি অবশ্যই ১ বা তার বেশি পূর্ণসংখ্যা হতে হবে')
+        .toInt(),
+    body('customLeaveQuota')
+        .optional({ checkFalsy: true })
+        .isFloat({ min: 0, max: 15 }).withMessage('ছুটির কোটা ০ থেকে ১৫ এর মধ্যে হতে হবে')
+        .toFloat(),
+    body('paymentMethod')
+        .optional({ checkFalsy: true })
+        .isIn(Object.values(PAYMENT_METHODS)).withMessage('পেমেন্ট মেথড সঠিক নয়'),
+    body('employmentType')
+        .optional({ checkFalsy: true })
+        .isIn(Object.values(EMPLOYMENT_TYPES)).withMessage('চাকরির ধরন সঠিক নয়'),
+    body('assignedClass')
+        .optional({ nullable: true })
+        .isIn(['', ...VALID_CLASS_BN]).withMessage('সঠিক নির্ধারিত শ্রেণি নির্বাচন করুন'),
+    body('canEditAssignedClass')
+        .optional()
+        .isBoolean().withMessage('শ্রেণি সম্পাদনা অনুমতি অবশ্যই true বা false হতে হবে')
+        .toBoolean(),
+    body('role')
+        .optional({ checkFalsy: true })
+        .isIn([ROLES.TEACHER, ROLES.ADMIN, ROLES.SUPER_ADMIN]).withMessage('পোর্টাল অ্যাক্সেস রোল সঠিক নয়'),
+    body('bankDetails').optional().isObject().withMessage('ব্যাংক তথ্য সঠিক অবজেক্ট হতে হবে'),
+    ...['bankName', 'branchName', 'accountHolderName', 'accountNumber', 'routingNumber'].map((field) => (
+        body(`bankDetails.${field}`)
+            .optional({ checkFalsy: true })
+            .customSanitizer(sanitizeClean)
+            .isLength({ max: 100 }).withMessage('ব্যাংকের তথ্য সর্বোচ্চ ১০০ অক্ষরের হতে পারে')
+    ))
+];
+
 module.exports = {
     createTeacherValidator,
     publicSelfRegisterValidator,
-    updateTeacherValidator
+    updateTeacherValidator,
+    approvePendingTeacherValidator
 };
