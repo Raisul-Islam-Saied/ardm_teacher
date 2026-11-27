@@ -1,15 +1,17 @@
-const jwt = require('jsonwebtoken');
 const Teacher = require('../models/Teacher');
 const ApiError = require('../utils/ApiError');
 const ApiResponse = require('../utils/ApiResponse');
 const asyncHandler = require('../utils/asyncHandler');
 const { ROLES } = require('../constants/system.constants');
-
-const signToken = (id, role) => {
-    return jwt.sign({ id, role }, process.env.JWT_SECRET, {
-        expiresIn: process.env.JWT_EXPIRES_IN || '12h'
-    });
-};
+const {
+    signAccessToken,
+    setAccessTokenCookie,
+    clearAccessTokenCookie
+} = require('../services/authSession.service');
+const {
+    requestPasswordReset: sendPasswordResetRequest,
+    resetPasswordWithToken
+} = require('../services/passwordReset.service');
 
 const setupInitialSuperAdmin = asyncHandler(async (req, res) => {
     const existingCount = await Teacher.countDocuments();
@@ -23,7 +25,8 @@ const setupInitialSuperAdmin = asyncHandler(async (req, res) => {
         isActive: true
     });
 
-    const token = signToken(superAdmin._id, superAdmin.role);
+    const token = signAccessToken(superAdmin._id, superAdmin.role);
+    setAccessTokenCookie(res, token);
     const adminResponse = superAdmin.toObject();
     delete adminResponse.password;
 
@@ -34,13 +37,21 @@ const setupInitialSuperAdmin = asyncHandler(async (req, res) => {
 
 const login = asyncHandler(async (req, res) => {
     const { identifier, password } = req.body;
+    const normalizedIdentifier = String(identifier).trim();
+    const userQuery = normalizedIdentifier.includes('@')
+        ? { email: normalizedIdentifier.toLowerCase() }
+        : {
+            $or: [
+                { phone: normalizedIdentifier },
+                { teacherCode: normalizedIdentifier.toUpperCase() }
+            ]
+        };
 
-    const user = await Teacher.findOne({
-        $or: [{ phone: identifier }, { teacherCode: identifier.toUpperCase() }]
-    }).select('+password +failedLoginAttempts +lockUntil');
+    const user = await Teacher.findOne(userQuery)
+        .select('+password +failedLoginAttempts +lockUntil');
 
     if (!user) {
-        throw new ApiError(401, 'ভুল মোবাইল নম্বর/আইডি অথবা পাসওয়ার্ড!');
+        throw new ApiError(401, 'ভুল ইমেইল/মোবাইল নম্বর/আইডি অথবা পাসওয়ার্ড!');
     }
 
     if (user.lockUntil && user.lockUntil > Date.now()) {
@@ -90,13 +101,8 @@ const login = asyncHandler(async (req, res) => {
     user.lastLogin = new Date();
     await user.save({ validateBeforeSave: false });
 
-    const token = signToken(user._id, user.role);
-    res.cookie('accessToken', token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 12 * 60 * 60 * 1000
-    });
+    const token = signAccessToken(user._id, user.role);
+    setAccessTokenCookie(res, token);
 
     const userObj = user.toObject();
     delete userObj.password;
@@ -107,7 +113,7 @@ const login = asyncHandler(async (req, res) => {
 });
 
 const logout = asyncHandler(async (req, res) => {
-    res.clearCookie('accessToken');
+    clearAccessTokenCookie(res);
     return res.status(200).json(new ApiResponse(200, 'সফলভাবে লগআউট করা হয়েছে।'));
 });
 
@@ -117,14 +123,45 @@ const getMe = asyncHandler(async (req, res) => {
 
 const changePassword = asyncHandler(async (req, res) => {
     const { currentPassword, newPassword } = req.body;
-    const user = await Teacher.findById(req.user._id).select('+password');
+    const user = await Teacher.findById(req.user._id)
+        .select('+password +passwordResetTokenHash +passwordResetExpires');
     if (!(await user.comparePassword(currentPassword))) {
         throw new ApiError(401, 'আপনার বর্তমান পাসওয়ার্ডটি সঠিক নয়!');
     }
     user.password = newPassword;
+    user.passwordResetTokenHash = undefined;
+    user.passwordResetExpires = undefined;
     await user.save();
-    const token = signToken(user._id, user.role);
+    const token = signAccessToken(user._id, user.role);
+    setAccessTokenCookie(res, token);
     return res.status(200).json(new ApiResponse(200, 'পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে!', { token }));
 });
 
-module.exports = { setupInitialSuperAdmin, login, logout, getMe, changePassword };
+const requestPasswordReset = asyncHandler(async (req, res) => {
+    await sendPasswordResetRequest(req.body.email);
+    return res.status(200).json(new ApiResponse(
+        200,
+        'ইমেইলটি কোনো পোর্টাল অ্যাকাউন্টের সঙ্গে মিললে পাসওয়ার্ড রিসেটের নির্দেশনা পাঠানো হবে।'
+    ));
+});
+
+const resetPassword = asyncHandler(async (req, res) => {
+    await resetPasswordWithToken({
+        token: req.body.token,
+        newPassword: req.body.newPassword
+    });
+    return res.status(200).json(new ApiResponse(
+        200,
+        'পাসওয়ার্ড সফলভাবে পরিবর্তন হয়েছে। নতুন পাসওয়ার্ড দিয়ে লগইন করুন।'
+    ));
+});
+
+module.exports = {
+    setupInitialSuperAdmin,
+    login,
+    logout,
+    getMe,
+    changePassword,
+    requestPasswordReset,
+    resetPassword
+};

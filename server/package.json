@@ -9,6 +9,9 @@
     "migrate:attendance": "node migrate_attendance_schema.js",
     "test:attendance": "node test_attendance_reconciliation.js",
     "test:attendance:api": "node test_attendance_api_integration.js",
+    "test:auth-session": "node test_auth_session.js",
+    "test:auth-login": "node test_auth_login.js",
+    "test:password-reset": "node test_password_reset.js",
     "test:payroll:email": "node test_payroll_email.js"
   },
   "dependencies": {

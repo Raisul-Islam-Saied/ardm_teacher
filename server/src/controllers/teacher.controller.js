@@ -240,7 +240,35 @@ const publicSelfRegisterTeacher = asyncHandler(async (req, res) => {
 // ৩. UID দিয়ে পাবলিক রেজিস্ট্রি কার্ড দেখা
 const getPublicRegistryCardByUid = asyncHandler(async (req, res) => {
     const { uid } = req.params;
-    const teacher = await Teacher.findOne({ uid }).lean();
+    const teacher = await Teacher.findOne({ uid })
+        .select([
+            'uid',
+            'teacherCode',
+            'biometricDeviceId',
+            'fullNameBng',
+            'fullNameEng',
+            'fathersNameBng',
+            'fathersNameEng',
+            'mothersNameBng',
+            'mothersNameEng',
+            'dateOfBirth',
+            'bloodGroup',
+            'nidNumber',
+            'birthRegNumber',
+            'phone',
+            'emergencyContact.contactName',
+            'emergencyContact.phone',
+            'designation',
+            'subject',
+            'joiningDate',
+            'academicQualifications',
+            'rankingMetrics.overallMadrasahRank',
+            'presentAddress',
+            'profilePicture.url',
+            'registrationStatus',
+            'createdAt'
+        ].join(' '))
+        .lean();
     if (!teacher) {
         throw new ApiError(404, 'এই UID দিয়ে কোনো নিবন্ধিত রেকর্ড পাওয়া যায়নি!');
     }
@@ -371,7 +399,8 @@ const resetTeacherPassword = asyncHandler(async (req, res) => {
         throw new ApiError(400, 'নতুন পাসওয়ার্ড ৬ থেকে ৬৪ অক্ষরের মধ্যে হতে হবে।');
     }
 
-    const teacher = await Teacher.findById(req.params.id).select('+password');
+    const teacher = await Teacher.findById(req.params.id)
+        .select('+password +passwordResetTokenHash +passwordResetExpires +failedLoginAttempts +lockUntil');
     if (!teacher) throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
     if (
         [ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(teacher.role) &&
@@ -381,6 +410,10 @@ const resetTeacherPassword = asyncHandler(async (req, res) => {
     }
 
     teacher.password = trimmedPassword;
+    teacher.passwordResetTokenHash = undefined;
+    teacher.passwordResetExpires = undefined;
+    teacher.failedLoginAttempts = 0;
+    teacher.lockUntil = null;
     await teacher.save();
     await AuditLog.create({
         action: 'TEACHER_PASSWORD_RESET',

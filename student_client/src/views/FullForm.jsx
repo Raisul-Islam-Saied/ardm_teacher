@@ -23,6 +23,7 @@ import {
   X
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   CLASS_LIST_BN,
   generateStudentId,
@@ -137,7 +138,7 @@ const STEPS_META = [
   { id: 3, title: 'অভিভাবক ও যোগাযোগ', sub: 'Parents & Contact', icon: Users },
   { id: 4, title: 'ঠিকানা', sub: 'Address', icon: MapPin },
   { id: 5, title: 'ফি ও ভাই-বোন', sub: 'Fee & Sibling', icon: CreditCard },
-  { id: 6, title: 'ছবি ও চূড়ান্ত যাচাই', sub: 'Photo & Review', icon: Camera }
+  { id: 6, title: 'ছবি ও চূড়ান্ত যাচাই', sub: 'Photo & Review', icon: Camera }
 ];
 const TOTAL_STEPS = STEPS_META.length;
 
@@ -170,7 +171,7 @@ const QrScannerModal = ({ isOpen, onClose, onDetected }) => {
     const startCamera = async () => {
       try {
         if (!navigator.mediaDevices?.getUserMedia) {
-          setCamError('এই ব্রাউজারে ক্যামেরা অ্যাক্সেস সমর্থিত নয়। নিচে আইডি বা লিংক পেস্ট করুন।');
+          setCamError('এই ব্রাউজারে ক্যামেরা অ্যাক্সেস সমর্থিত নয়। নিচে আইডি বা লিংক পেস্ট করুন।');
           return;
         }
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -209,7 +210,7 @@ const QrScannerModal = ({ isOpen, onClose, onDetected }) => {
           rafRef.current = requestAnimationFrame(scanLoop);
         }
       } catch {
-        setCamError('ক্যামেরা চালু করা যায়নি। পারমিশন চেক করুন অথবা নিচে আইডি কার্ডের লিংক/আইডি দিন।');
+        setCamError('ক্যামেরা চালু করা যায়নি। পারমিশন চেক করুন অথবা নিচে আইডি কার্ডের লিংক/আইডি দিন।');
       }
     };
 
@@ -230,7 +231,7 @@ const QrScannerModal = ({ isOpen, onClose, onDetected }) => {
   const handleManualExtract = () => {
     const code = extractStudentCode(manualText);
     if (!code) {
-      setCamError('সঠিক ১০-ডিজিটের স্টুডেন্ট আইডি বা QR লিংক পাওয়া যায়নি।');
+      setCamError('সঠিক ১০-ডিজিটের স্টুডেন্ট আইডি বা QR লিংক পাওয়া যায়নি।');
       return;
     }
     onDetected(code);
@@ -246,7 +247,7 @@ const QrScannerModal = ({ isOpen, onClose, onDetected }) => {
             </div>
             <div>
               <h4 className="text-sm font-black leading-tight">আইডি কার্ড QR স্ক্যানার</h4>
-              <p className="text-[10px] text-slate-400 font-bold">পুরনো আইডি কার্ডের QR কোড ক্যামেরায় ধরুন</p>
+              <p className="text-[10px] text-slate-400 font-bold">পুরনো আইডি কার্ডের QR কোড ক্যামেরায় ধরুন</p>
             </div>
           </div>
           <button
@@ -285,18 +286,18 @@ const QrScannerModal = ({ isOpen, onClose, onDetected }) => {
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">
               অথবা স্ক্যান করা QR লিংক / ১০-ডিজিট আইডি দিন
             </label>
-            <div className="flex gap-2">
+            <div className="flex items-stretch gap-2 w-full">
               <input
                 type="text"
                 value={manualText}
                 onChange={(e) => setManualText(e.target.value)}
                 placeholder="যেমন: 2026140101 বা URL"
-                className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold outline-none focus:border-[#060D1F]"
+                className="min-w-0 flex-1 px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold outline-none focus:border-[#060D1F]"
               />
               <button
                 type="button"
                 onClick={handleManualExtract}
-                className="px-4 py-2.5 rounded-xl bg-[#060D1F] text-[#D4A843] text-xs font-black shrink-0"
+                className="px-3.5 py-2.5 rounded-xl bg-[#060D1F] text-[#D4A843] text-xs font-black shrink-0"
               >
                 যাচাই করুন
               </button>
@@ -655,6 +656,8 @@ const AddressCascadeBlock = ({
 // ==============================================
 const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdmin }) => {
   const isUpdate = !!initialData;
+  const navigate = useNavigate();
+  const { step: stepParam, studentId } = useParams();
 
   const defaultState = {
     // Step 1: Academic
@@ -757,7 +760,6 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
 
   const [admissionMode, setAdmissionMode] = useState(initialDraft?.admissionMode || 'new'); // 'new' | 'old'
   const [form, setForm] = useState(() => (initialDraft?.form ? { ...defaultState, ...initialDraft.form } : defaultState));
-  const [step, setStep] = useState(() => (initialDraft?.step >= 1 && initialDraft?.step <= TOTAL_STEPS ? initialDraft.step : 1));
   const [errors, setErrors] = useState({});
   const [imgPreview, setImgPreview] = useState(() => initialDraft?.form?.imageUrl || null);
   const [imgChecking, setImgChecking] = useState(false);
@@ -769,24 +771,33 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
   const [restoredNotice, setRestoredNotice] = useState(() => Boolean(initialDraft?.form?.studentNameBn || initialDraft?.step > 1));
 
   const formRef = useRef(null);
-  const stepRef = useRef(step);
+
+  // URL-synced step (/admission/1..6 or /students/:studentId/edit/1..6)
+  const parsedStep = Number(stepParam);
+  const fallbackStep = !isUpdate && initialDraft?.step >= 1 && initialDraft?.step <= TOTAL_STEPS ? initialDraft.step : 1;
+  const step = Number.isInteger(parsedStep) && parsedStep >= 1 && parsedStep <= TOTAL_STEPS ? parsedStep : fallbackStep;
+
+  const baseFormPath = isUpdate
+    ? `/students/${studentId || initialData?.ID}/edit`
+    : '/admission';
 
   useEffect(() => {
-    stepRef.current = step;
-  }, [step]);
+    if (!stepParam || parsedStep !== step) {
+      navigate(`${baseFormPath}/${step}`, { replace: true });
+    }
+  }, [stepParam, parsedStep, step, baseFormPath, navigate]);
 
-  // ---- MOBILE BACK BUTTON FIX (Capture Phase) ----
+  const goToStep = (targetStep, replace = false) => {
+    navigate(`${baseFormPath}/${targetStep}`, { replace });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Close QR modal on browser back button
   useEffect(() => {
     const handlePopState = (e) => {
       if (isQrOpen) {
         e.stopImmediatePropagation();
         setIsQrOpen(false);
-        return;
-      }
-      if (stepRef.current > 1) {
-        e.stopImmediatePropagation();
-        setStep((prev) => Math.max(1, prev - 1));
-        window.scrollTo({ top: 0, behavior: 'smooth' });
       }
     };
     window.addEventListener('popstate', handlePopState, true);
@@ -795,11 +806,7 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
 
   const goBackStep = () => {
     if (step > 1) {
-      if (window.history.state?.page === 'formStep') {
-        window.history.back();
-      } else {
-        setStep((s) => s - 1);
-      }
+      navigate(-1);
     } else {
       onCancel();
     }
@@ -969,7 +976,6 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
       };
       localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(payload));
     } catch {
-      // If base64 image exceeds localStorage quota, save everything except raw base64 image
       try {
         const { imageUrl, ...formWithoutBase64 } = form;
         localStorage.setItem(
@@ -995,7 +1001,7 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
       ...defaultState,
       classBn: currentUser?.role === 'Class' ? currentUser.classBn : ''
     });
-    setStep(1);
+    goToStep(1, true);
     setAdmissionMode('new');
     setMigration(null);
     setLegacyId('');
@@ -1004,7 +1010,7 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
     setPermGeoSel(EMPTY_GEO_SEL);
     setErrors({});
     setRestoredNotice(false);
-    showToast('ফর্ম রিসেট করে নতুন অবস্থায় নেওয়া হয়েছে', 'success');
+    showToast('ফর্ম রিসেট করে নতুন অবস্থায় নেওয়া হয়েছে', 'success');
   };
 
   // ---- Load Initial Data (Edit Mode) ----
@@ -1115,7 +1121,6 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
         imageUrl: initialData.ImageURL || ''
       });
       setImgPreview(initialData.ImageURL || null);
-      setStep(1);
     }
   }, [initialData]);
 
@@ -1177,7 +1182,11 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
         if (!val) return baseField === 'whatsappNumber' ? 'মোবাইল নম্বর আবশ্যক' : 'জরুরি নম্বর আবশ্যক';
         if (!RX.MOBILE.test(val)) return 'সঠিক বাংলাদেশি নম্বর দিন (013-019, ১১ ডিজিট)';
         if (isFakeNumber(val)) return 'ভুয়া বা অবৈধ মোবাইল নম্বর গ্রহণযোগ্য নয়';
+
+        // শুধুমাত্র নতুন স্টুডেন্টের ক্ষেত্রে দুটি নম্বর ভিন্ন হতে হবে (পুরনো স্টুডেন্ট হলে ছাড় পাবে)
+        const isOldStudent = Boolean(all.migratedFromSheet || all.isLegacy || all.studentCode || migration || admissionMode === 'old');
         if (
+          !isOldStudent &&
           baseField === 'emergencyNumber' &&
           collapse(all.whatsappNumber) &&
           val === collapse(all.whatsappNumber)
@@ -1331,6 +1340,9 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
 
     const upd = { [f]: fieldError(f, v, next) };
     if (f === 'dob' && next.brn) upd.brn = fieldError('brn', next.brn, next);
+    if (f === 'whatsappNumber' && next.emergencyNumber) {
+      upd.emergencyNumber = fieldError('emergencyNumber', next.emergencyNumber, next);
+    }
     if (f === 'classBn') upd.group = fieldError('group', next.group, next);
     if (f === 'status') upd.statusReason = fieldError('statusReason', next.statusReason, next);
     if (f === 'feeCategory') upd.siblingStudentCode = fieldError('siblingStudentCode', next.siblingStudentCode, next);
@@ -1410,34 +1422,28 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
   const handleStepPillClick = (targetStep) => {
     if (targetStep === step) return;
     if (targetStep < step) {
-      setStep(targetStep);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      goToStep(targetStep);
       return;
     }
     for (let s = step; s < targetStep; s++) {
       if (!validate(s)) {
-        setStep(s);
+        goToStep(s);
         return;
       }
     }
-    window.history.pushState({ page: 'formStep', step: targetStep }, '');
-    setStep(targetStep);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    goToStep(targetStep);
   };
 
   const handleNext = () => {
     if (validate()) {
-      const nextStep = step + 1;
-      window.history.pushState({ page: 'formStep', step: nextStep }, '');
-      setStep(nextStep);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      goToStep(step + 1);
     }
   };
 
   const handleSubmit = async () => {
     for (const s of [1, 2, 3, 4, 5, 6]) {
       if (!validate(s)) {
-        setStep(s);
+        goToStep(s);
         return;
       }
     }
@@ -1449,7 +1455,7 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
       const { errors: srvErr, firstStep, unmapped } = mapServerFieldErrors(res.fieldErrors);
       if (Object.keys(srvErr).length) {
         setErrors((prev) => ({ ...prev, ...srvErr }));
-        if (firstStep) setStep(firstStep);
+        if (firstStep) goToStep(firstStep);
         focusField(Object.keys(srvErr)[0]);
       }
       if (unmapped.length && showToast) showToast(unmapped[0], 'error');
@@ -1510,7 +1516,7 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
       setImgPreview(f.imageUrl || null);
       setMigration({ studentCode: res.autoFillData.studentCode, admissionDate: res.autoFillData.admissionDate });
       setErrors({});
-      showToast(res.message || 'পুরনো তথ্য অটো-ফিল হয়েছে — যাচাই করে পরবর্তী ধাপে যান', 'success');
+      showToast('তথ্য লোড হয়েছে — যাচাই করে পরবর্তী ধাপে যান', 'success');
     } catch (err) {
       showToast(extractApiErrorMessage(err, 'পুরনো শিট থেকে তথ্য আনা যায়নি'), 'error');
     } finally {
@@ -1529,129 +1535,129 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
   const StepIcon = currentMeta.icon;
   const progressPercent = Math.round((step / TOTAL_STEPS) * 100);
 
-
   const FATHER_OCCUPATIONS = [
-  // কৃষি ও মৎস্য
-  'কৃষক (Farmer)',
-  'মৎস্যজীবী / জেলে (Fisherman)',
-  'মৎস্য ও পোল্ট্রি খামারি (Fish & Poultry Farmer)',
-  'গবাদিপশু খামারি (Livestock Farmer)',
+    // কৃষি ও মৎস্য
+    'কৃষক (Farmer)',
+    'মৎস্যজীবী / জেলে (Fisherman)',
+    'মৎস্য ও পোল্ট্রি খামারি (Fish & Poultry Farmer)',
+    'গবাদিপশু খামারি (Livestock Farmer)',
 
-  // ব্যবসা ও বাণিজ্য
-  'ব্যবসায়ী (Business)',
-  'ক্ষুদ্র ব্যবসায়ী / দোকানদার (Small Business / Shopkeeper)',
-  'কাঁচামাল / সবজি ব্যবসায়ী (Produce / Vegetable Trader)',
-  'মুদি ব্যবসায়ী (Grocery Shopkeeper)',
-  'ফার্মেসি ব্যবসায়ী (Pharmacy Business)',
-  'ঠিকাদার (Contractor)',
+    // ব্যবসা ও বাণিজ্য
+    'ব্যবসায়ী (Business)',
+    'ক্ষুদ্র ব্যবসায়ী / দোকানদার (Small Business / Shopkeeper)',
+    'কাঁচামাল / সবজি ব্যবসায়ী (Produce / Vegetable Trader)',
+    'মুদি ব্যবসায়ী (Grocery Shopkeeper)',
+    'ফার্মেসি ব্যবসায়ী (Pharmacy Business)',
+    'ঠিকাদার (Contractor)',
 
-  // প্রবাসী
-  'প্রবাসী (Expatriate)',
-  'প্রবাসী - মধ্যপ্রাচ্য (Expatriate - Middle East)',
-  'প্রবাসী - ইউরোপ/আমেরিকা (Expatriate - Europe/USA)',
-  'প্রবাসী - মালয়েশিয়া/সিঙ্গাপুর (Expatriate - Malaysia/Singapore)',
+    // প্রবাসী
+    'প্রবাসী (Expatriate)',
+    'প্রবাসী - মধ্যপ্রাচ্য (Expatriate - Middle East)',
+    'প্রবাসী - ইউরোপ/আমেরিকা (Expatriate - Europe/USA)',
+    'প্রবাসী - মালয়েশিয়া/সিঙ্গাপুর (Expatriate - Malaysia/Singapore)',
 
-  // চাকরি (সরকারি ও বেসরকারি)
-  'সরকারি চাকরিজীবী (Government Service)',
-  'বেসরকারি চাকরিজীবী (Private Service)',
-  'ব্যাংকার (Banker)',
-  'এনজিও কর্মী (NGO Worker)',
-  'গার্মেন্টস কর্মী (Garments Worker)',
-  'নিরাপত্তা প্রহরী (Security Guard)',
-  'অফিস সহায়ক (Office Support Staff)',
+    // চাকরি (সরকারি ও বেসরকারি)
+    'সরকারি চাকরিজীবী (Government Service)',
+    'বেসরকারি চাকরিজীবী (Private Service)',
+    'ব্যাংকার (Banker)',
+    'এনজিও কর্মী (NGO Worker)',
+    'গার্মেন্টস কর্মী (Garments Worker)',
+    'নিরাপত্তা প্রহরী (Security Guard)',
+    'অফিস সহায়ক (Office Support Staff)',
 
-  // শিক্ষা ও ধর্মীয় পেশা
-  'শিক্ষক (Teacher)',
-  'মাদ্রাসা শিক্ষক (Madrasah Teacher)',
-  'কলেজ / বিশ্ববিদ্যালয় শিক্ষক (College/University Teacher)',
-  'ইমাম (Imam)',
-  'খতিব (Khatib)',
-  'মুয়াজ্জিন (Muezzin)',
-  'হাফেজ / ক্বারী (Hafez / Qari)',
-  'কাজী / নিকাহ রেজিস্ট্রার (Kazi / Marriage Registrar)',
+    // শিক্ষা ও ধর্মীয় পেশা
+    'শিক্ষক (Teacher)',
+    'মাদ্রাসা শিক্ষক (Madrasah Teacher)',
+    'কলেজ / বিশ্ববিদ্যালয় শিক্ষক (College/University Teacher)',
+    'ইমাম (Imam)',
+    'খতিব (Khatib)',
+    'মুয়াজ্জিন (Muezzin)',
+    'হাফেজ / ক্বারী (Hafez / Qari)',
+    'কাজী / নিকাহ রেজিস্ট্রার (Kazi / Marriage Registrar)',
 
-  // চিকিৎসা ও স্বাস্থ্য
-  'ডাক্তার (Doctor)',
-  'পল্লী চিকিৎসক (Village Doctor)',
-  'হোমিও চিকিৎসক (Homeopathic Doctor)',
-  'নার্স / স্বাস্থ্যকর্মী (Nurse / Health Worker)',
-  'প্যাথলজিস্ট / টেকনোলজিস্ট (Medical Technologist)',
+    // চিকিৎসা ও স্বাস্থ্য
+    'ডাক্তার (Doctor)',
+    'পল্লী চিকিৎসক (Village Doctor)',
+    'হোমিও চিকিৎসক (Homeopathic Doctor)',
+    'নার্স / স্বাস্থ্যকর্মী (Nurse / Health Worker)',
+    'প্যাথলজিস্ট / টেকনোলজিস্ট (Medical Technologist)',
 
-  // কারিগরি, নির্মাণ ও শ্রমজীবী
-  'দিনমজুর (Day Laborer)',
-  'রাজমিস্ত্রি (Mason)',
-  'কাঠমিস্ত্রি (Carpenter)',
-  'রংমিস্ত্রি (Painter)',
-  'ইলেকট্রিশিয়ান (Electrician)',
-  'প্লাম্বার / স্যানিটারি মিস্ত্রি (Plumber)',
-  'মেকানিক / টেকনিশিয়ান (Mechanic / Technician)',
-  'ওয়েল্ডার / গ্রিল মিস্ত্রি (Welder)',
-  'দর্জি / টেইলার্স (Tailor)',
-  'সেলুন / নাপিত (Barber)',
-  'কামার / স্বর্ণকার (Blacksmith / Goldsmith)',
+    // কারিগরি, নির্মাণ ও শ্রমজীবী
+    'দিনমজুর (Day Laborer)',
+    'রাজমিস্ত্রি (Mason)',
+    'কাঠমিস্ত্রি (Carpenter)',
+    'রংমিস্ত্রি (Painter)',
+    'ইলেকট্রিশিয়ান (Electrician)',
+    'প্লাম্বার / স্যানিটারি মিস্ত্রি (Plumber)',
+    'মেকানিক / টেকনিশিয়ান (Mechanic / Technician)',
+    'ওয়েল্ডার / গ্রিল মিস্ত্রি (Welder)',
+    'দর্জি / টেইলার্স (Tailor)',
+    'সেলুন / নাপিত (Barber)',
+    'কামার / স্বর্ণকার (Blacksmith / Goldsmith)',
 
-  // পরিবহন
-  'ড্রাইভার / গাড়িচালক (Driver)',
-  'বাস / ট্রাক ড্রাইভার (Bus / Truck Driver)',
-  'সিএনজি / অটোরিকশা চালক (CNG / Auto Driver)',
-  'রিকশা / ভ্যান চালক (Rickshaw / Van Puller)',
-  'হেলপার / পরিবহন শ্রমিক (Transport Worker)',
+    // পরিবহন
+    'ড্রাইভার / গাড়িচালক (Driver)',
+    'বাস / ট্রাক ড্রাইভার (Bus / Truck Driver)',
+    'সিএনজি / অটোরিকশা চালক (CNG / Auto Driver)',
+    'রিকশা / ভ্যান চালক (Rickshaw / Van Puller)',
+    'হেলপার / পরিবহন শ্রমিক (Transport Worker)',
 
-  // পেশাজীবী, আইন ও প্রশাসন
-  'প্রকৌশলী / ইঞ্জিনিয়ার (Engineer)',
-  'আইনজীবী (Lawyer)',
-  'সাংবাদিক (Journalist)',
-  'পুলিশ / আইনশৃঙ্খলা বাহিনী (Police / Law Enforcement)',
-  'সেনাবাহিনী / বিজিবি / আনসার (Army / BGB / Ansar)',
-  'ফ্রিল্যান্সার / আইটি পেশাজীবী (Freelancer / IT Professional)',
-  'জনপ্রতিনিধি (Public Representative)',
+    // পেশাজীবী, আইন ও প্রশাসন
+    'প্রকৌশলী / ইঞ্জিনিয়ার (Engineer)',
+    'আইনজীবী (Lawyer)',
+    'সাংবাদিক (Journalist)',
+    'পুলিশ / আইনশৃঙ্খলা বাহিনী (Police / Law Enforcement)',
+    'সেনাবাহিনী / বিজিবি / আনসার (Army / BGB / Ansar)',
+    'ফ্রিল্যান্সার / আইটি পেশাজীবী (Freelancer / IT Professional)',
+    'জনপ্রতিনিধি (Public Representative)',
 
-  // অন্যান্য অবস্থা
-  'অবসরপ্রাপ্ত (Retired)',
-  'বেকার / কর্মহীন (Unemployed)',
-  'অসুস্থ / অক্ষম (Sick / Disabled)',
-  'মৃত (Late)',
-  'অন্যান্য (Other)'
-];
+    // অন্যান্য অবস্থা
+    'অবসরপ্রাপ্ত (Retired)',
+    'বেকার / কর্মহীন (Unemployed)',
+    'অসুস্থ / অক্ষম (Sick / Disabled)',
+    'মৃত (Late)',
+    'অন্যান্য (Other)'
+  ];
 
-const MOTHER_OCCUPATIONS = [
-  // গৃহিণী ও পারিবারিক
-  'গৃহিণী (Housewife)',
+  const MOTHER_OCCUPATIONS = [
+    // গৃহিণী ও পারিবারিক
+    'গৃহিণী (Housewife)',
 
-  // শিক্ষা ও ধর্মীয়
-  'শিক্ষিকা (Teacher)',
-  'মাদ্রাসা শিক্ষিকা (Madrasah Teacher)',
-  'কলেজ / বিশ্ববিদ্যালয় শিক্ষিকা (College/University Teacher)',
-  'গৃহশিক্ষিকা (Private Tutor)',
-  'কুরআন শিক্ষিকা / আলেমা (Quran Teacher / Alima)',
+    // শিক্ষা ও ধর্মীয়
+    'শিক্ষিকা (Teacher)',
+    'মাদ্রাসা শিক্ষিকা (Madrasah Teacher)',
+    'কলেজ / বিশ্ববিদ্যালয় শিক্ষিকা (College/University Teacher)',
+    'গৃহশিক্ষিকা (Private Tutor)',
+    'কুরআন শিক্ষিকা / আলেমা (Quran Teacher / Alima)',
 
-  // চাকরি (সরকারি ও বেসরকারি)
-  'সরকারি চাকরিজীবী (Government Service)',
-  'বেসরকারি চাকরিজীবী (Private Service)',
-  'ব্যাংকার (Banker)',
-  'এনজিও কর্মী (NGO Worker)',
-  'গার্মেন্টস কর্মী (Garments Worker)',
-  'আয়া / অফিস সহায়িকা (Ayah / Office Attendant)',
+    // চাকরি (সরকারি ও বেসরকারি)
+    'সরকারি চাকরিজীবী (Government Service)',
+    'বেসরকারি চাকরিজীবী (Private Service)',
+    'ব্যাংকার (Banker)',
+    'এনজিও কর্মী (NGO Worker)',
+    'গার্মেন্টস কর্মী (Garments Worker)',
+    'আয়া / অফিস সহায়িকা (Ayah / Office Attendant)',
 
-  // চিকিৎসা ও স্বাস্থ্য
-  'ডাক্তার (Doctor)',
-  'নার্স (Nurse)',
-  'স্বাস্থ্যকর্মী / ধাত্রী (Health Worker / Midwife)',
+    // চিকিৎসা ও স্বাস্থ্য
+    'ডাক্তার (Doctor)',
+    'নার্স (Nurse)',
+    'স্বাস্থ্যকর্মী / ধাত্রী (Health Worker / Midwife)',
 
-  // স্বনির্ভর ও ব্যবসা
-  'দর্জি / সেলাই কর্মী (Tailor / Sewing Worker)',
-  'হস্তশিল্প / কুটির শিল্প (Handicrafts)',
-  'ক্ষুদ্র উদ্যোক্তা / ব্যবসায়ী (Entrepreneur / Business)',
-  'ফ্রিল্যান্সার (Freelancer)',
-  'প্রবাসী (Expatriate)',
-  'পোল্ট্রি / গবাদিপশু পালনকারী (Poultry / Livestock Rearing)',
+    // স্বনির্ভর ও ব্যবসা
+    'দর্জি / সেলাই কর্মী (Tailor / Sewing Worker)',
+    'হস্তশিল্প / কুটির শিল্প (Handicrafts)',
+    'ক্ষুদ্র উদ্যোক্তা / ব্যবসায়ী (Entrepreneur / Business)',
+    'ফ্রিল্যান্সার (Freelancer)',
+    'প্রবাসী (Expatriate)',
+    'পোল্ট্রি / গবাদিপশু পালনকারী (Poultry / Livestock Rearing)',
 
-  // অন্যান্য অবস্থা
-  'অবসরপ্রাপ্ত (Retired)',
-  'অসুস্থ / অক্ষম (Sick / Disabled)',
-  'মৃত (Late)',
-  'অন্যান্য (Other)'
-];
+    // অন্যান্য অবস্থা
+    'অবসরপ্রাপ্ত (Retired)',
+    'অসুস্থ / অক্ষম (Sick / Disabled)',
+    'মৃত (Late)',
+    'অন্যান্য (Other)'
+  ];
+
   return (
     <div
       ref={formRef}
@@ -1736,7 +1742,7 @@ const MOTHER_OCCUPATIONS = [
         <div className="bg-emerald-50/90 border-b border-emerald-100 px-5 py-2 flex items-center justify-between text-[11px] font-bold text-emerald-800">
           <span className="flex items-center gap-1.5">
             <Sparkles size={13} className="text-emerald-600 shrink-0" />
-            আগের অসম্পূর্ণ ফর্মটি লোকাল স্টোরেজ থেকে রিস্টোর করা হয়েছে
+            আগের অসম্পূর্ণ ফর্মটি লোকাল স্টোরেজ থেকে রিস্টোর করা হয়েছে
           </span>
           <button
             type="button"
@@ -1818,43 +1824,54 @@ const MOTHER_OCCUPATIONS = [
                   </button>
                 </div>
 
-                {/* Old Student Lookup + QR Scanner Panel */}
+                {/* Old Student Lookup + QR Scanner Panel (QR-First Mobile Friendly) */}
                 {admissionMode === 'old' && (
-                  <div className="p-4 bg-gradient-to-br from-amber-50 via-orange-50/50 to-white rounded-2xl border border-amber-200 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-[11px] font-black text-amber-900">
-                        {migration
-                          ? `✓ পুরনো শিট থেকে লোড হয়েছে (ID: ${migration.studentCode})`
-                          : 'পুরনো ১০-ডিজিট আইডি দিন অথবা QR স্ক্যান করুন'}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          window.history.pushState({ page: 'qrScan' }, '');
-                          setIsQrOpen(true);
-                        }}
-                        className="px-3 py-1.5 rounded-xl bg-[#060D1F] text-[#D4A843] text-[11px] font-black flex items-center gap-1.5 shadow-sm active:scale-95 transition-transform shrink-0"
-                      >
-                        <QrCode size={14} /> QR স্ক্যান
-                      </button>
+                  <div className="p-4 bg-gradient-to-br from-[#060D1F] via-slate-900 to-[#0E3B2E] rounded-2xl border border-[#D4A843]/40 text-white space-y-3.5 shadow-lg animate-in fade-in slide-in-from-top-2 duration-200">
+                    {/* Primary Action: Big QR Scan Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        window.history.pushState({ page: 'qrScan' }, '');
+                        setIsQrOpen(true);
+                      }}
+                      className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-[#D4A843] to-amber-500 hover:brightness-105 text-[#060D1F] font-black text-xs sm:text-sm flex items-center justify-center gap-2.5 shadow-md shadow-amber-500/20 active:scale-[0.98] transition-all"
+                    >
+                      <QrCode size={18} strokeWidth={2.5} />
+                      <span>আইডি কার্ডের QR কোড স্ক্যান করুন</span>
+                    </button>
+
+                    {migration && (
+                      <div className="px-3 py-2 rounded-xl bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 text-[11px] font-bold flex items-center gap-1.5">
+                        <CheckCircle2 size={14} className="shrink-0 text-emerald-400" />
+                        <span className="truncate">লোড হয়েছে: ID {migration.studentCode}</span>
+                      </div>
+                    )}
+
+                    {/* Divider */}
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      <span className="h-px flex-1 bg-white/10" />
+                      <span>অথবা ১০-ডিজিট আইডি লিখুন</span>
+                      <span className="h-px flex-1 bg-white/10" />
                     </div>
 
-                    <div className="flex gap-2">
+                    {/* Compact Mobile-Safe ID Input + Search Button */}
+                    <div className="flex items-stretch gap-2 w-full">
                       <input
                         inputMode="numeric"
                         maxLength={10}
                         value={legacyId}
                         onChange={(e) => setLegacyId(e.target.value.replace(/[^0-9]/g, ''))}
-                        placeholder="১০-ডিজিট পুরনো আইডি (যেমন: 2026140101)"
-                        className="flex-1 px-3.5 py-3 bg-white rounded-xl font-mono font-bold outline-none border border-amber-300/80 focus:ring-2 focus:ring-amber-400 text-sm text-slate-800"
+                        placeholder="যেমন: 2026140101"
+                        className="min-w-0 flex-1 px-3 py-2.5 bg-white/10 border border-white/15 focus:bg-white focus:text-slate-900 focus:border-[#D4A843] rounded-xl font-mono font-bold text-xs sm:text-sm text-white placeholder:text-slate-400 outline-none transition-all"
                       />
                       <button
                         type="button"
                         onClick={() => handleLegacyLookup()}
                         disabled={legacyBusy}
-                        className="px-4 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs flex items-center gap-1.5 disabled:opacity-60 transition-colors shrink-0"
+                        className="px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center justify-center gap-1.5 disabled:opacity-60 transition-colors shrink-0"
                       >
-                        {legacyBusy ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />} খুঁজুন
+                        {legacyBusy ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                        <span>খুঁজুন</span>
                       </button>
                     </div>
                   </div>
@@ -2033,26 +2050,26 @@ const MOTHER_OCCUPATIONS = [
               <Input name="fatherNameEn" label="Father Name (English)" val={form.fatherNameEn} set={(v) => update('fatherNameEn', v)} error={errors.fatherNameEn} />
             </div>
             <Input name="fatherNid" label="পিতার NID (১০/১৩/১৭ ডিজিট · ঐচ্ছিক)" inputMode="numeric" maxLength={17} val={form.fatherNid} set={(v) => update('fatherNid', v)} error={errors.fatherNid} />
-           {/* পিতার পেশা */}
-<div className="relative pt-1 w-full">
-  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1 block">
-    পিতার পেশা (Father Occupation · ঐচ্ছিক)
-  </label>
-  <select
-    name="fatherOccupation"
-    className="w-full p-4 bg-gray-50 rounded-xl font-bold outline-none border border-transparent focus:bg-white focus:ring-2 focus:ring-slate-900"
-    value={form.fatherOccupation}
-    onChange={(e) => update('fatherOccupation', e.target.value)}
-  >
-    <option value="">নির্বাচন করুন...</option>
-    {form.fatherOccupation && !FATHER_OCCUPATIONS.includes(form.fatherOccupation) && (
-      <option value={form.fatherOccupation}>{form.fatherOccupation}</option>
-    )}
-    {FATHER_OCCUPATIONS.map((occ) => (
-      <option key={occ} value={occ}>{occ}</option>
-    ))}
-  </select>
-</div>
+            {/* পিতার পেশা */}
+            <div className="relative pt-1 w-full">
+              <label className="text-[10px] font-bold text-gray-400 uppercase ml-1 block">
+                পিতার পেশা (Father Occupation · ঐচ্ছিক)
+              </label>
+              <select
+                name="fatherOccupation"
+                className="w-full p-4 bg-gray-50 rounded-xl font-bold outline-none border border-transparent focus:bg-white focus:ring-2 focus:ring-slate-900"
+                value={form.fatherOccupation}
+                onChange={(e) => update('fatherOccupation', e.target.value)}
+              >
+                <option value="">নির্বাচন করুন...</option>
+                {form.fatherOccupation && !FATHER_OCCUPATIONS.includes(form.fatherOccupation) && (
+                  <option value={form.fatherOccupation}>{form.fatherOccupation}</option>
+                )}
+                {FATHER_OCCUPATIONS.map((occ) => (
+                  <option key={occ} value={occ}>{occ}</option>
+                ))}
+              </select>
+            </div>
 
             <div className="h-px bg-slate-100 my-2" />
 
@@ -2063,26 +2080,26 @@ const MOTHER_OCCUPATIONS = [
               <Input name="motherNameEn" label="Mother Name (English)" val={form.motherNameEn} set={(v) => update('motherNameEn', v)} error={errors.motherNameEn} />
             </div>
             <Input name="motherNid" label="মাতার NID (১০/১৩/১৭ ডিজিট · ঐচ্ছিক)" inputMode="numeric" maxLength={17} val={form.motherNid} set={(v) => update('motherNid', v)} error={errors.motherNid} />
-           {/* মাতার পেশা */}
-<div className="relative pt-1 w-full">
-  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1 block">
-    মাতার পেশা (Mother Occupation · ঐচ্ছিক)
-  </label>
-  <select
-    name="motherOccupation"
-    className="w-full p-4 bg-gray-50 rounded-xl font-bold outline-none border border-transparent focus:bg-white focus:ring-2 focus:ring-slate-900"
-    value={form.motherOccupation}
-    onChange={(e) => update('motherOccupation', e.target.value)}
-  >
-    <option value="">নির্বাচন করুন...</option>
-    {form.motherOccupation && !MOTHER_OCCUPATIONS.includes(form.motherOccupation) && (
-      <option value={form.motherOccupation}>{form.motherOccupation}</option>
-    )}
-    {MOTHER_OCCUPATIONS.map((occ) => (
-      <option key={occ} value={occ}>{occ}</option>
-    ))}
-  </select>
-</div>
+            {/* মাতার পেশা */}
+            <div className="relative pt-1 w-full">
+              <label className="text-[10px] font-bold text-gray-400 uppercase ml-1 block">
+                মাতার পেশা (Mother Occupation · ঐচ্ছিক)
+              </label>
+              <select
+                name="motherOccupation"
+                className="w-full p-4 bg-gray-50 rounded-xl font-bold outline-none border border-transparent focus:bg-white focus:ring-2 focus:ring-slate-900"
+                value={form.motherOccupation}
+                onChange={(e) => update('motherOccupation', e.target.value)}
+              >
+                <option value="">নির্বাচন করুন...</option>
+                {form.motherOccupation && !MOTHER_OCCUPATIONS.includes(form.motherOccupation) && (
+                  <option value={form.motherOccupation}>{form.motherOccupation}</option>
+                )}
+                {MOTHER_OCCUPATIONS.map((occ) => (
+                  <option key={occ} value={occ}>{occ}</option>
+                ))}
+              </select>
+            </div>
 
             <Input name="annualIncome" label="পারিবারিক বার্ষিক আয় (টাকা · ঐচ্ছিক)" inputMode="numeric" val={form.annualIncome} set={(v) => update('annualIncome', v)} error={errors.annualIncome} />
 
@@ -2335,7 +2352,7 @@ const MOTHER_OCCUPATIONS = [
             <div className="w-full rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 space-y-2.5 text-xs">
               <div className="flex items-center justify-between pb-2 border-b border-slate-200/80">
                 <span className="font-black text-slate-800 flex items-center gap-1.5">
-                  <FileCheck2 size={15} className="text-emerald-600" /> চূড়ান্ত তথ্য সারসংক্ষেপ
+                  <FileCheck2 size={15} className="text-emerald-600" /> চূড়ান্ত তথ্য সারসংক্ষেপ
                 </span>
                 <span className="font-mono text-[11px] font-black text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">
                   ID: {form.studentId || 'N/A'}

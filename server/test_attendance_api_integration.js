@@ -99,12 +99,78 @@ async function main() {
     const testPayrollPeriods = [];
     let originalJoiningDates = [];
     let originalLastCronAuditDate;
+    const originalIntegrationKeys = {
+        results: process.env.RESULTS_APP_API_KEY,
+        admitCard: process.env.ADMIT_CARD_APP_API_KEY
+    };
     try {
+        process.env.RESULTS_APP_API_KEY = 'test-results-api-key-32-characters-minimum';
+        process.env.ADMIT_CARD_APP_API_KEY = 'test-admit-card-api-key-32-characters';
         const [admin, settings] = await Promise.all([
             Teacher.findOne({ role: { $in: ['Admin', 'SuperAdmin'] }, isActive: true }).select('_id role').lean(),
             SystemSettings.getSettings()
         ]);
         assert.ok(admin, 'An active admin account is required for API integration tests.');
+
+        const unauthenticatedIntegrationResponse = await fetch(
+            `${baseUrl}/api/v1/integrations/teachers?limit=1`
+        );
+        assert.equal(unauthenticatedIntegrationResponse.status, 401);
+        const integrationResponse = await fetch(
+            `${baseUrl}/api/v1/integrations/teachers?limit=1`,
+            { headers: { Authorization: `Bearer ${process.env.RESULTS_APP_API_KEY}` } }
+        );
+        const integrationBody = await integrationResponse.json();
+        assert.equal(integrationResponse.status, 200, integrationBody.message);
+        assert.equal(integrationBody.data.teachers.length, 1);
+        const integrationTeacher = integrationBody.data.teachers[0];
+        assert.equal(Object.prototype.hasOwnProperty.call(integrationTeacher, 'password'), false);
+        assert.equal(Object.prototype.hasOwnProperty.call(integrationTeacher, 'editToken'), false);
+        assert.equal(Object.prototype.hasOwnProperty.call(integrationTeacher, 'passwordResetTokenHash'), false);
+        assert.equal(Object.prototype.hasOwnProperty.call(integrationTeacher, 'passwordResetExpires'), false);
+        assert.equal(Object.prototype.hasOwnProperty.call(integrationTeacher, 'bankDetails'), false);
+        assert.equal(Object.prototype.hasOwnProperty.call(integrationTeacher, 'basicSalary'), false);
+        const studentIntegrationResponse = await fetch(
+            `${baseUrl}/api/v1/integrations/students?limit=1`,
+            { headers: { Authorization: `Bearer ${process.env.ADMIT_CARD_APP_API_KEY}` } }
+        );
+        const studentIntegrationBody = await studentIntegrationResponse.json();
+        assert.equal(studentIntegrationResponse.status, 200, studentIntegrationBody.message);
+        if (studentIntegrationBody.data.students.length > 0) {
+            const integrationStudent = studentIntegrationBody.data.students[0];
+            assert.equal(Object.prototype.hasOwnProperty.call(integrationStudent, 'password'), false);
+            assert.equal(Object.prototype.hasOwnProperty.call(integrationStudent, 'editToken'), false);
+            assert.equal(Object.prototype.hasOwnProperty.call(integrationStudent, 'feeDetails'), true);
+            assert.equal(Object.prototype.hasOwnProperty.call(integrationStudent, 'annualIncome'), true);
+        }
+        const allStudentsResponse = await fetch(
+            `${baseUrl}/api/v1/integrations/students?all=true`,
+            { headers: { Authorization: `Bearer ${process.env.ADMIT_CARD_APP_API_KEY}` } }
+        );
+        const allStudentsBody = await allStudentsResponse.json();
+        assert.equal(allStudentsResponse.status, 200, allStudentsBody.message);
+        assert.equal(allStudentsBody.data.all, true);
+        assert.equal(allStudentsBody.data.totalCount, allStudentsBody.data.students.length);
+        assert.equal(
+            Object.prototype.hasOwnProperty.call(allStudentsBody.data.students[0] || {}, 'feeDetails'),
+            allStudentsBody.data.students.length > 0
+        );
+        const invalidAllAndPaginationResponse = await fetch(
+            `${baseUrl}/api/v1/integrations/students?all=true&page=1`,
+            { headers: { Authorization: `Bearer ${process.env.ADMIT_CARD_APP_API_KEY}` } }
+        );
+        assert.equal(invalidAllAndPaginationResponse.status, 400);
+        const publicRegistryTeacher = await Teacher.findById(integrationTeacher._id).select('uid').lean();
+        if (publicRegistryTeacher?.uid) {
+            const publicRegistryResponse = await fetch(
+                `${baseUrl}/api/v1/teachers/public/registry-card/${encodeURIComponent(publicRegistryTeacher.uid)}`
+            );
+            const publicRegistryBody = await publicRegistryResponse.json();
+            assert.equal(publicRegistryResponse.status, 200);
+            assert.equal(Object.prototype.hasOwnProperty.call(publicRegistryBody.data, 'bankDetails'), false);
+            assert.equal(Object.prototype.hasOwnProperty.call(publicRegistryBody.data, 'basicSalary'), false);
+            assert.equal(Object.prototype.hasOwnProperty.call(publicRegistryBody.data, 'password'), false);
+        }
 
         const toMinutes = (time) => {
             const [hours, minutes] = time.split(':').map(Number);
@@ -787,6 +853,10 @@ async function main() {
                 Teacher.updateOne({ _id: teacher._id }, { $set: { joiningDate: teacher.joiningDate } })
             )));
         }
+        if (originalIntegrationKeys.results === undefined) delete process.env.RESULTS_APP_API_KEY;
+        else process.env.RESULTS_APP_API_KEY = originalIntegrationKeys.results;
+        if (originalIntegrationKeys.admitCard === undefined) delete process.env.ADMIT_CARD_APP_API_KEY;
+        else process.env.ADMIT_CARD_APP_API_KEY = originalIntegrationKeys.admitCard;
         await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         await mongoose.disconnect();
     }

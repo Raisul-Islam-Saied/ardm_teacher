@@ -386,8 +386,26 @@ const commonMilitaryRules = [
     body('academicQualifications').custom(validateAcademicQualificationsCrossFields)
 ];
 
+const requiredTeacherEmailRule = () => body('email')
+    .trim()
+    .notEmpty().withMessage('পোর্টাল অ্যাকাউন্টের জন্য ইমেইল ঠিকানা আবশ্যক')
+    .bail()
+    .isEmail().withMessage('সঠিক ইমেইল ঠিকানা দিন')
+    .normalizeEmail();
+
+const emailWhenProvidedRule = () => body('email')
+    .if((value, { req }) => Object.prototype.hasOwnProperty.call(req.body, 'email'))
+    .isString().withMessage('সঠিক ইমেইল ঠিকানা দিন')
+    .bail()
+    .trim()
+    .notEmpty().withMessage('পোর্টাল অ্যাকাউন্টের ইমেইল ঠিকানা খালি রাখা যাবে না')
+    .bail()
+    .isEmail().withMessage('সঠিক ইমেইল ঠিকানা দিন')
+    .normalizeEmail();
+
 const createTeacherValidator = [
     ...commonMilitaryRules,
+    requiredTeacherEmailRule(),
     body('teacherCode')
         .optional({ checkFalsy: true })
         .customSanitizer(sanitizeDigits)
@@ -417,6 +435,7 @@ const publicSelfRegisterValidator = [
     ...commonMilitaryRules,
     ...addressLocationValidators('presentAddress'),
     ...addressLocationValidators('permanentAddress'),
+    requiredTeacherEmailRule(),
     body('password')
         .trim()
         .notEmpty().withMessage('পাসওয়ার্ড আবশ্যক')
@@ -433,7 +452,7 @@ const updateTeacherValidator = [
     body('phone').optional({ checkFalsy: true }).customSanitizer(sanitizeBdPhone).matches(BD_PHONE_REGEX).withMessage('সঠিক ১১ ডিজিটের বাংলাদেশী মোবাইল নম্বর দিন'),
     body('designation').optional({ checkFalsy: true }).customSanitizer(sanitizeClean).isIn(DESIGNATIONS).withMessage('পদবী সঠিক নয়'),
     body('bloodGroup').optional({ checkFalsy: true }).customSanitizer(sanitizeClean).isIn(BLOOD_GROUPS).withMessage('রক্তের গ্রুপ সঠিক নয়'),
-    body('email').optional({ checkFalsy: true }).isEmail().withMessage('সঠিক ইমেইল ঠিকানা দিন').normalizeEmail(),
+    emailWhenProvidedRule(),
     body('dateOfBirth')
         .optional({ checkFalsy: true })
         .isISO8601({ strict: true }).withMessage('জন্ম তারিখ সঠিক ফরম্যাটে (YYYY-MM-DD) দিন')

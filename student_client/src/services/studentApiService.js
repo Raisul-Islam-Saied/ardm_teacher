@@ -1,19 +1,12 @@
 /**
- * ARDM Student Portal — API Service (Centralized ERP backend)
- * Endpoints: /auth/login, /auth/me, /auth/logout, /students, /students/:id,
- *            /students/public/verify/:studentCode, /students/metadata, /students/legacy-lookup/:code
- * Returns RAW server documents. Conversion to the original UI field names
- * (ID, StudentNameBn, ...) is done in models/studentModel.js.
+- ARDM Student Portal — API Service (Centralized ERP backend)
  */
+import { ALLOWED_ROLES } from '../config/systemConfig';
 import axiosClient, {
     clearAuthSessionStorage,
     setAuthSessionStorage
 } from './axiosClient';
-import { ALLOWED_ROLES } from '../config/systemConfig';
 
-// ---------------------------------------------------------------
-// Portal access guard (spec §3): block Pending / inactive / other roles
-// ---------------------------------------------------------------
 export function assertPortalAccess(user) {
     if (!user || !(user._id || user.teacherCode)) {
         throw new Error('সার্ভার থেকে বৈধ ইউজার তথ্য পাওয়া যায়নি।');
@@ -36,11 +29,7 @@ export function assertPortalAccess(user) {
 const unwrapUser = (res) =>
     res?.data?.data?.teacher || res?.data?.data?.user || res?.data?.data;
 
-// ---------------------------------------------------------------
-// Auth
-// ---------------------------------------------------------------
 export const authApi = {
-    /** POST /auth/login  { identifier, password } → { user, token } */
     async login(identifier, password) {
         const res = await axiosClient.post('/auth/login', {
             identifier: String(identifier || '').trim(),
@@ -52,12 +41,11 @@ export const authApi = {
         if (!token || !user) {
             throw new Error('সার্ভার থেকে বৈধ লগইন সেশন পাওয়া যায়নি।');
         }
-        assertPortalAccess(user); // সেশন সেভ করার আগেই ব্লক
+        assertPortalAccess(user);
         setAuthSessionStorage(token, user);
         return { user, token, message: res.data?.message };
     },
 
-    /** GET /auth/me  (Bearer token) → user */
     async me() {
         const res = await axiosClient.get('/auth/me');
         const user = unwrapUser(res);
@@ -69,42 +57,56 @@ export const authApi = {
         try {
             await axiosClient.post('/auth/logout');
         } catch (e) {
-            /* সার্ভার অফলাইন হলেও লোকাল সেশন মুছবে */
+            /* অফলাইনে থাকলেও লোকাল সেশন মুছবে */
         } finally {
             clearAuthSessionStorage();
         }
     }
 };
 
-// ---------------------------------------------------------------
-// Students
-// ---------------------------------------------------------------
+export const teacherPortalApi = {
+    /** GET /teachers/my-portal/dashboard */
+    async getMyDashboard(params = {}) {
+        const res = await axiosClient.get('/teachers/my-portal/dashboard', { params });
+        return res.data?.data || res.data || {};
+    },
+
+    /** GET /attendance/my-summary?month=MM&year=YYYY */
+    async getMyMonthlyAttendance(month, year) {
+        const res = await axiosClient.get('/attendance/my-summary', {
+            params: { month, year }
+        });
+        return res.data?.data || res.data || {};
+    },
+
+    /** GET /payroll/sheets */
+    async getMySalaryHistory(params = {}) {
+        const res = await axiosClient.get('/payroll/sheets', { params });
+        return res.data?.data || res.data || [];
+    }
+};
+
 export const studentApi = {
-    /** GET /students → raw Mongo docs (Deleted বাদে) */
     async list(params = {}) {
         const res = await axiosClient.get('/students', { params });
         return res.data?.data?.students || [];
     },
 
-    /** GET /students/:id (ObjectId অথবা studentCode) → { student, siblings } */
     async getById(id) {
         const res = await axiosClient.get(`/students/${encodeURIComponent(id)}`);
         return res.data?.data || null;
     },
 
-    /** POST /students */
     async create(payload) {
         const res = await axiosClient.post('/students', payload);
         return { student: res.data?.data, message: res.data?.message };
     },
 
-    /** PATCH /students/:_id */
     async update(id, payload) {
         const res = await axiosClient.patch(`/students/${encodeURIComponent(id)}`, payload);
         return { student: res.data?.data, message: res.data?.message };
     },
 
-    /** DELETE /students/:_id  (soft delete → status = 'Deleted') */
     async remove(id, statusReason = '') {
         const res = await axiosClient.delete(`/students/${encodeURIComponent(id)}`, {
             data: statusReason ? { statusReason } : {}
@@ -112,7 +114,6 @@ export const studentApi = {
         return { message: res.data?.message };
     },
 
-    /** GET /students/public/verify/:studentCode  — লগইন ছাড়া (QR ভেরিফিকেশন) */
     async publicVerify(studentCode) {
         const res = await axiosClient.get(
             `/students/public/verify/${encodeURIComponent(studentCode)}`
@@ -120,13 +121,11 @@ export const studentApi = {
         return res.data?.data || null;
     },
 
-    /** GET /students/metadata */
     async metadata() {
         const res = await axiosClient.get('/students/metadata');
         return res.data?.data || {};
     },
 
-    /** GET /students/legacy-lookup/:studentCode  — পুরনো গুগল শিট থেকে মাইগ্রেশনের জন্য */
     async legacyLookup(studentCode) {
         const res = await axiosClient.get(
             `/students/legacy-lookup/${encodeURIComponent(studentCode)}`

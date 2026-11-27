@@ -13,6 +13,7 @@ import AppShell from '@components/layout/AppShell';
 import PageLoadingSkeleton from '@components/layout/PageLoadingSkeleton';
 const PublicRegistrationLedger = lazy(() => import('@pages/public/registration/PublicRegistrationLedger'));
 const Login = lazy(() => import('@pages/auth/Login'));
+const PasswordRecovery = lazy(() => import('@pages/auth/PasswordRecovery'));
 const AdminDashboard = lazy(() => import('@pages/admin/AdminDashboard'));
 const TeacherDirectory = lazy(() => import('@pages/admin/TeacherDirectory'));
 const PendingApprovals = lazy(() => import('@pages/admin/PendingApprovals'));
@@ -69,6 +70,7 @@ function AppRoutes() {
         <Routes>
             {/* ১. পাবলিক শিক্ষক নিবন্ধন ও ডিজিটাল আইডি কার্ড */}
             <Route path="/register" element={<PublicRegistrationLedger />} />
+            <Route path="/password-recovery" element={<PasswordRecovery />} />
 
             {/* ২. সিকিউর লগইন গেটওয়ে */}
             <Route

@@ -17,6 +17,7 @@ const payrollRoutes = require('./routes/payroll.routes');
 const uploadRoutes = require('./routes/upload.routes');
 const systemRoutes = require('./routes/system.routes');
 const resultsRoutes = require('./routes/results.routes');
+const integrationRoutes = require('./routes/integration.routes');
 const { zkTecoHandshake, zkTecoReceiveLogs } = require('./controllers/attendance.controller');
 
 const app = express();
@@ -81,6 +82,7 @@ app.get('/health', (req, res) => {
             '/api/v1/payroll',
             '/api/v1/upload',
             '/api/v1/system',
+            '/api/v1/integrations',
             '/api/v1/results',
             '/iclock/cdata'
         ],
@@ -104,6 +106,7 @@ app.use('/api/v1/attendance', attendanceRoutes);
 app.use('/api/v1/payroll', payrollRoutes);
 app.use('/api/v1/upload', uploadRoutes);
 app.use('/api/v1/system', systemRoutes);
+app.use('/api/v1/integrations', integrationRoutes);
 
 app.all('*', (req, res, next) => {
     next(new ApiError(404, 'অনুরোধ করা সেবাটি পাওয়া যায়নি। ঠিকানা যাচাই করে আবার চেষ্টা করুন।'));

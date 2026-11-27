@@ -117,7 +117,9 @@ export function validateStep3AddressContactData(formData) {
 
     const trimmedEmail = String(formData.email || '').trim();
     if (trimmedEmail.length > 0 && !EMAIL_REGEX.test(trimmedEmail)) {
-        errors.email = 'সঠিক ইমেইল অ্যাড্রেস প্রদান করুন (অথবা খালি রাখুন)।';
+        errors.email = 'সঠিক ইমেইল অ্যাড্রেস প্রদান করুন।';
+    } else if (!trimmedEmail) {
+        errors.email = 'পোর্টাল অ্যাকাউন্টের জন্য ইমেইল ঠিকানা আবশ্যক।';
     }
 
     validateAddressData(formData.presentAddress, 'present', errors);
@@ -286,8 +288,10 @@ export default function Step3AddressContact({
     );
     const trimmedEmail = String(formData.email || '').trim();
     const emailLive = {
-        valid: trimmedEmail.length === 0 || EMAIL_REGEX.test(trimmedEmail),
-        error: 'সঠিক ইমেইল অ্যাড্রেস প্রদান করুন (অথবা খালি রাখুন)।'
+        valid: trimmedEmail.length > 0 && EMAIL_REGEX.test(trimmedEmail),
+        error: trimmedEmail.length === 0
+            ? 'পোর্টাল অ্যাকাউন্টের জন্য ইমেইল ঠিকানা আবশ্যক।'
+            : 'সঠিক ইমেইল অ্যাড্রেস প্রদান করুন।'
     };
 
     const getFieldError = (fieldKey, liveCheck, val) => {
@@ -573,8 +577,8 @@ export default function Step3AddressContact({
                     />
 
                     <FormInput
-                        labelEng="Email Address (Optional)"
-                        labelBng="ইমেইল অ্যাড্রেস (যদি থাকে — ঐচ্ছিক)"
+                        labelEng="Email Address"
+                        labelBng="ইমেইল অ্যাড্রেস"
                         name="email"
                         type="email"
                         leftIcon={Mail}
@@ -587,10 +591,11 @@ export default function Step3AddressContact({
                             onBlurField('email');
                         }}
                         placeholder="teacher@example.com"
+                        required
                         showValidIcon={trimmedEmail.length > 0}
                         isValid={trimmedEmail.length > 0 && emailLive.valid}
                         error={getFieldError('email', emailLive, formData.email)}
-                        hint="পাসওয়ার্ড রিকভারি ও নোটিফিকেশনের জন্য (না থাকলে খালি রাখুন)।"
+                        hint="পাসওয়ার্ড রিসেটের লিংক এই ঠিকানায় পাঠানো হবে।"
                     />
                 </div>
 

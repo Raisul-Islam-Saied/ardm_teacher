@@ -1,16 +1,18 @@
 /**
  * ARDM Enterprise ERP — Military-Grade Secure Login Gateway (Step 11)
  * Features:
- * - Smart Dual Identifier: 11-Digit BD Mobile Number (01XXXXXXXXX) OR 10-Digit Teacher ID (10XXXXXXXX)
+ * - Login by email, 11-Digit BD mobile number, or 10-Digit Teacher ID
  * - Automatic Bengali-to-English digit normalization on live typing
  * - Persistent 15-Minute Bruteforce Lockout Countdown Timer (survives page reload via sessionStorage)
  * - Synchronized payload ({ phone, identifier, teacherCode, password }) to prevent 400 Bad Request
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     Lock,
     Phone,
+    Mail,
     Fingerprint,
     KeyRound,
     LogIn,
@@ -35,6 +37,18 @@ const LOCKOUT_STORAGE_KEY = 'ardm_erp_login_lockout_until_v2';
  * ইনপুটটি ১১ সংখ্যার মোবাইল নম্বর নাকি ১০ সংখ্যার টিচার আইডি তা স্বয়ংক্রিয়ভাবে শনাক্ত করার ফাংশন
  */
 function analyzeLoginIdentifier(rawInput) {
+    const rawValue = String(rawInput || '').trim();
+    if (/[A-Za-z@]/.test(rawValue)) {
+        const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawValue);
+        return {
+            valid: validEmail,
+            type: 'EMAIL',
+            cleanValue: rawValue.toLowerCase(),
+            badgeText: validEmail ? 'ইমেইল ✓' : 'ইমেইল ঠিকানা',
+            error: 'সঠিক নিবন্ধিত ইমেইল ঠিকানা দিন।'
+        };
+    }
+
     let digits = extractPureDigits(rawInput);
 
     // কেউ +8801... বা 8801... পেস্ট করলে ১১ ডিজিটে নামিয়ে আনা
@@ -47,8 +61,8 @@ function analyzeLoginIdentifier(rawInput) {
             valid: false,
             type: 'NONE',
             cleanValue: '',
-            badgeText: 'Mobile / 10-Digit ID',
-            error: 'মোবাইল নম্বর অথবা ১০ সংখ্যার টিচার আইডি প্রদান করা আবশ্যক।'
+            badgeText: 'Email / Mobile / ID',
+            error: 'ইমেইল, মোবাইল নম্বর অথবা ১০ সংখ্যার টিচার আইডি দিন।'
         };
     }
 
@@ -100,12 +114,13 @@ function analyzeLoginIdentifier(rawInput) {
         type: 'INVALID',
         cleanValue: digits,
         badgeText: 'অবৈধ ফরম্যাট',
-        error: 'সঠিক মোবাইল নম্বর (01XXXXXXXXX) অথবা ১০-ডিজিট টিচার আইডি (10XXXXXXXX) দিন।'
+        error: 'সঠিক ইমেইল, মোবাইল নম্বর (01XXXXXXXXX) অথবা ১০-ডিজিট টিচার আইডি (10XXXXXXXX) দিন।'
     };
 }
 
 export default function Login({ onLoginSuccess, onSwitchToPublicRegistration }) {
     const toast = useToast();
+    const navigate = useNavigate();
 
     // ১. ফর্ম স্টেট
     const [identifier, setIdentifier] = useState('');
@@ -236,7 +251,7 @@ export default function Login({ onLoginSuccess, onSwitchToPublicRegistration }) 
                 });
             }
 
-            toast.error(extractApiErrorMessage(err, 'মোবাইল নম্বর/আইডি অথবা পাসওয়ার্ড সঠিক নয়।'));
+            toast.error(extractApiErrorMessage(err, 'ইমেইল/মোবাইল নম্বর/আইডি অথবা পাসওয়ার্ড সঠিক নয়।'));
         } finally {
             setIsSubmitting(false);
         }
@@ -330,6 +345,13 @@ export default function Login({ onLoginSuccess, onSwitchToPublicRegistration }) 
                                 <p>
                                     নিরাপত্তার জন্য কিছুক্ষণ অপেক্ষা করতে হবে। সমস্যা চলতে থাকলে প্রশাসকের সঙ্গে যোগাযোগ করুন।
                                 </p>
+                                <button
+                                    type="button"
+                                    onClick={() => navigate('/password-recovery')}
+                                    className="pt-2 font-bold text-emerald hover:text-gold-deep"
+                                >
+                                    ইমেইলে পাসওয়ার্ড রিসেট করুন
+                                </button>
                             </div>
 
                         </div>
@@ -353,7 +375,7 @@ export default function Login({ onLoginSuccess, onSwitchToPublicRegistration }) 
                                         অ্যাডমিন ও শিক্ষক পোর্টাল লগইন
                                     </h2>
                                     <p className="font-bengali text-xs text-ink-soft mt-0.5">
-                                        মোবাইল নম্বর অথবা ১০-ডিজিট টিচার আইডি দিয়ে প্রবেশ করুন
+                                        ইমেইল, মোবাইল নম্বর অথবা ১০-ডিজিট টিচার আইডি দিয়ে প্রবেশ করুন
                                     </p>
                                 </div>
 
@@ -367,16 +389,31 @@ export default function Login({ onLoginSuccess, onSwitchToPublicRegistration }) 
                                 </button>
                             </div>
 
-                            {/* ইনপুট ১: মোবাইল নম্বর অথবা ১০-ডিজিট টিচার আইডি */}
+                            {/* ইনপুট ১: ইমেইল, মোবাইল নম্বর অথবা ১০-ডিজিট টিচার আইডি */}
                             <FormInput
-                                labelEng="Mobile or 10-Digit Teacher ID"
-                                labelBng="মোবাইল নম্বর অথবা ১০-ডিজিট টিচার আইডি"
+                                labelEng="Email, Mobile or 10-Digit Teacher ID"
+                                labelBng="ইমেইল, মোবাইল নম্বর অথবা ১০-ডিজিট টিচার আইডি"
                                 name="identifier"
                                 variant="erp"
-                                inputMode="numeric"
-                                leftIcon={idAnalysis.type === 'TEACHER_ID' ? Fingerprint : Phone}
+                                inputMode={idAnalysis.type === 'EMAIL' ? 'email' : 'text'}
+                                autoCapitalize="none"
+                                autoCorrect="off"
+                                autoComplete="username"
+                                spellCheck={false}
+                                leftIcon={
+                                    idAnalysis.type === 'EMAIL'
+                                        ? Mail
+                                        : (idAnalysis.type === 'TEACHER_ID' ? Fingerprint : Phone)
+                                }
                                 value={identifier}
                                 onChange={(e) => {
+                                    if (/[A-Za-z@]/.test(e.target.value)) {
+                                        setIdentifier(e.target.value.slice(0, 254));
+                                        if (fieldErrors.identifier) {
+                                            setFieldErrors((prev) => ({ ...prev, identifier: '' }));
+                                        }
+                                        return;
+                                    }
                                     // বাংলা সংখ্যা টাইপ করলেও সাথে সাথে ইংরেজি ডিজিটে রূপান্তর করে ১১ ডিজিট পর্যন্ত রাখা
                                     const pure = extractPureDigits(e.target.value).slice(0, 13);
                                     const normalized =
@@ -389,7 +426,7 @@ export default function Login({ onLoginSuccess, onSwitchToPublicRegistration }) 
                                     }
                                 }}
                                 onBlur={() => setTouched((prev) => ({ ...prev, identifier: true }))}
-                                placeholder="018XXXXXXXX বা 1026030301"
+                                placeholder="name@example.com, 018XXXXXXXX বা 1026030301"
                                 required
                                 isMonoText
                                 isValid={idAnalysis.valid}
@@ -411,7 +448,7 @@ export default function Login({ onLoginSuccess, onSwitchToPublicRegistration }) 
                                         </span>
                                     ) : null
                                 }
-                                hint="বাংলা বা ইংরেজি যেকোনো সংখ্যায় ১১-ডিজিট মোবাইল বা ১০-ডিজিট আইডি লিখুন।"
+                                hint="ইমেইল, ১১-ডিজিট মোবাইল নম্বর অথবা ১০-ডিজিট টিচার আইডি ব্যবহার করুন।"
                             />
 
                             {/* ইনপুট ২: পাসওয়ার্ড (Show/Hide আইকনসহ) */}
@@ -441,6 +478,16 @@ export default function Login({ onLoginSuccess, onSwitchToPublicRegistration }) 
                                         : '')
                                 }
                             />
+
+                            <div className="-mt-2 mb-4 text-right">
+                                <button
+                                    type="button"
+                                    onClick={() => navigate('/password-recovery')}
+                                    className="font-bengali text-xs font-semibold text-emerald hover:text-gold-deep"
+                                >
+                                    পাসওয়ার্ড ভুলে গেছেন?
+                                </button>
+                            </div>
 
                             {/* লগইন সাবমিট বাটন */}
                             <Button
@@ -501,7 +548,7 @@ export default function Login({ onLoginSuccess, onSwitchToPublicRegistration }) 
                                 ১. লগইন আইডি কী দেবেন?
                             </p>
                             <p>
-                                আপনার নিবন্ধিত ১১ সংখ্যার মোবাইল নম্বর (যেমন: <b className="font-mono">01812345678</b>) অথবা ডিজিটাল রেজিস্ট্রি কার্ডের ১০ সংখ্যার টিচার আইডি (যেমন: <b className="font-mono">1026030301</b>)।
+                                আপনার অ্যাকাউন্টে নিবন্ধিত ইমেইল, ১১ সংখ্যার মোবাইল নম্বর (যেমন: <b className="font-mono">01812345678</b>) অথবা ডিজিটাল রেজিস্ট্রি কার্ডের ১০ সংখ্যার টিচার আইডি (যেমন: <b className="font-mono">1026030301</b>) ব্যবহার করুন।
                             </p>
                         </div>
 
@@ -510,7 +557,7 @@ export default function Login({ onLoginSuccess, onSwitchToPublicRegistration }) 
                                 ২. পাসওয়ার্ড ভুলে গেলে কী করবেন?
                             </p>
                             <p>
-                                নিবন্ধনের সময় নির্ধারিত পাসওয়ার্ড ব্যবহার করুন। ভুলে গেলে প্রশাসকের সঙ্গে যোগাযোগ করে পাসওয়ার্ড রিসেট করুন।
+                                অ্যাকাউন্টে নিবন্ধিত ইমেইল ঠিকানায় রিসেট লিংক নিয়ে নিজেই পাসওয়ার্ড পরিবর্তন করতে পারবেন।
                             </p>
                         </div>
 

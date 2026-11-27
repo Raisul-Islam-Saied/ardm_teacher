@@ -343,6 +343,15 @@ const teacherSchema = new mongoose.Schema({
         type: Date,
         select: false
     },
+    passwordResetTokenHash: {
+        type: String,
+        select: false,
+        index: true
+    },
+    passwordResetExpires: {
+        type: Date,
+        select: false
+    },
     role: {
         type: String,
         enum: Object.values(ROLES),
@@ -375,6 +384,8 @@ const teacherSchema = new mongoose.Schema({
             delete ret.password;
             delete ret.editToken;
             delete ret.passwordChangedAt;
+            delete ret.passwordResetTokenHash;
+            delete ret.passwordResetExpires;
             delete ret.failedLoginAttempts;
             delete ret.lockUntil;
             return ret;
@@ -385,6 +396,8 @@ const teacherSchema = new mongoose.Schema({
             delete ret.password;
             delete ret.editToken;
             delete ret.passwordChangedAt;
+            delete ret.passwordResetTokenHash;
+            delete ret.passwordResetExpires;
             delete ret.failedLoginAttempts;
             delete ret.lockUntil;
             return ret;
