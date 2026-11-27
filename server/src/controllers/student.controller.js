@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Student = require('../models/Student');
 const AuditLog = require('../models/AuditLog');
+const SystemSettings = require('../models/SystemSettings');
 const {
     ROLES,
     BLOOD_GROUPS,
@@ -20,15 +21,43 @@ const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const ApiResponse = require('../utils/ApiResponse');
 
-const assertCanManageStudentClass = (user, targetClassBn) => {
-    if ([ROLES.SUPER_ADMIN, ROLES.ADMIN].includes(user.role)) return true;
+const normalizeClassBn = (s) => String(s || '').replace(/\u09DF/g, '\u09AF\u09BC').trim();
+
+const assertStudentActionPermission = async (user, action, targetClassBn = null) => {
+    if (!user) {
+        throw new ApiError(401, 'লগইন সেশন পাওয়া যায়নি!');
+    }
+    if ([ROLES.SUPER_ADMIN, ROLES.ADMIN].includes(user.role)) {
+        return true;
+    }
 
     if (user.role === ROLES.TEACHER) {
-        if (!user.assignedClass || !user.canEditAssignedClass) {
-            throw new ApiError(403, 'আপনার শিক্ষার্থী যোগ বা সম্পাদনা করার প্রশাসনিক অনুমতি নেই!');
+        const settings = await SystemSettings.getSettings();
+        const sp = settings?.studentPortal || {};
+        const assignedClass = normalizeClassBn(user.assignedClass);
+        const normalizedTarget = normalizeClassBn(targetClassBn);
+
+        // ১. সাধারণ শিক্ষক (যার কোনো শ্রেণি অ্যাসাইন করা নেই)
+        if (!assignedClass) {
+            const allowed = Boolean(sp.nonClassTeacherPermissions?.[action]);
+            if (!allowed) {
+                throw new ApiError(403, 'সাধারণ শিক্ষকদের জন্য এই কার্যক্রমের প্রশাসনিক অনুমতি বন্ধ রাখা হয়েছে!');
+            }
+            return true;
         }
-        if (user.assignedClass !== targetClassBn) {
-            throw new ApiError(403, `আপনি শুধুমাত্র আপনার নির্ধারিত শ্রেণির (${user.assignedClass}) শিক্ষার্থীর তথ্য ব্যবস্থাপনা করতে পারবেন!`);
+
+        // ২. ক্লাস টিচার (নিজের শ্রেণি বনাম অন্যের শ্রেণি)
+        const isOwnClass = !normalizedTarget || assignedClass === normalizedTarget;
+        const scopeKey = isOwnClass ? 'ownClass' : 'otherClass';
+        const allowed = Boolean(sp.classTeacherPermissions?.[scopeKey]?.[action]);
+
+        if (!allowed) {
+            throw new ApiError(
+                403,
+                isOwnClass
+                    ? `আপনার নিজের শ্রেণির (${user.assignedClass}) ক্ষেত্রে এই কার্যক্রমের অনুমতি বন্ধ রাখা হয়েছে!`
+                    : `আপনি শুধুমাত্র আপনার নির্ধারিত শ্রেণির (${user.assignedClass}) শিক্ষার্থীর তথ্য ব্যবস্থাপনা করতে পারবেন!`
+            );
         }
         return true;
     }
@@ -71,7 +100,7 @@ const getStudentMetadata = asyncHandler(async (req, res) => {
 const lookupLegacyStudentById = asyncHandler(async (req, res) => {
     const { studentCode } = req.params;
 
-    // পূর্বে ডিলিট করা (status: 'Deleted') কোনো রেকর্ড থাকলে স্থায়ীভাবে পরিষ্কার করা
+    // পূর্বে ডিলিট করা (status: 'Deleted') কোনো রেকর্ড থাকলে স্থায়ীভাবে পরিষ্কার করা
     await Student.deleteMany({ studentCode: String(studentCode).trim(), status: 'Deleted' });
 
     const result = await fetchLegacyStudentFromSheet(studentCode);
@@ -105,14 +134,14 @@ const registerStudent = asyncHandler(async (req, res) => {
         feeDetails
     } = req.body;
 
-    assertCanManageStudentClass(req.user, classBn);
+    await assertStudentActionPermission(req.user, 'add', classBn);
     await verifySiblingExistsIfWaiver(feeDetails, studentCode);
 
     const uniqueOr = [{ brnNumber }];
     if (boardRegNo) uniqueOr.push({ boardRegNo });
     if (studentCode) uniqueOr.push({ studentCode });
 
-    // আগে ডিলিট করা কোনো রেকর্ডে একই ID/BRN/BoardReg থাকলে তা স্থায়ীভাবে মুছে ফেলা
+    // আগে ডিলিট করা কোনো রেকর্ডে একই ID/BRN/BoardReg থাকলে তা স্থায়ীভাবে মুছে ফেলা
     await Student.deleteMany({
         status: 'Deleted',
         $or: uniqueOr
@@ -278,9 +307,9 @@ const updateStudent = asyncHandler(async (req, res) => {
         throw new ApiError(404, 'শিক্ষার্থী খুঁজে পাওয়া যায়নি!');
     }
 
-    assertCanManageStudentClass(req.user, student.classBn);
+    await assertStudentActionPermission(req.user, 'edit', student.classBn);
     if (req.body.classBn && req.body.classBn !== student.classBn) {
-        assertCanManageStudentClass(req.user, req.body.classBn);
+        await assertStudentActionPermission(req.user, 'edit', req.body.classBn);
     }
 
     const nextFeeDetails = req.body.feeDetails
@@ -380,7 +409,7 @@ const deleteStudent = asyncHandler(async (req, res) => {
         throw new ApiError(404, 'শিক্ষার্থী খুঁজে পাওয়া যায়নি!');
     }
 
-    assertCanManageStudentClass(req.user, student.classBn);
+    await assertStudentActionPermission(req.user, 'delete', student.classBn);
 
     const reason = req.body?.statusReason || 'প্রশাসনিকভাবে মুছে ফেলা হয়েছে';
 
@@ -418,6 +447,9 @@ const promoteStudentsBulk = asyncHandler(async (req, res) => {
     for (const item of promotions) {
         const student = await Student.findById(item.studentId);
         if (!student || student.status !== 'Active') continue;
+
+        await assertStudentActionPermission(req.user, 'edit', student.classBn);
+        await assertStudentActionPermission(req.user, 'edit', item.nextClassBn);
 
         const currentHist = student.academicHistory.find(
             h => h.session === student.session && h.classBn === student.classBn

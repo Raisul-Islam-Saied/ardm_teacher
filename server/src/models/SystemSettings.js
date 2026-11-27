@@ -35,6 +35,31 @@ const systemSettingsSchema = new mongoose.Schema({
         enableProRataForMidMonthJoin: { type: Boolean, default: true },
         autoDeductLoanInstallment: { type: Boolean, default: true }
     },
+    studentPortal: {
+        onlyAdminResults: { type: Boolean, default: true },
+        maintenanceMode: { type: Boolean, default: false },
+        resultPublishTime: { type: String, default: '2026-08-17T19:30:00+06:00' },
+        classTeacherPermissions: {
+            ownClass: {
+                add: { type: Boolean, default: true },
+                edit: { type: Boolean, default: true },
+                delete: { type: Boolean, default: true },
+                export: { type: Boolean, default: true }
+            },
+            otherClass: {
+                add: { type: Boolean, default: false },
+                edit: { type: Boolean, default: false },
+                delete: { type: Boolean, default: false },
+                export: { type: Boolean, default: false }
+            }
+        },
+        nonClassTeacherPermissions: {
+            add: { type: Boolean, default: false },
+            edit: { type: Boolean, default: false },
+            delete: { type: Boolean, default: false },
+            export: { type: Boolean, default: false }
+        }
+    },
     lastCronAuditDate: {
         type: String,
         default: null

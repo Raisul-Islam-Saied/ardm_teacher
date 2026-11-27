@@ -18,8 +18,46 @@ const WEEKDAY_NAMES_BN = ['রবি', 'সোম', 'মঙ্গল', 'বু�
 const MONTH_NAMES_BN = ['জানু', 'ফেব্রু', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুল', 'আগ', 'সেপ্টে', 'অক্টো', 'নভে', 'ডিসে'];
 
 // =========================================================================
-// ⚙️ ১. ডায়নামিক সিস্টেম সেটিংস (No-Code Policy Update)
+// ⚙️ ১. ডায়নামিক সিস্টেম সেটিংস (No-Code Policy Update)
 // =========================================================================
+const getPublicPortalSettings = asyncHandler(async (req, res) => {
+    const settings = await SystemSettings.getSettings();
+    const sp = settings.studentPortal || {};
+
+    return res.status(200).json(
+        new ApiResponse(200, 'পাবলিক পোর্টাল কনফিগারেশন', {
+            madrasahNameBng: settings.madrasahNameBng,
+            madrasahNameEng: settings.madrasahNameEng,
+            addressBng: settings.addressBng,
+            studentPortal: {
+                onlyAdminResults: sp.onlyAdminResults ?? true,
+                maintenanceMode: sp.maintenanceMode ?? false,
+                resultPublishTime: sp.resultPublishTime || '2026-08-17T19:30:00+06:00',
+                classTeacherPermissions: {
+                    ownClass: {
+                        add: sp.classTeacherPermissions?.ownClass?.add ?? true,
+                        edit: sp.classTeacherPermissions?.ownClass?.edit ?? true,
+                        delete: sp.classTeacherPermissions?.ownClass?.delete ?? true,
+                        export: sp.classTeacherPermissions?.ownClass?.export ?? true
+                    },
+                    otherClass: {
+                        add: sp.classTeacherPermissions?.otherClass?.add ?? false,
+                        edit: sp.classTeacherPermissions?.otherClass?.edit ?? false,
+                        delete: sp.classTeacherPermissions?.otherClass?.delete ?? false,
+                        export: sp.classTeacherPermissions?.otherClass?.export ?? false
+                    }
+                },
+                nonClassTeacherPermissions: {
+                    add: sp.nonClassTeacherPermissions?.add ?? false,
+                    edit: sp.nonClassTeacherPermissions?.edit ?? false,
+                    delete: sp.nonClassTeacherPermissions?.delete ?? false,
+                    export: sp.nonClassTeacherPermissions?.export ?? false
+                }
+            }
+        })
+    );
+});
+
 const getSystemSettings = asyncHandler(async (req, res) => {
     const settings = await SystemSettings.getSettings();
     return res.status(200).json(new ApiResponse(200, 'সিস্টেম কনফিগারেশন', settings));
@@ -27,6 +65,10 @@ const getSystemSettings = asyncHandler(async (req, res) => {
 
 const updateSystemSettings = asyncHandler(async (req, res) => {
     const current = await SystemSettings.getSettings();
+    const curPortal = current.studentPortal || {};
+    const reqPortal = req.body.studentPortal || {};
+    const curClassPerm = curPortal.classTeacherPermissions || {};
+    const reqClassPerm = reqPortal.classTeacherPermissions || {};
 
     const updated = await SystemSettings.findOneAndUpdate(
         { key: 'GLOBAL_SETTINGS' },
@@ -43,6 +85,24 @@ const updateSystemSettings = asyncHandler(async (req, res) => {
                     ...current.payrollPolicy,
                     ...(req.body.payrollPolicy || {})
                 },
+                studentPortal: {
+                    ...curPortal,
+                    ...reqPortal,
+                    classTeacherPermissions: {
+                        ownClass: {
+                            ...(curClassPerm.ownClass || {}),
+                            ...(reqClassPerm.ownClass || {})
+                        },
+                        otherClass: {
+                            ...(curClassPerm.otherClass || {}),
+                            ...(reqClassPerm.otherClass || {})
+                        }
+                    },
+                    nonClassTeacherPermissions: {
+                        ...(curPortal.nonClassTeacherPermissions || {}),
+                        ...(reqPortal.nonClassTeacherPermissions || {})
+                    }
+                },
                 updatedBy: req.user._id
             }
         },
@@ -52,14 +112,14 @@ const updateSystemSettings = asyncHandler(async (req, res) => {
     await AuditLog.create({
         action: 'SETTINGS_UPDATED',
         module: 'System',
-        description: 'সিস্টেম পলিসি ও সেটিংস আপডেট করা হয়েছে',
+        description: 'সিস্টেম পলিসি ও স্টুডেন্ট পোর্টাল সেটিংস আপডেট করা হয়েছে',
         performedBy: req.user._id,
         ipAddress: req.ip,
         metadata: req.body
     });
 
     return res.status(200).json(
-        new ApiResponse(200, 'সিস্টেম সেটিংস সফলভাবে আপডেট করা হয়েছে! এখন থেকে নতুন নিয়ম কার্যকর হবে।', updated)
+        new ApiResponse(200, 'সিস্টেম সেটিংস সফলভাবে আপডেট করা হয়েছে! এখন থেকে নতুন নিয়ম কার্যকর হবে।', updated)
     );
 });
 
@@ -70,10 +130,10 @@ const createLoanOrAdvance = asyncHandler(async (req, res) => {
     const { teacherId, type = 'Advance_Salary', totalAmount, monthlyInstallment, reason } = req.body;
 
     const teacher = await Teacher.findById(teacherId).lean();
-    if (!teacher) throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
+    if (!teacher) throw new ApiError(404, 'শিক্ষক খুঁজে পাওয়া যায়নি!');
 
     if (Number(monthlyInstallment) > Number(totalAmount)) {
-        throw new ApiError(400, 'মাসিক কিস্তির পরিমাণ মোট লোনের চেয়ে বেশি হতে পারে না!');
+        throw new ApiError(400, 'মাসিক কিস্তির পরিমাণ মোট লোনের চেয়ে বেশি হতে পারে না!');
     }
 
     const loan = await LoanAdvance.create({
@@ -89,14 +149,14 @@ const createLoanOrAdvance = asyncHandler(async (req, res) => {
     await AuditLog.create({
         action: 'LOAN_CREATED',
         module: 'Payroll',
-        description: `${teacher.fullNameBng}-কে ${totalAmount}৳ লোন/অগ্রিম দেওয়া হয়েছে (মাসিক কিস্তি: ${monthlyInstallment}৳)`,
+        description: `${teacher.fullNameBng}-কে ${totalAmount}৳ লোন/অগ্রিম দেওয়া হয়েছে (মাসিক কিস্তি: ${monthlyInstallment}৳)`,
         performedBy: req.user._id,
         targetTeacherId: teacher._id,
         ipAddress: req.ip
     });
 
     return res.status(201).json(
-        new ApiResponse(201, `${teacher.fullNameBng}-এর নামে ${totalAmount}৳ অগ্রিম/লোন এন্ট্রি হয়েছে। প্রতি মাসে ${monthlyInstallment}৳ স্বয়ংক্রিয়ভাবে কাটা হবে।`, loan)
+        new ApiResponse(201, `${teacher.fullNameBng}-এর নামে ${totalAmount}৳ অগ্রিম/লোন এন্ট্রি হয়েছে। প্রতি মাসে ${monthlyInstallment}৳ স্বয়ংক্রিয়ভাবে কাটা হবে।`, loan)
     );
 });
 
@@ -117,13 +177,13 @@ const getLoansAndAdvances = asyncHandler(async (req, res) => {
 const updateLoanStatus = asyncHandler(async (req, res) => {
     const { status, monthlyInstallment } = req.body;
     const loan = await LoanAdvance.findById(req.params.id);
-    if (!loan) throw new ApiError(404, 'লোন রেকর্ড পাওয়া যায়নি!');
+    if (!loan) throw new ApiError(404, 'লোন রেকর্ড পাওয়া যায়নি!');
 
     if (status) loan.status = status;
     if (monthlyInstallment) loan.monthlyInstallment = Number(monthlyInstallment);
     await loan.save();
 
-    return res.status(200).json(new ApiResponse(200, 'লোন স্ট্যাটাস আপডেট করা হয়েছে!', loan));
+    return res.status(200).json(new ApiResponse(200, 'লোন স্ট্যাটাস আপডেট করা হয়েছে!', loan));
 });
 
 // =========================================================================
@@ -341,7 +401,7 @@ const exportFullDatabaseBackup = asyncHandler(async (req, res) => {
     await AuditLog.create({
         action: 'BACKUP_EXPORTED',
         module: 'System',
-        description: 'সম্পূর্ণ ডাটাবেস ব্যাকআপ ডাউনলোড করা হয়েছে',
+        description: 'সম্পূর্ণ ডাটাবেস ব্যাকআপ ডাউনলোড করা হয়েছে',
         performedBy: req.user._id,
         ipAddress: req.ip
     });
@@ -364,6 +424,7 @@ const getAuditLogs = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
+    getPublicPortalSettings,
     getSystemSettings,
     updateSystemSettings,
     createLoanOrAdvance,

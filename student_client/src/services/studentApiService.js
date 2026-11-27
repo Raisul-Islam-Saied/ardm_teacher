@@ -1,7 +1,7 @@
 /**
 - ARDM Student Portal — API Service (Centralized ERP backend)
  */
-import { ALLOWED_ROLES } from '../config/systemConfig';
+import { ALLOWED_ROLES, syncPortalSettings } from '../config/systemConfig';
 import axiosClient, {
     clearAuthSessionStorage,
     setAuthSessionStorage
@@ -31,8 +31,11 @@ const unwrapUser = (res) =>
 
 export const authApi = {
     async login(identifier, password) {
+        const cleanId = String(identifier || '').trim();
         const res = await axiosClient.post('/auth/login', {
-            identifier: String(identifier || '').trim(),
+            phone: cleanId,
+            identifier: cleanId,
+            teacherCode: cleanId,
             password: String(password || '').trim()
         });
         const body = res.data?.data || res.data || {};
@@ -53,6 +56,29 @@ export const authApi = {
         return user;
     },
 
+    async forgotPassword(email) {
+        const res = await axiosClient.post('/auth/forgot-password', {
+            email: String(email || '').trim().toLowerCase()
+        });
+        return res.data;
+    },
+
+    async resetPassword(token, newPassword) {
+        const res = await axiosClient.post('/auth/reset-password', {
+            token: String(token || '').trim(),
+            newPassword: String(newPassword || '').trim()
+        });
+        return res.data;
+    },
+
+    async changePassword(currentPassword, newPassword) {
+        const res = await axiosClient.patch('/auth/change-password', {
+            currentPassword: String(currentPassword || '').trim(),
+            newPassword: String(newPassword || '').trim()
+        });
+        return res.data;
+    },
+
     async logout() {
         try {
             await axiosClient.post('/auth/logout');
@@ -61,6 +87,38 @@ export const authApi = {
         } finally {
             clearAuthSessionStorage();
         }
+    }
+};
+
+export const systemSettingsApi = {
+    /** GET /system/settings/public (লগইন ছাড়াই পোর্টাল সেটিংস লোড) */
+    async getPublicSettings() {
+        const res = await axiosClient.get('/system/settings/public');
+        const data = res.data?.data || res.data || {};
+        if (data.studentPortal) {
+            syncPortalSettings(data.studentPortal);
+        }
+        return data;
+    },
+
+    /** GET /system/settings (পূর্ণ গ্লোবাল সেটিংস) */
+    async getSettings() {
+        const res = await axiosClient.get('/system/settings');
+        const data = res.data?.data || res.data || {};
+        if (data.studentPortal) {
+            syncPortalSettings(data.studentPortal);
+        }
+        return data;
+    },
+
+    /** PUT /system/settings (SuperAdmin / Admin আপডেট) */
+    async updateSettings(payload) {
+        const res = await axiosClient.put('/system/settings', payload);
+        const data = res.data?.data || res.data || {};
+        if (data.studentPortal) {
+            syncPortalSettings(data.studentPortal);
+        }
+        return { data, message: res.data?.message };
     }
 };
 

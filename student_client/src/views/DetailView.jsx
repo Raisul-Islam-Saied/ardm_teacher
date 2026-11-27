@@ -6,16 +6,16 @@ import {
 import { useEffect, useMemo, useState, useRef } from 'react';
 import signImg from '../assets/principal-sign.png';
 import { CLASS_ORDER, CONFIG, DEFAULT_IMAGE } from '../config/systemConfig';
-import { getDaysUntilBirthday, formatDate as formatDateGlobal, REGEX } from '../models/studentModel';
+import { canDeleteStudent, canEditStudent, getDaysUntilBirthday, formatDate as formatDateGlobal, REGEX } from '../models/studentModel';
 import { CLASS_PALETTE } from './UIComponents';
 
 // ================================================================
 // PREMIUM DETAIL VIEW — extracted 100% verbatim from the original Index.jsx
 // (single CR80 ID card front/back + A5 profile print, WhatsApp message, siblings card)
 // ================================================================
-const DetailView = ({ data, currentUser, onBack, onEdit, onDelete, onImageClick, siblings = [], onSelectSibling }) => {
-  // RBAC: টিচার তখনই এডিট/ডিলিট দেখবে যখন সার্ভার প্রোফাইলে canEditAssignedClass = true
-  const CAN_CLASS_TEACHER_EDIT = currentUser?.canEditAssignedClass === true;
+const DetailView = ({ data, currentUser, portalSettings, onBack, onEdit, onDelete, onImageClick, siblings = [], onSelectSibling }) => {
+  const canEdit = canEditStudent(currentUser, data, portalSettings);
+  const canDelete = canDeleteStudent(currentUser, data, portalSettings);
   const [mounted, setMounted] = useState(false);
   const [activeSection, setActiveSection] = useState(null);
   const scrollRef = useRef(null);
@@ -1354,9 +1354,9 @@ if (currentUser?.role === "Admin") {
         </div>
 
         {/* ══════════════════════════════════════
-            STICKY BOTTOM — Edit / Delete
+            STICKY BOTTOM — Edit / Delete (Dynamic RBAC)
         ══════════════════════════════════════ */}
-        {(currentUser?.role === "Admin" || (currentUser?.role === "Class" && data.ClassBn === currentUser?.classBn && CAN_CLASS_TEACHER_EDIT)) && (
+        {(canEdit || canDelete) && (
           <div
             className="fixed bottom-0 left-0 right-0 z-30 px-4 pb-8 pt-4 dv-slide-up"
             style={{
@@ -1365,29 +1365,34 @@ if (currentUser?.role === "Admin") {
             }}
           >
             <div className="flex gap-3">
-              <button
-                onClick={onEdit}
-                className="dv-action-btn flex-1 flex items-center justify-center gap-2.5 py-4 rounded-[20px] font-black text-sm text-white"
-                style={{
-                  background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)',
-                  boxShadow: '0 12px 40px rgba(6,13,31,0.35)',
-                }}
-              >
-                <Edit3 size={18} />
-                Edit Profile
-              </button>
-              <button
-                onClick={() => onDelete(data.ID)}
-                className="dv-action-btn w-16 rounded-[20px] flex items-center justify-center"
-                style={{
-                  background: '#FEF2F2',
-                  border: '1.5px solid #FECACA',
-                  color: '#EF4444',
-                  boxShadow: '0 4px 16px rgba(239,68,68,0.15)',
-                }}
-              >
-                <Trash2 size={22} />
-              </button>
+              {canEdit && (
+                <button
+                  onClick={onEdit}
+                  className="dv-action-btn flex-1 flex items-center justify-center gap-2.5 py-4 rounded-[20px] font-black text-sm text-white"
+                  style={{
+                    background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)',
+                    boxShadow: '0 12px 40px rgba(6,13,31,0.35)',
+                  }}
+                >
+                  <Edit3 size={18} />
+                  Edit Profile
+                </button>
+              )}
+              {canDelete && (
+                <button
+                  onClick={() => onDelete(data.ID)}
+                  className={`dv-action-btn ${canEdit ? 'w-16' : 'flex-1 gap-2 text-sm font-black'} py-4 rounded-[20px] flex items-center justify-center`}
+                  style={{
+                    background: '#FEF2F2',
+                    border: '1.5px solid #FECACA',
+                    color: '#EF4444',
+                    boxShadow: '0 4px 16px rgba(239,68,68,0.15)',
+                  }}
+                >
+                  <Trash2 size={22} />
+                  {!canEdit && <span>Delete Student</span>}
+                </button>
+              )}
             </div>
           </div>
         )}

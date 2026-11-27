@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const {
+    getPublicPortalSettings,
     getSystemSettings,
     updateSystemSettings,
     createLoanOrAdvance,
@@ -13,6 +14,9 @@ const {
 } = require('../controllers/system.controller');
 const { protect, restrictTo } = require('../middlewares/auth.middleware');
 const { ROLES } = require('../constants/system.constants');
+
+// পাবলিক রাউট: লগইন ছাড়াই মেইনটেন্যান্স মোড ও রেজাল্ট পাবলিশ টাইম জানার জন্য
+router.get('/settings/public', getPublicPortalSettings);
 
 router.use(protect);
 
@@ -29,7 +33,7 @@ router.patch('/loans/:id', restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN), updateLoa
 router.get('/dashboard', restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN), getAdminDashboardOverview);
 router.get('/bank-advice', restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN), getBankTransferAdviceSheet);
 
-// ৪. ওয়ান-ক্লিক ডাটাবেস ব্যাকআপ ও সিকিউরিটি অডিট লগ
+// ৪. ওয়ান-ক্লিক ডাটাবেস ব্যাকআপ ও সিকিউরিটি অডিট লগ
 router.get('/backup', restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN), exportFullDatabaseBackup);
 router.get('/audit-logs', restrictTo(ROLES.SUPER_ADMIN, ROLES.ADMIN), getAuditLogs);
 

@@ -10,10 +10,12 @@ import {
   Copy,
   FileText,
   Filter,
+  GraduationCap,
   Home,
   IdCard,
   Layers,
   Loader2,
+  Menu,
   Printer,
   RefreshCw,
   Search,
@@ -23,12 +25,15 @@ import {
   Users,
   X
 } from 'lucide-react';
+import { useState } from 'react';
 import { useNavigate } from "react-router-dom";
 import AdvancedFilter from './AdvancedFilter';
 import { CLASS_ORDER, CONFIG } from "./config/systemConfig";
 import useStudentController from "./controllers/useStudentController";
 import ImageViewer from './ImageViewer';
+import { canCreateStudent, canEditStudent } from './models/studentModel';
 import PdfExportModal from './PdfExportModal';
+import { systemSettingsApi } from './services/studentApiService';
 import DetailView from "./views/DetailView";
 import FullForm from "./views/FullForm";
 import LoginView from "./views/LoginView";
@@ -45,8 +50,10 @@ import {
 
 const Index = () => {
   const navigate = useNavigate();
+  const [isQuickMenuOpen, setIsQuickMenuOpen] = useState(false);
+
   const {
-    currentUser, authLoading, login, handleLogout,
+    currentUser, authLoading, portalSettings, login, handleLogout,
     loading, processing, isSyncing, loadData,
     tab, detailData, isEdit, studentId,
     searchText, setSearchText, classFilter, setClassFilter, sortConfig, setSortConfig,
@@ -62,9 +69,45 @@ const Index = () => {
     checkExportPermission
   } = useStudentController();
 
-  const CAN_CLASS_TEACHER_EDIT = currentUser?.canEditAssignedClass === true;
-  const canAddStudent = currentUser?.role === "Admin" || (currentUser?.role === "Class" && CAN_CLASS_TEACHER_EDIT);
+  const canAddStudent = canCreateStudent(currentUser, null, portalSettings);
+  const canAccessFormRoute = isEdit
+    ? (!detailData || canEditStudent(currentUser, detailData, portalSettings))
+    : canAddStudent;
   const roleFilteredStudents = students;
+
+  // সিঙ্ক বাটন হ্যান্ডলার (ডাটা + সিস্টেম সেটিংস রিফ্রেশ)
+  const handleManualSync = async () => {
+    if (isSyncing) return;
+    try {
+      await Promise.allSettled([
+        loadData(true),
+        systemSettingsApi.getSettings()
+      ]);
+      showToast("ডাটা ও সেটিংস সফলভাবে সিঙ্ক হয়েছে", "success");
+    } catch {
+      showToast("সিঙ্ক করতে সমস্যা হয়েছে", "error");
+    }
+  };
+
+  // নিচের ৩-বার মেনুর ভাসমান আইটেমসমূহ (ভবিষ্যতে এখানে আরও যোগ করা যাবে)
+  const floatingMenuItems = [
+    {
+      id: 'result',
+      label: 'ফলাফল (Result)',
+      subLabel: 'পরীক্ষার ফলাফল ও মার্কশিট',
+      icon: Award,
+      iconBg: 'bg-amber-500/15 text-amber-400 border-amber-400/30',
+      path: '/result'
+    },
+    {
+      id: 'teacher',
+      label: 'শিক্ষক (Teacher)',
+      subLabel: 'শিক্ষক তালিকা ও তথ্যভাণ্ডার',
+      icon: GraduationCap,
+      iconBg: 'bg-emerald-500/15 text-emerald-400 border-emerald-400/30',
+      path: '/teacher'
+    }
+  ];
 
   if (authLoading) {
     return (
@@ -180,28 +223,29 @@ const Index = () => {
                 >
                   <Award size={14} /> ফলাফল
                 </button>
+                <button
+                  onClick={() => navigate('/teacher')}
+                  className="px-4 py-2 rounded-xl text-blue-700 hover:bg-blue-50 text-xs font-black flex items-center gap-1.5 transition"
+                >
+                  <GraduationCap size={14} /> শিক্ষক
+                </button>
               </nav>
 
-              {/* Right Actions: Result (Mobile), Sync, Profile Pill */}
+              {/* Right Actions: Sync & Profile Pill */}
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => navigate("/result")}
-                  title="ফলাফল"
-                  className="lg:hidden p-2.5 bg-amber-50 hover:bg-amber-100 rounded-xl text-amber-600 transition"
-                >
-                  <Award size={19} />
-                </button>
-
-                <button
-                  onClick={() => loadData(true)}
-                  title="ডাটা রিফ্রেশ করুন"
-                  className="p-2.5 bg-slate-100 hover:bg-slate-200/80 rounded-xl transition flex items-center gap-1.5"
+                  type="button"
+                  onClick={handleManualSync}
+                  disabled={isSyncing}
+                  title="ডাটা ও সেটিংস সিঙ্ক করুন"
+                  className="p-2.5 bg-slate-100 hover:bg-slate-200/80 active:scale-95 rounded-xl transition flex items-center gap-1.5 cursor-pointer disabled:opacity-70"
                 >
                   <RefreshCw size={18} className={`transition-all duration-300 ${isSyncing ? 'animate-spin text-blue-600' : 'text-slate-600'}`} />
                   <span className="hidden xl:inline text-[11px] font-black text-slate-600">সিঙ্ক</span>
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => navigate('/profile')}
                   title="আমার প্রোফাইল ও হাজিরা"
                   className="flex items-center gap-2.5 pl-1.5 pr-3 py-1.5 rounded-2xl bg-[#060D1F] hover:bg-slate-800 border border-[#D4A843]/40 text-white shadow-sm active:scale-95 transition"
@@ -528,7 +572,7 @@ const Index = () => {
               <input
                 autoFocus
                 className="w-full bg-white pl-12 pr-10 py-4 rounded-2xl border border-slate-200/80 shadow-sm outline-none focus:ring-2 focus:ring-[#060D1F] font-bold text-base lg:text-lg placeholder:font-medium placeholder:text-slate-300"
-                placeholder="নাম, আইডি, রোল বা মোবাইল নম্বর দিয়ে খুঁজুন..."
+                placeholder="নাম, আইডি, রোল বা মোবাইল নম্বর দিয়ে খুঁজুন..."
                 value={searchText}
                 onChange={e => setSearchText(e.target.value)}
               />
@@ -565,7 +609,7 @@ const Index = () => {
 
       {/* ==================== ROUTE: /admission & /students/:id/edit ==================== */}
       {tab === 'add' && (
-        (currentUser.role === "Visitor" || (currentUser.role === "Class" && !CAN_CLASS_TEACHER_EDIT))
+        !canAccessFormRoute
           ? null
           : (
             <div className="pt-20 px-4 sm:px-6 pb-12 max-w-2xl mx-auto">
@@ -584,6 +628,7 @@ const Index = () => {
                 <FullForm
                   initialData={isEdit ? detailData : null}
                   currentUser={currentUser}
+                  portalSettings={portalSettings}
                   onSave={handleSave}
                   onCancel={() => {
                     if (isEdit && studentId) {
@@ -608,6 +653,7 @@ const Index = () => {
               data={detailData}
               onImageClick={(img) => setViewerImg(img)}
               currentUser={currentUser}
+              portalSettings={portalSettings}
               siblings={siblingsOfDetail}
               onSelectSibling={(sib) => {
                 navigate(`/students/${sib.ID}`);
@@ -639,23 +685,83 @@ const Index = () => {
         )
       )}
 
+      {/* ==================== FLOATING QUICK MENU (Triggered by Bottom 3-Bar Menu) ==================== */}
+      {isQuickMenuOpen && (
+        <>
+          <div
+            onClick={() => setIsQuickMenuOpen(false)}
+            className="lg:hidden fixed inset-0 bg-slate-950/35 backdrop-blur-[2px] z-40 transition-opacity"
+          />
+          <div className="lg:hidden fixed bottom-24 right-4 z-50 w-64 rounded-3xl bg-[#060D1F]/95 backdrop-blur-xl border border-[#D4A843]/35 p-3 shadow-[0_20px_50px_rgba(6,13,31,0.55)] text-white">
+            <div className="flex items-center justify-between px-2 pb-2 mb-2 border-b border-white/10">
+              <span className="text-[10px] font-black uppercase tracking-widest text-[#D4A843]">
+                Quick Menu
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsQuickMenuOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            <div className="space-y-1.5">
+              {floatingMenuItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setIsQuickMenuOpen(false);
+                      navigate(item.path);
+                    }}
+                    className="w-full flex items-center gap-3 p-2.5 rounded-2xl bg-white/5 hover:bg-white/15 active:scale-95 transition text-left"
+                  >
+                    <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${item.iconBg}`}>
+                      <Icon size={18} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-black text-white truncate">{item.label}</p>
+                      <p className="text-[10px] font-semibold text-slate-400 truncate">{item.subLabel}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
+
       {/* ==================== MOBILE BOTTOM NAV (Hidden on Desktop) ==================== */}
       {!studentId && tab !== 'add' && tab !== 'profile' && (
         <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200/70 h-20 px-6 flex justify-between items-end pb-3 z-40 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
-          <NavTab icon={Home} label="Home" active={tab === 'home'} onClick={() => navigate('/')} />
+          <NavTab
+            icon={Home}
+            label="Home"
+            active={tab === 'home' && !isQuickMenuOpen}
+            onClick={() => {
+              setIsQuickMenuOpen(false);
+              navigate('/');
+            }}
+          />
           {canAddStudent && (
             <NavTab
               icon={UserPlus}
               label="Add"
               main
-              onClick={() => navigate('/admission/1')}
+              onClick={() => {
+                setIsQuickMenuOpen(false);
+                navigate('/admission/1');
+              }}
             />
           )}
           <NavTab
-            icon={Search}
-            label="Search"
-            active={tab === 'search'}
-            onClick={() => navigate('/search')}
+            icon={Menu}
+            label="Menu"
+            active={isQuickMenuOpen}
+            onClick={() => setIsQuickMenuOpen((v) => !v)}
           />
         </div>
       )}

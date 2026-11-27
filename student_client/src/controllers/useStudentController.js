@@ -1,15 +1,16 @@
 /**
 - ARDM Student Portal — State & RBAC Controller (MVC "controller")
-- - ERP session (shared JWT with Teacher client) + role mapping
+- - ERP session (shared JWT with Teacher client) + dynamic RBAC settings
 - - student CRUD against the centralized backend
 - - search / class filter / sort + React Router URL sync
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { CLASS_ORDER, DEFAULT_IMAGE } from '../config/systemConfig';
+import { CLASS_ORDER, DEFAULT_IMAGE, getPortalSettings } from '../config/systemConfig';
 import {
   canCreateStudent,
-  canManageStudent,
+  canDeleteStudent,
+  canEditStudent,
   findSiblings,
   getDaysUntilBirthday,
   toServerPayload,
@@ -24,7 +25,7 @@ import {
   getStoredAuthUser
 } from '../services/axiosClient';
 import { uploadSquarePhotoToCloudinary } from '../services/cloudinaryClient';
-import { authApi, studentApi } from '../services/studentApiService';
+import { authApi, studentApi, systemSettingsApi } from '../services/studentApiService';
 import { createExportController } from './exportController';
 
 const STUDENTS_CACHE_KEY = 'ardm_students_cache_v2';
@@ -36,6 +37,7 @@ export default function useStudentController() {
 
   const [currentUser, setCurrentUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [portalSettings, setPortalSettings] = useState(() => getPortalSettings());
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -138,13 +140,33 @@ export default function useStudentController() {
     return () => { cancelled = true; };
   }, []);
 
+  // সার্ভার থেকে ডায়নামিক সিস্টেম সেটিংস সিঙ্ক রাখা
+  useEffect(() => {
+    if (!currentUser) return undefined;
+    let cancelled = false;
+    systemSettingsApi
+      .getSettings()
+      .then(() => {
+        if (!cancelled) setPortalSettings(getPortalSettings());
+      })
+      .catch(() => {
+        if (!cancelled) setPortalSettings(getPortalSettings());
+      });
+    return () => { cancelled = true; };
+  }, [currentUser?._id, pathname]);
+
   const login = async (identifier, password) => {
     try {
       const { user } = await authApi.login(identifier, password);
       setCurrentUser(toUiUser(user));
       return { ok: true };
     } catch (err) {
-      return { ok: false, message: extractApiErrorMessage(err, 'লগিন ব্যর্থ হয়েছে') };
+      return {
+        ok: false,
+        status: err?.response?.status,
+        retryAfterSeconds: Number(err?.response?.data?.meta?.retryAfterSeconds) || 0,
+        message: extractApiErrorMessage(err, 'লগিন ব্যর্থ হয়েছে')
+      };
     }
   };
 
@@ -228,11 +250,22 @@ export default function useStudentController() {
     return () => window.removeEventListener("popstate", handleModalBack);
   }, [isFilterOpen, viewerImg, isPdfModalOpen]);
 
-  // 3. CREATE / UPDATE
+  // 3. CREATE / UPDATE (Dynamic RBAC enforced)
   const handleSave = async (formData, extra = {}) => {
-    if (isEdit ? !canManageStudent(currentUser, detailData) : !canCreateStudent(currentUser)) {
-      showToast("আপনার ডাটা অ্যাড বা এডিট করার অনুমতি নেই", "error");
-      return { ok: false };
+    if (isEdit) {
+      if (!canEditStudent(currentUser, detailData, portalSettings)) {
+        showToast("আপনার এই শিক্ষার্থীর তথ্য পরিবর্তন করার অনুমতি নেই", "error");
+        return { ok: false };
+      }
+      if (formData.classBn && !canEditStudent(currentUser, { ClassBn: formData.classBn }, portalSettings)) {
+        showToast("নির্বাচিত শ্রেণিতে তথ্য পরিবর্তন করার অনুমতি আপনার নেই", "error");
+        return { ok: false };
+      }
+    } else {
+      if (!canCreateStudent(currentUser, formData.classBn || null, portalSettings)) {
+        showToast("নির্বাচিত শ্রেণিতে নতুন শিক্ষার্থী ভর্তি করার অনুমতি আপনার নেই", "error");
+        return { ok: false };
+      }
     }
 
     const exists = students.find(s =>
@@ -245,11 +278,6 @@ export default function useStudentController() {
     if (exists) {
       showToast("এই ক্লাসে এই রোল নম্বর আগে থেকেই আছে!", "error");
       return { ok: false, fieldErrors: [{ field: 'roll', message: `'${exists.StudentNameBn}'-এর রোল ইতিমধ্যে ${formData.roll}` }] };
-    }
-
-    if (currentUser.role === "Class" && formData.classBn !== currentUser.classBn) {
-      alert("আপনি শুধু নিজের ক্লাসে ডাটা দিতে পারবেন");
-      return { ok: false };
     }
 
     setProcessing(true);
@@ -277,6 +305,7 @@ export default function useStudentController() {
 
       if (!isEdit) {
         localStorage.removeItem("draftStudentForm");
+        localStorage.removeItem("ardm_admission_draft_v2");
       }
       await loadData(false);
       showToast(result.message || "সফল হয়েছে", "success");
@@ -301,11 +330,11 @@ export default function useStudentController() {
     }
   };
 
-  // 4. SOFT DELETE
+  // 4. SOFT DELETE (Dynamic RBAC enforced)
   const handleDelete = async (id) => {
     const target = students.find(s => s.ID === id) || detailData;
-    if (!canManageStudent(currentUser, target)) {
-      showToast("আপনার এই ডাটা ডিলিট করার অনুমতি নেই", "error");
+    if (!canDeleteStudent(currentUser, target, portalSettings)) {
+      showToast("আপনার এই শিক্ষার্থীর ডাটা ডিলিট করার অনুমতি নেই", "error");
       return;
     }
 
@@ -443,10 +472,10 @@ export default function useStudentController() {
   }, [roleFilteredStudents, searchText, sortConfig, classFilter, currentUser, advancedFilteredData]);
 
   // 6. EXPORTS
-  const exportsApi = createExportController({ filteredList, currentUser, showToast, setContactProgress });
+  const exportsApi = createExportController({ filteredList, currentUser, showToast, setContactProgress, portalSettings });
 
   return {
-    currentUser, authLoading, login, handleLogout,
+    currentUser, authLoading, portalSettings, login, handleLogout,
     students, loading, processing, isSyncing, loadData,
     tab, detailData, isEdit, studentId,
     searchText, setSearchText, classFilter, setClassFilter, sortConfig, setSortConfig,

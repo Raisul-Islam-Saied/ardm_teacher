@@ -1,9 +1,9 @@
 /**
-- ARDM Student Portal — Student Model (MongoDB <-> original UI adapter)
+- ARDM Student Portal — Student Model (MongoDB <-> original UI adapter + Dynamic RBAC)
 - Server docs use fullNameBng / studentCode / ... ; the original UI (DetailView, exports,
 - filters, ID cards) uses StudentNameBn / ID / ... — this file converts both ways.
  */
-import { CLASS_ORDER } from '../config/systemConfig';
+import { CLASS_ORDER, getPortalSettings } from '../config/systemConfig';
 
 // ------------------------------------------------------------------
 // Original helpers (verbatim)
@@ -59,8 +59,6 @@ export const toISODate = (dStr) => {
 
 // ------------------------------------------------------------------
 // Class name normalisation
-// Server stores "২য়"/"৩য়" with য + ় (U+09AF U+09BC); the original UI uses the
-// single character য় (U+09DF). UI form is canonical inside the client.
 // ------------------------------------------------------------------
 export const toUiClass = (s) => String(s || '').replace(/\u09AF\u09BC/g, '\u09DF');
 export const toServerClass = (s) => String(s || '').replace(/\u09DF/g, '\u09AF\u09BC');
@@ -236,8 +234,6 @@ export const toServerPayload = (form, { isUpdate = false, imageUrl, publicId, mi
     payload.status = form.status || 'Active';
     payload.statusReason = clean(form.statusReason);
   } else {
-    // নতুন ভর্তিতে ১০ ডিজিটের আইডি সার্ভার নিজেই বানায় (একই অ্যালগরিদম)।
-    // শিট থেকে মাইগ্রেশনে পুরনো আইডি অবিকৃত রাখা হয়।
     if (migration?.studentCode) {
       payload.studentCode = migration.studentCode;
       payload.migratedFromSheet = true;
@@ -248,7 +244,7 @@ export const toServerPayload = (form, { isUpdate = false, imageUrl, publicId, mi
 };
 
 // ------------------------------------------------------------------
-// Smart ID (same algorithm as the original form & the server)
+// Smart ID
 // ------------------------------------------------------------------
 export const generateStudentId = (sessionYear, dob, classBn, roll) => {
   if (!sessionYear || !dob || !classBn || !roll) return '';
@@ -259,7 +255,7 @@ export const generateStudentId = (sessionYear, dob, classBn, roll) => {
 };
 
 // ------------------------------------------------------------------
-// Sibling detection (verbatim logic from original Index)
+// Sibling detection
 // ------------------------------------------------------------------
 export const cleanFamilyName = (name) =>
   (name || '')
@@ -285,7 +281,6 @@ export const findSiblings = (list, detailData) => {
       return score >= 2;
     })
     .sort((a, b) => {
-      // বড় থেকে ছোট (জন্ম তারিখ অনুযায়ী), DOB না থাকলে ক্লাস অনুযায়ী
       const da = a.DOB ? new Date(a.DOB) : null;
       const db = b.DOB ? new Date(b.DOB) : null;
       if (da && db) return da - db;
@@ -294,8 +289,7 @@ export const findSiblings = (list, detailData) => {
 };
 
 // ------------------------------------------------------------------
-// Auth user (ERP) -> legacy UI user shape used by the original views
-//   SuperAdmin/Admin -> role "Admin"      Teacher -> role "Class"
+// Auth user (ERP) -> UI user shape
 // ------------------------------------------------------------------
 export const toUiUser = (user) => {
   if (!user) return null;
@@ -305,6 +299,9 @@ export const toUiUser = (user) => {
     ...user,
     role: isAdmin ? 'Admin' : 'Class',
     erpRole: user.role,
+    isSuperAdmin: user.role === 'SuperAdmin',
+    isAdminRole: isAdmin,
+    isClassTeacher: !isAdmin && Boolean(classBn),
     classBn,
     classEn: CLASS_EN_MAP[classBn] || '',
     canEditAssignedClass: user.canEditAssignedClass === true,
@@ -312,20 +309,61 @@ export const toUiUser = (user) => {
   };
 };
 
-// RBAC (spec §4)
-export const canManageStudent = (uiUser, student) => {
+// ------------------------------------------------------------------
+// Dynamic RBAC (reads GLOBAL_SETTINGS.studentPortal from server)
+// action: 'add' | 'edit' | 'delete' | 'export'
+// ------------------------------------------------------------------
+export const hasStudentPermission = (uiUser, action, targetClassBn = null, settingsOverride = null) => {
   if (!uiUser) return false;
-  if (uiUser.role === 'Admin') return true;
-  return (
-    uiUser.role === 'Class' &&
-    uiUser.canEditAssignedClass === true &&
-    !!uiUser.classBn &&
-    (!student || student.ClassBn === uiUser.classBn)
-  );
+  if (uiUser.role === 'Admin' || uiUser.erpRole === 'SuperAdmin' || uiUser.erpRole === 'Admin') {
+    return true;
+  }
+
+  const sp = settingsOverride || getPortalSettings();
+  const isClassTeacher = Boolean(uiUser.classBn);
+
+  // নন-ক্লাস টিচার (যার কোনো শ্রেণি অ্যাসাইন করা নেই)
+  if (!isClassTeacher) {
+    return Boolean(sp?.nonClassTeacherPermissions?.[action]);
+  }
+
+  // ক্লাস টিচার (যার একটি নির্দিষ্ট শ্রেণি অ্যাসাইন করা আছে)
+  const ownPerm = Boolean(sp?.classTeacherPermissions?.ownClass?.[action]);
+  const otherPerm = Boolean(sp?.classTeacherPermissions?.otherClass?.[action]);
+
+  if (!targetClassBn) {
+    return ownPerm || otherPerm;
+  }
+
+  const normalizedTarget = toUiClass(targetClassBn);
+  const isOwnClass = normalizedTarget === uiUser.classBn;
+  return isOwnClass ? ownPerm : otherPerm;
 };
 
-export const canCreateStudent = (uiUser) =>
-  !!uiUser && (uiUser.role === 'Admin' || (uiUser.role === 'Class' && uiUser.canEditAssignedClass === true && !!uiUser.classBn));
+export const canCreateStudent = (uiUser, targetClassBn = null, settingsOverride = null) =>
+  hasStudentPermission(uiUser, 'add', targetClassBn, settingsOverride);
+
+export const canEditStudent = (uiUser, student, settingsOverride = null) =>
+  hasStudentPermission(uiUser, 'edit', student?.ClassBn || null, settingsOverride);
+
+export const canDeleteStudent = (uiUser, student, settingsOverride = null) =>
+  hasStudentPermission(uiUser, 'delete', student?.ClassBn || null, settingsOverride);
+
+export const canExportStudents = (uiUser, targetClassBn = null, settingsOverride = null) =>
+  hasStudentPermission(uiUser, 'export', targetClassBn, settingsOverride);
+
+// ব্যাকওয়ার্ড কমপ্যাটিবিলিটির জন্য (DetailView ও Controller-এ ব্যবহৃত)
+export const canManageStudent = (uiUser, student, settingsOverride = null) =>
+  canEditStudent(uiUser, student, settingsOverride);
+
+// ফর্ম বা এক্সপোর্টে একজন শিক্ষক কোন কোন শ্রেণিতে কাজ করতে পারবেন তা বের করার হেল্পার
+export const getAllowedClassesForAction = (uiUser, action = 'add', settingsOverride = null) => {
+  if (!uiUser) return [];
+  if (uiUser.role === 'Admin' || uiUser.erpRole === 'SuperAdmin' || uiUser.erpRole === 'Admin') {
+    return [...CLASS_LIST_BN];
+  }
+  return CLASS_LIST_BN.filter((cls) => hasStudentPermission(uiUser, action, cls, settingsOverride));
+};
 
 // ------------------------------------------------------------------
 // Server field name -> form field + step (for inline error mapping)

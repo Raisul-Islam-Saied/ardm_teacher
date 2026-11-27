@@ -27,6 +27,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   CLASS_LIST_BN,
   generateStudentId,
+  getAllowedClassesForAction,
   isSeniorClass,
   legacyToFormState,
   mapServerFieldErrors,
@@ -654,8 +655,9 @@ const AddressCascadeBlock = ({
 // ==============================================
 // MAIN FULLFORM COMPONENT (ULTRA-PREMIUM 6-STEP)
 // ==============================================
-const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdmin }) => {
+const FullForm = ({ initialData, currentUser, portalSettings, onSave, onCancel, showToast, isAdmin }) => {
   const isUpdate = !!initialData;
+  const allowedClasses = getAllowedClassesForAction(currentUser, isUpdate ? 'edit' : 'add', portalSettings);
   const navigate = useNavigate();
   const { step: stepParam, studentId } = useParams();
 
@@ -999,7 +1001,7 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
     localStorage.removeItem('draftStudentForm');
     setForm({
       ...defaultState,
-      classBn: currentUser?.role === 'Class' ? currentUser.classBn : ''
+      classBn: allowedClasses.length === 1 ? allowedClasses[0] : (allowedClasses.includes(currentUser?.classBn) ? currentUser.classBn : '')
     });
     goToStep(1, true);
     setAdmissionMode('new');
@@ -1125,10 +1127,16 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
   }, [initialData]);
 
   useEffect(() => {
-    if (!initialData && currentUser?.role === 'Class') {
-      setForm((f) => ({ ...f, classBn: currentUser.classBn }));
+    if (!initialData && allowedClasses.length > 0) {
+      setForm((f) => {
+        if (f.classBn && allowedClasses.includes(f.classBn)) return f;
+        if (currentUser?.classBn && allowedClasses.includes(currentUser.classBn)) {
+          return { ...f, classBn: currentUser.classBn };
+        }
+        return allowedClasses.length === 1 ? { ...f, classBn: allowedClasses[0] } : f;
+      });
     }
-  }, [initialData, currentUser]);
+  }, [initialData, currentUser, allowedClasses.join(',')]);
 
   useEffect(() => {
     if (!initialData && !migration && form.sessionYear && form.dob && form.classBn && form.roll) {
@@ -1509,7 +1517,9 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
         ...defaultState,
         ...f,
         sessionYear: getDefaultAcademicSession(),
-        classBn: currentUser?.role === 'Class' ? currentUser.classBn : (f.classBn || ''),
+        classBn: allowedClasses.includes(f.classBn)
+          ? f.classBn
+          : (allowedClasses.includes(currentUser?.classBn) ? currentUser.classBn : (allowedClasses[0] || '')),
         sameAsPresent: true
       };
       setForm(merged);
@@ -1524,7 +1534,7 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
     }
   };
 
-  const classLocked = currentUser?.role === 'Class';
+  const classLocked = !isAdmin && allowedClasses.length <= 1;
   const liveAge = (() => {
     if (!form.dob || errors.dob) return null;
     const diff = (new Date() - new Date(form.dob)) / (365.25 * 24 * 3600 * 1000);
@@ -1926,7 +1936,9 @@ const FullForm = ({ initialData, currentUser, onSave, onCancel, showToast, isAdm
                 onChange={(e) => update('classBn', e.target.value)}
               >
                 <option value="">Select...</option>
-                {CLASS_LIST_BN.map((c) => <option key={c} value={c}>{c}</option>)}
+                {(allowedClasses.length > 0 ? allowedClasses : CLASS_LIST_BN).map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
               </select>
               {errors.classBn && <p className="text-red-500 text-xs font-bold mt-1">{errors.classBn}</p>}
             </div>

@@ -24,7 +24,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from "react-router-dom";
 import ResultTimer from './ResultTimer';
-import { ONLY_ADMIN, RESULT_PUBLISH_TIME } from './systemConfig';
+import { getPortalSettings } from './config/systemConfig';
 
 // ==============================================
 // 1. SHARED ERP SESSION READER (FROM '/')
@@ -627,10 +627,15 @@ export default function Result() {
   const [authLoading, setAuthLoading] = useState(false);
   const [isAutoSearching, setIsAutoSearching] = useState(false);
   
+  const [portalSettings, setPortalSettings] = useState(() => getPortalSettings());
+  const onlyAdminSetting = portalSettings.onlyAdminResults ?? true;
+  const resultPublishTime = portalSettings.resultPublishTime || '2026-08-17T19:30:00+06:00';
+
   const [activeTab, setActiveTab] = useState(() => {
     const u = getSessionUser();
     if (!u) return 'search';
-    const isClassEffective = ONLY_ADMIN ? false : u.role === 'Class';
+    const initialOnlyAdmin = getPortalSettings().onlyAdminResults ?? true;
+    const isClassEffective = initialOnlyAdmin ? false : u.role === 'Class';
     return (u.role === 'Admin' || isClassEffective) ? 'dashboard' : 'search';
   });
   
@@ -688,19 +693,15 @@ const [cachedSheets, setCachedSheets] = useState({}); // 👈 এই লাই�
   const isAdmin = currentUser?.role === 'Admin';
   const isClassAdminRaw = currentUser?.role === 'Class';
   const now = new Date();
-const publishTime = new Date(RESULT_PUBLISH_TIME);
+  const publishTime = new Date(resultPublishTime);
 
-// সময় পার হয়েছে?
-const isPublished = now >= publishTime;
-// Admin always allowed
-// Teacher allowed only when ONLY_ADMIN = false
-const canBypassTimer =
-  isAdmin || (!ONLY_ADMIN && isClassAdminRaw);
-// ⏰ RESULT LOCK SYSTEM (সব সময় চেক হবে)
+  // সময় পার হয়েছে?
+  const isPublished = now >= publishTime;
+  // Admin always allowed; Teacher allowed only when onlyAdminResults = false
+  const canBypassTimer = isAdmin || (!onlyAdminSetting && isClassAdminRaw);
 
-
-  // Apply the Global ONLY_ADMIN rule
-  const isClassAdmin = ONLY_ADMIN ? false : isClassAdminRaw;
+  // Apply the Global onlyAdminResults rule
+  const isClassAdmin = onlyAdminSetting ? false : isClassAdminRaw;
   const canManage = isAdmin || isClassAdmin;
 
   // Get formatted class name for Class Admin securely
@@ -790,7 +791,8 @@ useEffect(() => {
           localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(serverUser));
           const mapped = getSessionUser();
           setCurrentUser(mapped);
-          const isClassEffective = ONLY_ADMIN ? false : mapped?.role === 'Class';
+          const liveOnlyAdmin = getPortalSettings().onlyAdminResults ?? true;
+          const isClassEffective = liveOnlyAdmin ? false : mapped?.role === 'Class';
           setActiveTab((mapped?.role === 'Admin' || isClassEffective) ? 'dashboard' : 'search');
         }
       })
@@ -800,6 +802,22 @@ useEffect(() => {
         setCurrentUser(null);
         setActiveTab('search');
       });
+
+    // সার্ভার থেকে সর্বশেষ রেজাল্ট পাবলিশ টাইম ও onlyAdminResults লোড
+    systemSettingsApi
+      .getPublicSettings()
+      .then((res) => {
+        const sp = res?.studentPortal;
+        if (sp) {
+          setPortalSettings((prev) => ({ ...prev, ...sp }));
+          const u = getSessionUser();
+          if (u) {
+            const isClassEffective = (sp.onlyAdminResults ?? true) ? false : u.role === 'Class';
+            setActiveTab((u.role === 'Admin' || isClassEffective) ? 'dashboard' : 'search');
+          }
+        }
+      })
+      .catch(() => {});
   }, []);
 
  
@@ -1369,7 +1387,7 @@ window.history.pushState({ view: "marksheet" }, "", `?id=${shortId}`);
   ];
 // ⏰ TIMER LOCK (FIRST PRIORITY)
 if (!isPublished && !canBypassTimer) {
-  return <ResultTimer targetDate={RESULT_PUBLISH_TIME} />;
+  return <ResultTimer targetDate={resultPublishTime} />;
 }
 
   if (authLoading || isAutoSearching) {

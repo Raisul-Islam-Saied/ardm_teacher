@@ -1,16 +1,14 @@
 /**
- * ARDM Student Portal — Export Controller
- * Excel CSV · 2-per-page PDF Info Sheet · A4 Table Register · Bulk CR80 ID Cards ·
- * vCard (.vcf) · Copy IDs.
+- ARDM Student Portal — Export Controller
+- Excel CSV · 2-per-page PDF Info Sheet · A4 Table Register · Bulk CR80 ID Cards ·
+- vCard (.vcf) · Copy IDs.
  *
- * ⚠️ প্রিন্ট/এক্সপোর্ট টেমপ্লেটগুলো মূল Index.jsx থেকে অক্ষরে অক্ষরে কপি করা —
- *    এগুলো কখনো পরিবর্তন করা যাবে না।
+- ⚠️ প্রিন্ট/এক্সপোর্ট টেমপ্লেটগুলো মূল Index.jsx থেকে অক্ষরে অক্ষরে কপি করা —
+-    এগুলো কখনো পরিবর্তন করা যাবে না।
  */
 import signImg from '../assets/principal-sign.png';
-import { CONFIG, DEFAULT_IMAGE } from '../config/systemConfig';
-import { formatDate, toISODate } from '../models/studentModel';
-
-const RESTRICT_EXPORT_BY_ROLE = true; // true হলে টিচার শুধু নিজের ক্লাস এক্সপোর্ট করতে পারবে
+import { CONFIG, DEFAULT_IMAGE, getPortalSettings } from '../config/systemConfig';
+import { canExportStudents, formatDate, toISODate } from '../models/studentModel';
 
 // ── vCard EXPORT HELPERS (ported from register→contact tool) ──
 const CONTACT_CLASS_CODE = {
@@ -18,17 +16,6 @@ const CONTACT_CLASS_CODE = {
   "One": "1", "Two": "2", "Three": "3", "Four": "4",
   "Five": "5", "Six": "6", "Seven": "7", "Eight": "8", "Nine": "9", "Ten": "10"
 };
-
-// const toISODate = (dStr) => {
-//   if (!dStr) return '';
-//   if (/^\d{4}-\d{2}-\d{2}$/.test(dStr)) return dStr;
-//   const d = new Date(dStr);
-//   if (isNaN(d.getTime())) return '';
-//   const y = d.getFullYear();
-//   const m = String(d.getMonth() + 1).padStart(2, '0');
-//   const day = String(d.getDate()).padStart(2, '0');
-//   return `${y}-${m}-${day}`;
-// };
 
 const vcardEscape = (str) => {
   if (str === undefined || str === null) return "";
@@ -89,7 +76,8 @@ const buildContactNote = (s) => {
 
 const normalizeForVCard = (data) => {
   const rawClass = (data.ClassEn || "").trim();
-const code = CONTACT_CLASS_CODE[rawClass] || "0";  const nameEn = data.StudentNameEn || "";
+  const code = CONTACT_CLASS_CODE[rawClass] || "0";
+  const nameEn = data.StudentNameEn || "";
   return {
     id: data.ID,
     code,
@@ -141,15 +129,48 @@ const buildContactVCard = async (data) => {
 };
 
 /**
- * ctx = { filteredList, currentUser, showToast, setContactProgress }
- * (filteredList = বর্তমানে স্ক্রিনে দেখানো লিস্ট)
+- ctx = { filteredList, currentUser, showToast, setContactProgress, portalSettings }
+- (filteredList = বর্তমানে স্ক্রিনে দেখানো লিস্ট)
  */
-export const createExportController = ({ filteredList, currentUser, showToast, setContactProgress }) => {
+export const createExportController = ({ filteredList, currentUser, showToast, setContactProgress, portalSettings }) => {
   // --- EXPORT FUNCTIONS (FULL RESTORED) ---
-const getFilteredData = () => {
-  return filteredList;
-};
+  const getFilteredData = () => {
+    return filteredList;
+  };
 
+  const checkExportPermission = () => {
+    if (!currentUser || currentUser?.role === 'Visitor') {
+      showToast("ভিজিটরদের ডাটা ডাউনলোড করার অনুমতি নেই!", "error");
+      return false;
+    }
+
+    const activeSettings = portalSettings || getPortalSettings();
+
+    // যদি ফিল্টার করা লিস্টে কোনো ডাটা থাকে, প্রতিটি শিক্ষার্থীর শ্রেণির এক্সপোর্ট অনুমতি যাচাই করা হবে
+    if (Array.isArray(filteredList) && filteredList.length > 0) {
+      const hasUnauthorized = filteredList.some(
+        (s) => !canExportStudents(currentUser, s.ClassBn, activeSettings)
+      );
+      if (hasUnauthorized) {
+        showToast(
+          currentUser.classBn
+            ? `আপনি শুধুমাত্র অনুমোদিত শ্রেণি (${currentUser.classBn}) এর ডাটা ডাউনলোড করতে পারবেন!`
+            : "আপনার শিক্ষার্থীর তথ্য এক্সপোর্ট করার অনুমতি নেই!",
+          "error"
+        );
+        return false;
+      }
+      return true;
+    }
+
+    // লিস্ট খালি থাকলে সাধারণ এক্সপোর্ট অনুমতি যাচাই
+    if (!canExportStudents(currentUser, null, activeSettings)) {
+      showToast("আপনার শিক্ষার্থীর তথ্য এক্সপোর্ট করার অনুমতি নেই!", "error");
+      return false;
+    }
+
+    return true;
+  };
 
   const handleExportTablePDF = () => {
     if (!checkExportPermission()) return;
@@ -258,7 +279,7 @@ const getFilteredData = () => {
   window.onload = function () {
     setTimeout(() => {
       window.print();
-    }, 800); // QR + photo load হওয়ার সময় দেয়
+    }, 800); // QR + photo load হওয়ার সময় দেয়
   };
 </script>
 
@@ -300,691 +321,664 @@ const getFilteredData = () => {
 
     link.click();
   };
-const handleCopyAllIds = async () => {
-  const list = filteredList;
-  if (!list || list.length === 0) {
-    return showToast("কপি করার জন্য কোনো আইডি নেই", "error");
-  }
-  const idsText = list.map(s => s.ID).filter(Boolean).join(', ');
-  try {
-    await navigator.clipboard.writeText(idsText);
-    showToast(`${list.length}টি স্টুডেন্ট আইডি কপি হয়েছে`, "success");
-  } catch (e) {
-    showToast("কপি করা যায়নি", "error");
-  }
-};
-  const checkExportPermission = () => {
-  // যদি টগল 'false' (অফ) থাকে, তবে আগের মতই সবাই সব এক্সপোর্ট করতে পারবে
-  if (!RESTRICT_EXPORT_BY_ROLE) return true;
 
-  // ভিজিটরদের জন্য সম্পূর্ণ ব্লক
-  if (currentUser?.role === 'Visitor') {
-    showToast("ভিজিটরদের ডাটা ডাউনলোড করার অনুমতি নেই!", "error");
-    return false;
-  }
-
-  // ক্লাস টিচারদের জন্য রেস্ট্রিকশন
-  if (currentUser?.role === 'Class') {
-    // চেক করা হচ্ছে ফিল্টার করা লিস্টে অন্য কোনো ক্লাসের স্টুডেন্ট আছে কিনা
-    const hasOtherClassData = filteredList.some(s => s.ClassBn !== currentUser.classBn);
-    
-    if (hasOtherClassData) {
-      showToast(`আপনি শুধুমাত্র আপনার ক্লাস (${currentUser.classBn}) এর ডাটা ডাউনলোড করতে পারবেন!`, "error");
-      return false;
+  const handleCopyAllIds = async () => {
+    const list = filteredList;
+    if (!list || list.length === 0) {
+      return showToast("কপি করার জন্য কোনো আইডি নেই", "error");
     }
-  }
-
-  // এডমিন বা সঠিক পারমিশন থাকলে true রিটার্ন করবে
-  return true;
-};
+    const idsText = list.map(s => s.ID).filter(Boolean).join(', ');
+    try {
+      await navigator.clipboard.writeText(idsText);
+      showToast(`${list.length}টি স্টুডেন্ট আইডি কপি হয়েছে`, "success");
+    } catch (e) {
+      showToast("কপি করা যায়নি", "error");
+    }
+  };
 
   const handleExportContacts = async () => {
- if (!checkExportPermission()) return;
+    if (!checkExportPermission()) return;
 
     const list = getFilteredData();
-  if (!list || list.length === 0) {
-    return showToast("কন্টাক ডাউনলোড করার জন্য কোনো ডাটা নেই", "error");
-  }
-
-  setContactProgress({ show: true, current: 0, total: list.length, name: '' });
-
-  try {
-    const cards = [];
-    for (let i = 0; i < list.length; i++) {
-      const s = list[i];
-      setContactProgress({ show: true, current: i, total: list.length, name: s.StudentNameEn || s.StudentNameBn || '' });
-      cards.push(await buildContactVCard(s));
+    if (!list || list.length === 0) {
+      return showToast("কন্টাক ডাউনলোড করার জন্য কোনো ডাটা নেই", "error");
     }
-    setContactProgress({ show: true, current: list.length, total: list.length, name: '' });
 
-    const vcfText = cards.join("\r\n");
-    const blob = new Blob([vcfText], { type: "text/vcard;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `ARDM_Contacts_${list.length}_${new Date().toISOString().slice(0,10)}.vcf`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    setContactProgress({ show: true, current: 0, total: list.length, name: '' });
 
-    showToast(`${list.length} টি কন্টাক কার্ড ডাউনলোড হয়েছে`, "success");
-  } catch (e) {
-    showToast("কন্টাক তৈরি করতে সমস্যা হয়েছে", "error");
-  } finally {
-    setTimeout(() => setContactProgress({ show: false, current: 0, total: 0, name: '' }), 300);
-  }
-};
-const handleExportPDF = () => {
-  if (!checkExportPermission()) return;
-
-  const dataToExport = getFilteredData();
-  if (dataToExport.length === 0) return showToast("ইনফো শিটের জন্য কোনো ডাটা পাওয়া যায়নি!", "error");
-
-  const printWindow = window.open('', '_blank', 'height=900,width=1100');
-  if (!printWindow) {
-    return alert("পপআপ ব্লক হয়েছে!");
-  }
-
-  printWindow.document.write(`
-  <html>
-  <head>
-    <title>Student Information Sheet</title>
-    <style>
-      @media print {
-        @page { size: A4; margin: 10mm; }
+    try {
+      const cards = [];
+      for (let i = 0; i < list.length; i++) {
+        const s = list[i];
+        setContactProgress({ show: true, current: i, total: list.length, name: s.StudentNameEn || s.StudentNameBn || '' });
+        cards.push(await buildContactVCard(s));
       }
+      setContactProgress({ show: true, current: list.length, total: list.length, name: '' });
 
-      body {
-        font-family: Arial, sans-serif;
-        font-size: 11px;
-        margin: 0;
-      }
+      const vcfText = cards.join("\r\n");
+      const blob = new Blob([vcfText], { type: "text/vcard;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `ARDM_Contacts_${list.length}_${new Date().toISOString().slice(0,10)}.vcf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
 
-      .page {
-        page-break-after: always;
-      }
+      showToast(`${list.length} টি কন্টাক কার্ড ডাউনলোড হয়েছে`, "success");
+    } catch (e) {
+      showToast("কন্টাক তৈরি করতে সমস্যা হয়েছে", "error");
+    } finally {
+      setTimeout(() => setContactProgress({ show: false, current: 0, total: 0, name: '' }), 300);
+    }
+  };
 
-      .student-card {
-        border: 2px solid #000;
-        padding: 8px;
-        margin-bottom: 38px;
-        height: 48%;
-        box-sizing: border-box;
-      }
+  const handleExportPDF = () => {
+    if (!checkExportPermission()) return;
 
-      .header {
-        text-align: center;
-        border-bottom: 2px solid #000;
-        margin-bottom: 6px;
-      }
+    const dataToExport = getFilteredData();
+    if (dataToExport.length === 0) return showToast("ইনফো শিটের জন্য কোনো ডাটা পাওয়া যায়নি!", "error");
 
-      .header h2 {
-        margin: 0;
-        font-size: 20px;
-      }
-
-      .header p {
-        margin: 0;
-        font-size: 15px;
-      }
-
-      .top-row {
-        display: flex;
-        gap: 10px;
-      }
-
-      .photo-box {
-        width: 110px;
-        text-align: center;
-      }
-
-      .photo-box img {
-        width: 100px;
-        height: 110px;
-        border: 1px solid #000;
-      }
-
-      table {
-      font-size : 13px;
-        width: 100%;
-        border-collapse: collapse;
-      }
-
-      td {
-        border: 1px solid #000;
-        padding: 3px;
-        vertical-align: top;
-      }
-
-      .label {
-        width: 35%;
-        font-weight: bold;
-      }
-
-      .footer {
-        margin-top: 28px;
-        display: flex;
-        justify-content: space-between;
-      }
-
-      .sign {
-        border-top: 1px solid #000;
-        width: 150px;
-        text-align: center;
-        font-size: 10px;
-      }
-    </style>
-  </head>
-  <body>
-  `);
-
-  dataToExport.forEach((s, i) => {
-    if (i % 2 === 0) printWindow.document.write(`<div class="page">`);
+    const printWindow = window.open('', '_blank', 'height=900,width=1100');
+    if (!printWindow) {
+      return alert("পপআপ ব্লক হয়েছে!");
+    }
 
     printWindow.document.write(`
-      <div class="student-card">
-        <div class="header">
-          <h2>${CONFIG.APP_NAME}</h2>
-          <p>Student Information Form</p>
-        </div>
+    <html>
+    <head>
+      <title>Student Information Sheet</title>
+      <style>
+        @media print {
+          @page { size: A4; margin: 10mm; }
+        }
 
-        <div class="top-row">
-          <div class="photo-box">
-            <img src="${s.ImageURL || DEFAULT_IMAGE}">
-            <div>Roll: ${s.Roll}</div>
-            <div>Class: ${s.ClassEn || s.ClassBn}</div>
-          </div>
+        body {
+          font-family: Arial, sans-serif;
+          font-size: 11px;
+          margin: 0;
+        }
 
-          <table>
-            <tr><td class="label">শিক্ষার্থীর নাম :</td><td>${s.StudentNameBn}</td></tr>
-            <tr><td class="label">Student's Name :</td><td>${s.StudentNameEn}</td></tr>
-             <tr><td class="label">Student ID :</td><td>${s.ID}</td></tr>
-            <tr><td class="label">জন্ম নিবন্ধন নং :</td><td>${s.BRN}</td></tr>
-            <tr><td class="label">Date of Birth :</td><td>${formatDate(s.DOB)}</td></tr>
-            <tr><td class="label">Blood Group :</td><td>${s.BloodGroup}</td></tr>
-              <tr><td class="label">Gender :</td><td>${s.Gender}</td></tr>
-            <tr><td class="label">Session :</td><td>${s.Session}</td></tr>
+        .page {
+          page-break-after: always;
+        }
 
-            <tr><td class="label">পিতার নাম :</td><td>${s.FatherNameBn}</td></tr>
-            <tr><td class="label">Father's Name :</td><td>${s.FatherNameEn}</td></tr>
-            <tr><td class="label">মাতার নাম :</td><td>${s.MotherNameBn}</td></tr>
-            <tr><td class="label">Mother's Name :</td><td>${s.MotherNameEn}</td></tr>
+        .student-card {
+          border: 2px solid #000;
+          padding: 8px;
+          margin-bottom: 38px;
+          height: 48%;
+          box-sizing: border-box;
+        }
 
-            <tr><td class="label">মোবাইল :</td><td>${s.WhatsApp}</td></tr>
-            <tr><td class="label">জরুরী নম্বর :</td><td>${s.EmergencyNo}</td></tr>
+        .header {
+          text-align: center;
+          border-bottom: 2px solid #000;
+          margin-bottom: 6px;
+        }
 
-            <tr><td class="label">ঠিকানা (বাংলা) :</td>
-              <td>${s.HouseNameBn || ''}, ${s.VillageBn || ''}, ${s.UnionBn || ''}, ${s.UpazilaBn || ''}, ${s.DistrictBn || ''}</td>
-            </tr>
+        .header h2 {
+          margin: 0;
+          font-size: 20px;
+        }
 
-            <tr><td class="label">Address (English) :</td>
-              <td>${s.HouseNameEn || ''}, ${s.VillageEn || ''}, ${s.UnionEn || ''}, ${s.UpazilaEn || ''}, ${s.DistrictEn || ''}</td>
-            </tr>
-          </table>
-        </div>
+        .header p {
+          margin: 0;
+          font-size: 15px;
+        }
 
-        <div class="footer">
-          <div class="sign">Guardian's Signature</div>
-          <div class="sign">Head Teacher</div>
-        </div>
-      </div>
+        .top-row {
+          display: flex;
+          gap: 10px;
+        }
+
+        .photo-box {
+          width: 110px;
+          text-align: center;
+        }
+
+        .photo-box img {
+          width: 100px;
+          height: 110px;
+          border: 1px solid #000;
+        }
+
+        table {
+        font-size : 13px;
+          width: 100%;
+          border-collapse: collapse;
+        }
+
+        td {
+          border: 1px solid #000;
+          padding: 3px;
+          vertical-align: top;
+        }
+
+        .label {
+          width: 35%;
+          font-weight: bold;
+        }
+
+        .footer {
+          margin-top: 28px;
+          display: flex;
+          justify-content: space-between;
+        }
+
+        .sign {
+          border-top: 1px solid #000;
+          width: 150px;
+          text-align: center;
+          font-size: 10px;
+        }
+      </style>
+    </head>
+    <body>
     `);
 
-    if (i % 2 === 1 || i === dataToExport.length - 1)
-      printWindow.document.write(`</div>`);
-  });
+    dataToExport.forEach((s, i) => {
+      if (i % 2 === 0) printWindow.document.write(`<div class="page">`);
 
-  printWindow.document.write(`
-    <script>
-      window.onload = function() {
-        window.print();
+      printWindow.document.write(`
+        <div class="student-card">
+          <div class="header">
+            <h2>${CONFIG.APP_NAME}</h2>
+            <p>Student Information Form</p>
+          </div>
+
+          <div class="top-row">
+            <div class="photo-box">
+              <img src="${s.ImageURL || DEFAULT_IMAGE}">
+              <div>Roll: ${s.Roll}</div>
+              <div>Class: ${s.ClassEn || s.ClassBn}</div>
+            </div>
+
+            <table>
+              <tr><td class="label">শিক্ষার্থীর নাম :</td><td>${s.StudentNameBn}</td></tr>
+              <tr><td class="label">Student's Name :</td><td>${s.StudentNameEn}</td></tr>
+               <tr><td class="label">Student ID :</td><td>${s.ID}</td></tr>
+              <tr><td class="label">জন্ম নিবন্ধন নং :</td><td>${s.BRN}</td></tr>
+              <tr><td class="label">Date of Birth :</td><td>${formatDate(s.DOB)}</td></tr>
+              <tr><td class="label">Blood Group :</td><td>${s.BloodGroup}</td></tr>
+                <tr><td class="label">Gender :</td><td>${s.Gender}</td></tr>
+              <tr><td class="label">Session :</td><td>${s.Session}</td></tr>
+
+              <tr><td class="label">পিতার নাম :</td><td>${s.FatherNameBn}</td></tr>
+              <tr><td class="label">Father's Name :</td><td>${s.FatherNameEn}</td></tr>
+              <tr><td class="label">মাতার নাম :</td><td>${s.MotherNameBn}</td></tr>
+              <tr><td class="label">Mother's Name :</td><td>${s.MotherNameEn}</td></tr>
+
+              <tr><td class="label">মোবাইল :</td><td>${s.WhatsApp}</td></tr>
+              <tr><td class="label">জরুরী নম্বর :</td><td>${s.EmergencyNo}</td></tr>
+
+              <tr><td class="label">ঠিকানা (বাংলা) :</td>
+                <td>${s.HouseNameBn || ''}, ${s.VillageBn || ''}, ${s.UnionBn || ''}, ${s.UpazilaBn || ''}, ${s.DistrictBn || ''}</td>
+              </tr>
+
+              <tr><td class="label">Address (English) :</td>
+                <td>${s.HouseNameEn || ''}, ${s.VillageEn || ''}, ${s.UnionEn || ''}, ${s.UpazilaEn || ''}, ${s.DistrictEn || ''}</td>
+              </tr>
+            </table>
+          </div>
+
+          <div class="footer">
+            <div class="sign">Guardian's Signature</div>
+            <div class="sign">Head Teacher</div>
+          </div>
+        </div>
+      `);
+
+      if (i % 2 === 1 || i === dataToExport.length - 1)
+        printWindow.document.write(`</div>`);
+    });
+
+    printWindow.document.write(`
+      <script>
+        window.onload = function() {
+          window.print();
+        }
+      <\/script>
+    </body></html>
+    `);
+
+    printWindow.document.close();
+  };
+
+  const handleExportAllIDCards = () => {
+    if (!checkExportPermission()) return;
+
+    const list = getFilteredData();
+    if (list.length === 0) return showToast("আইডি কার্ডের জন্য কোনো ডাটা নেই", "error");
+
+    const w = window.open('', '_blank');
+
+    w.document.write(`
+    <html>
+    <head>
+      <title>All ID Cards</title>
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&display=swap');
+
+        @media print {
+          @page { size: A4 landscape; margin: 0mm; }
+          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+
+        body {
+          font-family: 'Noto Sans Bengali', sans-serif;
+          margin: 0;
+        }
+
+        
+  .page {
+    width: 297mm;
+    height: 210mm;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: 20px;
+    justify-items: center;
+    align-items: center;
+    page-break-after: always;
+    
+  }
+        .print-container {
+          display: flex;
+          gap: 2px;
+          align-items: flex-start;
+        }
+
+        .id-card-box {
+          width: 2.125in;
+          height: 3.375in;
+          position: relative;
+          background: #fff;
+          border-radius: 8px;
+          overflow: hidden;
+          border: 1px solid #ddd;
+          box-sizing: border-box;
+        }
+
+        .front-header {
+          background: linear-gradient(to bottom, #0f172a 0%, #1e293b 100%);
+          height: 65px;
+          color: white;
+          text-align: center;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          position: relative;
+          z-index: 1;
+        }
+
+        .curve {
+          position: absolute;
+          bottom: -30px;
+          left: 0;
+          width: 100%;
+          height: 30px;
+          background: #1e293b;
+          border-radius: 0 0 50% 50%;
+          z-index: -1;
+        }
+
+        .front-header h2 {
+          font-size: 11.5px;
+          margin: 0;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          font-family: 'Oswald', sans-serif;
+          padding: 0 5px;
+        }
+
+        .front-header p {
+          font-size: 9px;
+          margin: 2px 0 0;
+          opacity: 0.8;
+        }
+
+        .photo-box {
+          width: 72px;
+          height: 72px;
+          margin: -10px auto 0;
+          position: relative;
+          z-index: 2;
+          background: white;
+          padding: 3px;
+          border-radius: 6px;
+          box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+        }
+
+        .photo-box img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          border-radius: 4px;
+          display: block;
+        }
+
+        .student-info {
+          text-align: center;
+          margin-top: 7px;
+          margin-bottom: 7px;
+        }
+
+        .s-name-en { font-size: 12px; font-weight: 800; color: #1e293b; text-transform: uppercase; line-height: 1.2; }
+        .s-name-bn { font-size: 11px; font-weight: 600; color: #334155; }
+
+        .id-pill {
+          background: #0f172a;
+          color: white;
+          font-size: 9px;
+          padding: 1px 8px;
+          border-radius: 10px;
+          display: inline-block;
+          margin: 2px 0 2px;
+          font-weight: bold;
+        }
+
+        .info-table { width: 92%; margin: 0 auto; border-collapse: collapse; }
+
+        .info-table td {
+          font-size: 10.5px;
+          padding: 1.5px 5px;
+          color: #0f172a;
+          vertical-align: middle;
+        }
+
+        .info-table .lbl { font-weight: 700; color: #64748b; width: 40px; text-align: left; }
+        .info-table .val { font-weight: 600; text-align: left; }
+        .info-table .row-border { border-bottom: 1px dotted #cbd5e1; }
+
+        .signature-area {
+          position: absolute;
+          bottom: 8px;
+          right: 15px;
+          text-align: center;
+        }
+
+        .sig-line { width: 60px; border-top: 1px solid #0f172a; margin-bottom: 2px; }
+        .sig-text { font-size: 6px; font-weight: 700; color: #0f172a; }
+
+        .back-container {
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+          background: #fff;
+          position: relative;
+        }
+
+        .back-content {
+          flex: 1;
+          padding: 10px 18px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          position: relative;
+          z-index: 1;
+        }
+
+        .watermark-logo {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          font-size: 60px;
+          opacity: 0.05;
+          color: #000;
+          z-index: 0;
+          font-weight: bold;
+          pointer-events: none;
+          white-space: nowrap;
+        }
+
+        .guardian-card {
+          width: 100%;
+          border: 1px solid #e2e8f0;
+          background: #f8fafc;
+          border-radius: 6px;
+          padding: 6px;
+          margin-bottom: 8px;
+          text-align: left;
+          box-sizing: border-box;
+        }
+
+        .section-title {
+          font-size: 8px;
+          font-weight: 700;
+          text-transform: uppercase;
+          color: #64748b;
+          margin-bottom: 3px;
+          border-bottom: 1px solid #cbd5e1;
+          padding-bottom: 2px;
+          display: block;
+        }
+
+        .address-text { font-size: 9px; color: #334155; line-height: 1.3; font-weight: 500; }
+
+        .qr-wrapper {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin: 5px 0 8px;
+          width: 100%;
+          background: #fff;
+          padding: 4px;
+          border: 1px dashed #cbd5e1;
+          border-radius: 6px;
+          box-sizing: border-box;
+        }
+
+        .qr-img { width: 55px; height: 55px; display: block; }
+
+        .validity-info { flex: 1; text-align: left; }
+
+        .valid-label { font-size: 7px; color: #64748b; text-transform: uppercase; font-weight: 700; }
+        .valid-year {
+          font-size: 14px;
+          font-weight: 800;
+          color: #0f172a;
+          font-family: 'Oswald', sans-serif;
+          display: block;
+          margin-top: -2px;
+        }
+
+        .scan-hint { font-size: 6px; color: #94a3b8; margin-top: 2px; }
+
+        .rules-list { width: 100%; text-align: left; margin-bottom: auto; }
+
+        .rules-list ul { margin: 0; padding-left: 12px; }
+
+        .rules-list li {
+          font-size: 7px;
+          color: #475569;
+          margin-bottom: 2px;
+          line-height: 1.2;
+        }
+
+        .emergency-footer {
+          width: 100%;
+          margin-top: 5px;
+          background: #fee2e2;
+          border: 1px solid #fecaca;
+          border-radius: 4px;
+          padding: 4px;
+          text-align: center;
+          box-sizing: border-box;
+        }
+
+        .emergency-label { font-size: 7px; color: #dc2626; font-weight: 700; text-transform: uppercase; }
+        .emergency-num { font-size: 10px; font-weight: 800; color: #b91c1c; }
+
+        .return-strip {
+          background: #0f172a;
+          color: white;
+          font-size: 7px;
+          text-align: center;
+          padding: 4px 0;
+          width: 100%;
+          margin-top: 5px;
+        }
+      </style>
+    </head>
+    <body>
+    `);
+
+    list.forEach((data, i) => {
+      const qrData = `${window.location.origin}/${data.ID}`;
+      const qrImage = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrData)}`;
+
+      if (i % 4 === 0) {
+        if (i !== 0) w.document.write(`</div>`);
+        w.document.write(`<div class="page">`);
       }
-    <\/script>
-  </body></html>
-  `);
 
-  printWindow.document.close();
-};
+      w.document.write(`
+        <div class="print-container">
 
+          <!-- FRONT -->
+          <div class="id-card-box">
+            <div class="front-header">
+              <h2>${CONFIG.APP_NAME}</h2>
+              <p>Sarafbhata, Rangunia, Chattogram</p>
+              <div class="curve"></div>
+            </div>
 
-const handleExportAllIDCards = () => {
-  if (!checkExportPermission()) return;
+            <div class="photo-box">
+              <img src="${data.ImageURL || 'https://via.placeholder.com/150'}" />
+            </div>
 
-  const list = getFilteredData();
-  if (list.length === 0) return showToast("আইডি কার্ডের জন্য কোনো ডাটা নেই", "error");
+            <div class="student-info">
+              <div class="s-name-en">${data.StudentNameEn}</div>
+              <div class="s-name-bn">${data.StudentNameBn}</div>
+              <div class="id-pill">ID: ${data.ID}</div>
+            </div>
 
-  const w = window.open('', '_blank');
+            <table class="info-table">
+              <tr class="row-border">
+                <td class="lbl">Class</td>
+                <td class="val">: ${data.ClassEn} | Roll: ${data.Roll}</td>
+              </tr>
+              <tr class="row-border">
+                <td class="lbl">Father</td>
+                <td class="val">: ${data.FatherNameBn}</td>
+              </tr>
+              <tr class="row-border">
+                <td class="lbl">Mother</td>
+                <td class="val">: ${data.MotherNameBn}</td>
+              </tr>
+              <tr class="row-border">
+                <td class="lbl">DOB</td>
+                <td class="val">: <span style="font-weight:800;">${formatDate(data.DOB)}</span></td>
+              </tr>
+              <tr class="row-border">
+                <td class="lbl">Blood</td>
+                <td class="val">: <span style="color:#ef4444; font-weight:800;">${data.BloodGroup || 'N/A'}</span></td>
+              </tr>
+              <tr>
+                <td class="lbl">Mobile</td>
+                <td class="val">: ${data.WhatsApp}</td>
+              </tr>
+            </table>
 
-  w.document.write(`
-  <html>
-  <head>
-    <title>All ID Cards</title>
-    <style>
-      @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
-      @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&display=swap');
+            <div class="signature-area">
+              <img src="${signImg}" style="width:60px; display:block; margin-bottom:-23px;" />
+              <div class="sig-line"></div>
+              <div class="sig-text">Superintendent</div>
+            </div>
+          </div>
 
-      @media print {
-        @page { size: A4 landscape; margin: 0mm; }
-        body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      }
+          <!-- BACK -->
+          <div class="id-card-box">
+            <div class="back-container">
 
-      body {
-        font-family: 'Noto Sans Bengali', sans-serif;
-        margin: 0;
-      }
+              <div class="front-header" style="height: 50px;">
+                <h2>${CONFIG.APP_NAME}</h2>
+              </div>
 
-      
-.page {
-  width: 297mm;
-  height: 210mm;
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  grid-template-rows: repeat(2, 1fr);
-  gap: 20px;
-  justify-items: center;
-  align-items: center;
-  page-break-after: always;
-  
-}
-      .print-container {
-        display: flex;
-        gap: 2px;
-        align-items: flex-start;
-      }
+              <div class="back-content">
+                <div class="watermark-logo">
+                  ${CONFIG.APP_NAME.split(' ').map(w => w.charAt(0).toUpperCase()).join('')}
+                </div>
 
-      .id-card-box {
-        width: 2.125in;
-        height: 3.375in;
-        position: relative;
-        background: #fff;
-        border-radius: 8px;
-        overflow: hidden;
-        border: 1px solid #ddd;
-        box-sizing: border-box;
-      }
+                <div class="guardian-card">
+                  <span class="section-title">Permanent Address</span>
+             <div class="address-text">
+    ${
+      [
+        data.HouseNameBn,
+        data.VillageBn,
+        data.UnionBn,
+        data.UpazilaBn,
+        data.DistrictBn
+      ]
+      .filter(Boolean)
+      .join(', ')
+    }।
+  </div>
 
-      .front-header {
-        background: linear-gradient(to bottom, #0f172a 0%, #1e293b 100%);
-        height: 65px;
-        color: white;
-        text-align: center;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        position: relative;
-        z-index: 1;
-      }
+                </div>
 
-      .curve {
-        position: absolute;
-        bottom: -30px;
-        left: 0;
-        width: 100%;
-        height: 30px;
-        background: #1e293b;
-        border-radius: 0 0 50% 50%;
-        z-index: -1;
-      }
+                <div class="qr-wrapper">
+                  <img src="${qrImage}" class="qr-img" />
+                  <div class="validity-info">
+                    <div class="valid-label">Academic Session</div>
+                    <div class="valid-year">${data.Session} - ${parseInt(data.Session)+1}</div>
+                    <div class="scan-hint">Scan to verify student profile</div>
+                  </div>
+                </div>
 
-      .front-header h2 {
-        font-size: 11.5px;
-        margin: 0;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        font-family: 'Oswald', sans-serif;
-        padding: 0 5px;
-      }
+                <div class="rules-list">
+                  <span class="section-title">Instructions</span>
+                  <ul>
+                    <li>This card is non-transferable.</li>
+                    <li>Must be worn during institution hours.</li>
+                    <li>Report lost card immediately to office.</li>
+                    <li>Phone : 01865415088 | 01837713062</li>
+                    <li>Email : raisulislamsaied@gmail.com</li>
+                  </ul>
+                </div>
 
-      .front-header p {
-        font-size: 9px;
-        margin: 2px 0 0;
-        opacity: 0.8;
-      }
+                <div class="emergency-footer">
+                  <div class="emergency-label">this id card is valid until
+  </div>
+                  <div class="emergency-num" style="text-transform: uppercase;">31 January 2027</div>
+                </div>
 
-      .photo-box {
-        width: 72px;
-        height: 72px;
-        margin: -10px auto 0;
-        position: relative;
-        z-index: 2;
-        background: white;
-        padding: 3px;
-        border-radius: 6px;
-        box-shadow: 0 3px 8px rgba(0,0,0,0.15);
-      }
+              </div>
 
-      .photo-box img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        border-radius: 4px;
-        display: block;
-      }
+              <div class="return-strip">
+                If found, please return to the madrasah office.
+              </div>
+            </div>
+          </div>
 
-      .student-info {
-        text-align: center;
-        margin-top: 7px;
-        margin-bottom: 7px;
-      }
+        </div>
+      `);
+    });
 
-      .s-name-en { font-size: 12px; font-weight: 800; color: #1e293b; text-transform: uppercase; line-height: 1.2; }
-      .s-name-bn { font-size: 11px; font-weight: 600; color: #334155; }
-
-      .id-pill {
-        background: #0f172a;
-        color: white;
-        font-size: 9px;
-        padding: 1px 8px;
-        border-radius: 10px;
-        display: inline-block;
-        margin: 2px 0 2px;
-        font-weight: bold;
-      }
-
-      .info-table { width: 92%; margin: 0 auto; border-collapse: collapse; }
-
-      .info-table td {
-        font-size: 10.5px;
-        padding: 1.5px 5px;
-        color: #0f172a;
-        vertical-align: middle;
-      }
-
-      .info-table .lbl { font-weight: 700; color: #64748b; width: 40px; text-align: left; }
-      .info-table .val { font-weight: 600; text-align: left; }
-      .info-table .row-border { border-bottom: 1px dotted #cbd5e1; }
-
-      .signature-area {
-        position: absolute;
-        bottom: 8px;
-        right: 15px;
-        text-align: center;
-      }
-
-      .sig-line { width: 60px; border-top: 1px solid #0f172a; margin-bottom: 2px; }
-      .sig-text { font-size: 6px; font-weight: 700; color: #0f172a; }
-
-      .back-container {
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-        background: #fff;
-        position: relative;
-      }
-
-      .back-content {
-        flex: 1;
-        padding: 10px 18px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        position: relative;
-        z-index: 1;
-      }
-
-      .watermark-logo {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        font-size: 60px;
-        opacity: 0.05;
-        color: #000;
-        z-index: 0;
-        font-weight: bold;
-        pointer-events: none;
-        white-space: nowrap;
-      }
-
-      .guardian-card {
-        width: 100%;
-        border: 1px solid #e2e8f0;
-        background: #f8fafc;
-        border-radius: 6px;
-        padding: 6px;
-        margin-bottom: 8px;
-        text-align: left;
-        box-sizing: border-box;
-      }
-
-      .section-title {
-        font-size: 8px;
-        font-weight: 700;
-        text-transform: uppercase;
-        color: #64748b;
-        margin-bottom: 3px;
-        border-bottom: 1px solid #cbd5e1;
-        padding-bottom: 2px;
-        display: block;
-      }
-
-      .address-text { font-size: 9px; color: #334155; line-height: 1.3; font-weight: 500; }
-
-      .qr-wrapper {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin: 5px 0 8px;
-        width: 100%;
-        background: #fff;
-        padding: 4px;
-        border: 1px dashed #cbd5e1;
-        border-radius: 6px;
-        box-sizing: border-box;
-      }
-
-      .qr-img { width: 55px; height: 55px; display: block; }
-
-      .validity-info { flex: 1; text-align: left; }
-
-      .valid-label { font-size: 7px; color: #64748b; text-transform: uppercase; font-weight: 700; }
-      .valid-year {
-        font-size: 14px;
-        font-weight: 800;
-        color: #0f172a;
-        font-family: 'Oswald', sans-serif;
-        display: block;
-        margin-top: -2px;
-      }
-
-      .scan-hint { font-size: 6px; color: #94a3b8; margin-top: 2px; }
-
-      .rules-list { width: 100%; text-align: left; margin-bottom: auto; }
-
-      .rules-list ul { margin: 0; padding-left: 12px; }
-
-      .rules-list li {
-        font-size: 7px;
-        color: #475569;
-        margin-bottom: 2px;
-        line-height: 1.2;
-      }
-
-      .emergency-footer {
-        width: 100%;
-        margin-top: 5px;
-        background: #fee2e2;
-        border: 1px solid #fecaca;
-        border-radius: 4px;
-        padding: 4px;
-        text-align: center;
-        box-sizing: border-box;
-      }
-
-      .emergency-label { font-size: 7px; color: #dc2626; font-weight: 700; text-transform: uppercase; }
-      .emergency-num { font-size: 10px; font-weight: 800; color: #b91c1c; }
-
-      .return-strip {
-        background: #0f172a;
-        color: white;
-        font-size: 7px;
-        text-align: center;
-        padding: 4px 0;
-        width: 100%;
-        margin-top: 5px;
-      }
-    </style>
-  </head>
-  <body>
-  `);
-
-  list.forEach((data, i) => {
-    const qrData = `${window.location.origin}/${data.ID}`;
-    const qrImage = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrData)}`;
-
-    if (i % 4 === 0) {
-      if (i !== 0) w.document.write(`</div>`);
-      w.document.write(`<div class="page">`);
+    if (list.length > 0) {
+      w.document.write(`</div>`);
     }
 
     w.document.write(`
-      <div class="print-container">
-
-        <!-- FRONT -->
-        <div class="id-card-box">
-          <div class="front-header">
-            <h2>${CONFIG.APP_NAME}</h2>
-            <p>Sarafbhata, Rangunia, Chattogram</p>
-            <div class="curve"></div>
-          </div>
-
-          <div class="photo-box">
-            <img src="${data.ImageURL || 'https://via.placeholder.com/150'}" />
-          </div>
-
-          <div class="student-info">
-            <div class="s-name-en">${data.StudentNameEn}</div>
-            <div class="s-name-bn">${data.StudentNameBn}</div>
-            <div class="id-pill">ID: ${data.ID}</div>
-          </div>
-
-          <table class="info-table">
-            <tr class="row-border">
-              <td class="lbl">Class</td>
-              <td class="val">: ${data.ClassEn} | Roll: ${data.Roll}</td>
-            </tr>
-            <tr class="row-border">
-              <td class="lbl">Father</td>
-              <td class="val">: ${data.FatherNameBn}</td>
-            </tr>
-            <tr class="row-border">
-              <td class="lbl">Mother</td>
-              <td class="val">: ${data.MotherNameBn}</td>
-            </tr>
-            <tr class="row-border">
-              <td class="lbl">DOB</td>
-              <td class="val">: <span style="font-weight:800;">${formatDate(data.DOB)}</span></td>
-            </tr>
-            <tr class="row-border">
-              <td class="lbl">Blood</td>
-              <td class="val">: <span style="color:#ef4444; font-weight:800;">${data.BloodGroup || 'N/A'}</span></td>
-            </tr>
-            <tr>
-              <td class="lbl">Mobile</td>
-              <td class="val">: ${data.WhatsApp}</td>
-            </tr>
-          </table>
-
-          <div class="signature-area">
-            <img src="${signImg}" style="width:60px; display:block; margin-bottom:-23px;" />
-            <div class="sig-line"></div>
-            <div class="sig-text">Superintendent</div>
-          </div>
-        </div>
-
-        <!-- BACK -->
-        <div class="id-card-box">
-          <div class="back-container">
-
-            <div class="front-header" style="height: 50px;">
-              <h2>${CONFIG.APP_NAME}</h2>
-            </div>
-
-            <div class="back-content">
-              <div class="watermark-logo">
-                ${CONFIG.APP_NAME.split(' ').map(w => w.charAt(0).toUpperCase()).join('')}
-              </div>
-
-              <div class="guardian-card">
-                <span class="section-title">Permanent Address</span>
-           <div class="address-text">
-  ${
-    [
-      data.HouseNameBn,
-      data.VillageBn,
-      data.UnionBn,
-      data.UpazilaBn,
-      data.DistrictBn
-    ]
-    .filter(Boolean)
-    .join(', ')
-  }।
-</div>
-
-              </div>
-
-              <div class="qr-wrapper">
-                <img src="${qrImage}" class="qr-img" />
-                <div class="validity-info">
-                  <div class="valid-label">Academic Session</div>
-                  <div class="valid-year">${data.Session} - ${parseInt(data.Session)+1}</div>
-                  <div class="scan-hint">Scan to verify student profile</div>
-                </div>
-              </div>
-
-              <div class="rules-list">
-                <span class="section-title">Instructions</span>
-                <ul>
-                  <li>This card is non-transferable.</li>
-                  <li>Must be worn during institution hours.</li>
-                  <li>Report lost card immediately to office.</li>
-                  <li>Phone : 01865415088 | 01837713062</li>
-                  <li>Email : raisulislamsaied@gmail.com</li>
-                </ul>
-              </div>
-
-              <div class="emergency-footer">
-                <div class="emergency-label">this id card is valid until
-</div>
-                <div class="emergency-num" style="text-transform: uppercase;">31 January 2027</div>
-              </div>
-
-            </div>
-
-            <div class="return-strip">
-              If found, please return to the madrasah office.
-            </div>
-          </div>
-        </div>
-
-      </div>
+    <script>
+    window.onload = function () {
+      setTimeout(() => {
+        window.print();
+      }, 700);
+    };
+    </script>
+    </body>
+    </html>
     `);
-  });
 
-// loop শেষ হওয়ার পরে last page close
-if (list.length > 0) {
-  w.document.write(`</div>`);
-}
-
-w.document.write(`
-<script>
-window.onload = function () {
-  setTimeout(() => {
-    window.print();
-  }, 700);
-};
-</script>
-</body>
-</html>
-`);
-
-
-  w.document.close();
-};
-// এটা roleFilteredStudents / filteredList সংজ্ঞার আশেপাশে বসান (Index কম্পোনেন্টের ভেতরে)
-
+    w.document.close();
+  };
 
   return {
     handleExportTablePDF,
