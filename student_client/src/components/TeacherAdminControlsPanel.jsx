@@ -63,6 +63,7 @@ export default function TeacherAdminControlsPanel({ teacher, onUpdated, currentU
         || currentUser?.erpRole === 'SuperAdmin'
         || currentUser?.role === 'SuperAdmin'
     );
+    const isProtectedSuperAdmin = teacher.role === 'SuperAdmin' && !isSuperAdmin;
     const isPending = teacher.registrationStatus === 'Pending';
     const isApproving = fields.registrationStatus === 'Approved'
         && teacher.registrationStatus !== 'Approved';
@@ -124,7 +125,7 @@ export default function TeacherAdminControlsPanel({ teacher, onUpdated, currentU
             ),
             assignedClass: toServerAssignedClass(fields.assignedClass),
             canEditAssignedClass: Boolean(fields.assignedClass && fields.canEditAssignedClass),
-            role: fields.role,
+            role: isProtectedSuperAdmin ? teacher.role : fields.role,
             registrationStatus: fields.registrationStatus,
             isActive: isApproving ? true : fields.isActive
         };
@@ -235,11 +236,21 @@ export default function TeacherAdminControlsPanel({ teacher, onUpdated, currentU
                         </label>
                         <label>
                             <span className={labelClassName}>পোর্টাল অ্যাক্সেস রোল</span>
-                            <select value={fields.role} onChange={(event) => updateField('role', event.target.value)} className={inputClassName}>
+                            <select
+                                value={fields.role}
+                                onChange={(event) => updateField('role', event.target.value)}
+                                disabled={isProtectedSuperAdmin}
+                                className={inputClassName}
+                            >
                                 <option value="Teacher">Teacher</option>
                                 <option value="Admin">Admin</option>
-                                {isSuperAdmin && <option value="SuperAdmin">SuperAdmin</option>}
+                                {(isSuperAdmin || teacher.role === 'SuperAdmin') && <option value="SuperAdmin">SuperAdmin</option>}
                             </select>
+                            {isProtectedSuperAdmin && (
+                                <span className="mt-1 block font-bengali text-[10px] text-slate-500">
+                                    এই রোল পরিবর্তন শুধু সুপার অ্যাডমিন করতে পারবেন।
+                                </span>
+                            )}
                         </label>
                     </div>
 

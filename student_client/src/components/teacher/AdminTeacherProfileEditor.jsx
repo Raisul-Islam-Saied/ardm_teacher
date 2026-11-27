@@ -265,6 +265,7 @@ export function TeacherProfileEditorForm({
 
     const isReturningTeacher = teacher.isActive === false
         && !['Pending', 'Rejected'].includes(teacher.registrationStatus);
+    const isTargetSuperAdmin = teacher.role === 'SuperAdmin';
 
     const idPreview = useMemo(() => ({ fullId: teacher.teacherCode || '' }), [teacher.teacherCode]);
 
@@ -652,7 +653,15 @@ export function TeacherProfileEditorForm({
                                     variant="erp"
                                     value={adminFields.role}
                                     onChange={(event) => updateAdminField('role', event.target.value)}
-                                    options={['Teacher', 'Admin', ...(isSuperAdmin ? ['SuperAdmin'] : [])]}
+                                    disabled={isTargetSuperAdmin && !isSuperAdmin}
+                                    hint={isTargetSuperAdmin && !isSuperAdmin
+                                        ? 'সুপার অ্যাডমিন অ্যাকাউন্টের রোল পরিবর্তন শুধু সুপার অ্যাডমিন করতে পারবেন।'
+                                        : ''}
+                                    options={[
+                                        'Teacher',
+                                        'Admin',
+                                        ...(isSuperAdmin || isTargetSuperAdmin ? ['SuperAdmin'] : [])
+                                    ]}
                                 />
                                 <FormSelect
                                     labelEng="Registration Status"

@@ -94,6 +94,7 @@ const TeacherProfileDetailView = () => {
     const load = async () => {
       setLoading(true);
       setError('');
+      setActiveTab('profile');
       try {
         const [meData, teacherData] = await Promise.all([
           authApi.me().catch(() => null),
@@ -121,6 +122,12 @@ const TeacherProfileDetailView = () => {
     || ['Admin', 'SuperAdmin'].includes(currentUser?.erpRole)
     || currentUser?.isSuperAdmin
   );
+  const isSuperAdmin = Boolean(
+    currentUser?.role === 'SuperAdmin'
+    || currentUser?.erpRole === 'SuperAdmin'
+    || currentUser?.isSuperAdmin
+  );
+  const canManageTeacher = isAdmin && !(teacher?.role === 'SuperAdmin' && !isSuperAdmin);
   const isSelf = Boolean(currentUser?._id && teacher?._id && String(currentUser._id) === String(teacher._id));
   const canViewSensitive = isAdmin || isSelf;
 
@@ -159,14 +166,14 @@ const TeacherProfileDetailView = () => {
         { id: 'password', label: 'পাসওয়ার্ড পরিবর্তন', en: 'Security', icon: KeyRound }
       );
     }
-    if (isAdmin) {
+    if (canManageTeacher) {
       list.push(
         { id: 'update', label: 'আপডেট', en: 'Update', icon: Pencil },
         { id: 'settings', label: 'সেটিংস', en: 'Controls', icon: Settings }
       );
     }
     return list;
-  }, [canViewSensitive, isAdmin]);
+  }, [canViewSensitive, canManageTeacher]);
 
   // Address comparison
   const presentAddr = teacher?.presentAddress || null;
@@ -513,6 +520,14 @@ const TeacherProfileDetailView = () => {
                 RIGHT COLUMN (8 COLS · TABS + CONTENT)
             ══════════════════════════════════════════════ */}
             <main className="lg:col-span-8 space-y-5 tp-slide-up" style={{ animationDelay: '0.08s' }}>
+              {teacher.role === 'SuperAdmin' && !isSuperAdmin && (
+                <div role="note" className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
+                  <Lock size={16} className="mt-0.5 shrink-0" />
+                  <p className="font-bengali text-xs font-bold leading-5">
+                    সুপার অ্যাডমিনের অ্যাকাউন্ট ও অ্যাক্সেস কন্ট্রোল শুধু সুপার অ্যাডমিন পরিবর্তন করতে পারবেন।
+                  </p>
+                </div>
+              )}
               {/* EXECUTIVE PILL TAB BAR */}
               <div className="rounded-[22px] border border-slate-200/80 bg-white p-2 shadow-sm">
                 <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 2xl:grid-cols-6">
@@ -915,7 +930,7 @@ const TeacherProfileDetailView = () => {
                 />
               )}
 
-              {activeTab === 'update' && isAdmin && (
+              {activeTab === 'update' && canManageTeacher && (
                 <Suspense fallback={<div className="rounded-2xl bg-white p-6 text-center text-sm font-bold text-slate-500">এডিটর লোড হচ্ছে...</div>}>
                   <TeacherProfileEditorBridge
                     teacher={teacher}
@@ -926,7 +941,7 @@ const TeacherProfileDetailView = () => {
                 </Suspense>
               )}
 
-              {activeTab === 'settings' && isAdmin && (
+              {activeTab === 'settings' && canManageTeacher && (
                 <TeacherAdminControlsPanel
                   teacher={teacher}
                   currentUser={currentUser}
