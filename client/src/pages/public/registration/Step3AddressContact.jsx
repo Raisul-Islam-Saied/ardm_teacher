@@ -44,10 +44,11 @@ const ADDRESS_TEXT_FIELDS = [
     ['districtEn', 'জেলার নাম (ইংরেজি)'],
     ['divisionBn', 'বিভাগের নাম (বাংলা)'],
     ['divisionEn', 'বিভাগের নাম (ইংরেজি)'],
-    ['postOffice', 'ডাকঘর']
+    ['postOffice', 'ডাকঘর (ইংরেজি)']
 ];
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const ENG_POST_OFFICE_REGEX = /^[A-Za-z][A-Za-z\s.'-]{1,79}$/;
 
 function normalizeEnglishText(val = '') {
     const clean = String(val || '').replace(/\s+/g, ' ').trim();
@@ -77,9 +78,16 @@ const RELATIONSHIP_OPTIONS = [
 
 function validateAddressData(address, prefix, errors) {
     ADDRESS_TEXT_FIELDS.forEach(([field, label]) => {
+        const fieldName = `${prefix}${field[0].toUpperCase()}${field.slice(1)}`;
+        if (field === 'postOffice') {
+            const cleanPostOffice = sanitizeText(address?.postOffice || '');
+            if (!ENG_POST_OFFICE_REGEX.test(cleanPostOffice)) {
+                errors[fieldName] = 'পোস্ট অফিস অবশ্যই ইংরেজিতে (২ থেকে ৮০ অক্ষর) দিতে হবে, বাংলা দেওয়া যাবে না।';
+            }
+            return;
+        }
         const check = validateAddressField(address?.[field], label);
         if (!check.valid) {
-            const fieldName = `${prefix}${field[0].toUpperCase()}${field.slice(1)}`;
             errors[fieldName] = check.error;
         }
     });
@@ -321,6 +329,12 @@ export default function Step3AddressContact({
         const hasBeenEdited = touchedFields[fieldName] || String(value).length > 0;
         if (!hasBeenEdited) return '';
 
+        if (field === 'postOffice') {
+            return ENG_POST_OFFICE_REGEX.test(sanitizeText(value))
+                ? ''
+                : 'পোস্ট অফিস অবশ্যই ইংরেজিতে (২ থেকে ৮০ অক্ষর) দিতে হবে, বাংলা দেওয়া যাবে না।';
+        }
+
         if (field === 'wardNo') {
             return /^\d{1,3}$/.test(extractPureDigits(value))
                 ? ''
@@ -515,7 +529,7 @@ export default function Step3AddressContact({
                     {renderInput('villageBn', 'Village (Bangla)', 'গ্রাম (বাংলা)', { isBengaliText: true })}
                     {renderInput('villageEn', 'Village (English)', 'গ্রাম (ইংরেজি)', { isBengaliText: false, titleCase: true })}
                     {renderInput('wardNo', 'Ward No.', 'ওয়ার্ড নম্বর', { inputMode: 'numeric', maxLength: 3, numeric: true, isBengaliText: false })}
-                    {renderInput('postOffice', 'Post Office', 'ডাকঘর', { isBengaliText: true })}
+                    {renderInput('postOffice', 'Post Office (English)', 'ডাকঘর (ইংরেজি)', { isBengaliText: false, titleCase: true })}
                     {renderInput('postCode', 'Post Code', 'পোস্ট কোড (৪ সংখ্যা)', { inputMode: 'numeric', maxLength: 4, numeric: true, isBengaliText: false })}
                 </div>
             </div>
