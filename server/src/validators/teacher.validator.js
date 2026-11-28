@@ -50,6 +50,7 @@ const sanitizeBdPhone = (val) => {
 
 // Regex প্যাটার্নসমূহ
 const ENG_NAME_REGEX = /^[A-Za-z][A-Za-z\s.'-]{2,59}$/;
+const ENG_POST_OFFICE_REGEX = /^[A-Za-z][A-Za-z\s.'-]{1,79}$/;
 // বাংলা সংখ্যা (০-৯) বাদ দিয়ে এবং যুক্তবর্ণের ZWNJ/ZWJ অনুমোদন করে
 const BNG_NAME_REGEX = /^[\u0980-\u09E5\u09F0-\u09FF][\u0980-\u09E5\u09F0-\u09FF\u200C\u200D\s.'-]{1,59}$/;
 const BD_PHONE_REGEX = /^01[3-9]\d{8}$/;
@@ -184,7 +185,7 @@ const addressLocationValidators = (addressKey) => [
     body(`${addressKey}.postOffice`)
         .optional({ checkFalsy: true })
         .customSanitizer(sanitizeClean)
-        .isLength({ min: 2, max: 80 }).withMessage('ডাকঘরের নাম ২ থেকে ৮০ অক্ষরের মধ্যে হতে হবে'),
+        .matches(ENG_POST_OFFICE_REGEX).withMessage('পোস্ট অফিস অবশ্যই ইংরেজিতে (২ থেকে ৮০ অক্ষর) দিতে হবে, বাংলা দেওয়া যাবে না'),
     body(`${addressKey}.postCode`)
         .optional({ checkFalsy: true })
         .customSanitizer(sanitizeDigits)
@@ -488,7 +489,6 @@ const updateTeacherValidator = [
             ...ADDRESS_TEXT_FIELDS,
             ['houseOrRoad', 'বাড়ি বা রাস্তা'],
             ['village', 'গ্রাম'],
-            ['postOffice', 'ডাকঘর'],
             ['upazila', 'উপজেলা'],
             ['district', 'জেলা']
         ].map(([field, label]) => (
@@ -497,6 +497,10 @@ const updateTeacherValidator = [
                 .customSanitizer(sanitizeClean)
                 .isLength({ max: 80 }).withMessage(`${label} সর্বোচ্চ ৮০ অক্ষরের মধ্যে হতে হবে`)
         )),
+        body(`${addressKey}.postOffice`)
+            .optional({ checkFalsy: true })
+            .customSanitizer(sanitizeClean)
+            .matches(ENG_POST_OFFICE_REGEX).withMessage('পোস্ট অফিস অবশ্যই ইংরেজিতে (২ থেকে ৮০ অক্ষর) দিতে হবে, বাংলা দেওয়া যাবে না'),
         body(`${addressKey}.wardNo`)
             .optional({ checkFalsy: true })
             .customSanitizer(sanitizeDigits)
