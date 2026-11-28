@@ -212,7 +212,12 @@ const teacherSchema = new mongoose.Schema({
         divisionEn: { type: String, trim: true, default: '', maxlength: 80 },
         houseOrRoad: { type: String, required: [true, 'বাড়ি বা রাস্তার নাম আবশ্যক'], trim: true },
         village: { type: String, required: [true, 'গ্রামের নাম আবশ্যক'], trim: true },
-        postOffice: { type: String, trim: true, default: '' },
+        postOffice: {
+            type: String,
+            trim: true,
+            default: '',
+            match: [/^$|^[A-Za-z][A-Za-z\s.'-]{1,79}$/, 'পোস্ট অফিস অবশ্যই ইংরেজিতে (২ থেকে ৮০ অক্ষর) দিতে হবে, বাংলা দেওয়া যাবে না']
+        },
         postCode: { type: String, trim: true, default: '' },
         upazila: { type: String, trim: true, default: '' },
         district: { type: String, trim: true, default: '' }
@@ -233,7 +238,12 @@ const teacherSchema = new mongoose.Schema({
         divisionEn: { type: String, trim: true, default: '', maxlength: 80 },
         houseOrRoad: { type: String, trim: true, default: '' },
         village: { type: String, trim: true, default: '' },
-        postOffice: { type: String, trim: true, default: '' },
+        postOffice: {
+            type: String,
+            trim: true,
+            default: '',
+            match: [/^$|^[A-Za-z][A-Za-z\s.'-]{1,79}$/, 'পোস্ট অফিস অবশ্যই ইংরেজিতে (২ থেকে ৮০ অক্ষর) দিতে হবে, বাংলা দেওয়া যাবে না']
+        },
         postCode: { type: String, trim: true, default: '' },
         upazila: { type: String, trim: true, default: '' },
         district: { type: String, trim: true, default: '' }
