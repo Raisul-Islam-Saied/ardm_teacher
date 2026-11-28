@@ -108,7 +108,7 @@ export default function InlinePhotoCropper({
         [cropSource]
     );
 
-    // মাউস হুইল জুম (non-passive listener যাতে পেজ স্ক্রল না হয় এবং ক্র্যাশ না করে)
+    // মাউস হুইল জুম (non-passive listener যাতে পেজ স্ক্রল না হয়)
     useEffect(() => {
         if (!isEditing || !viewportRef.current) return undefined;
         const el = viewportRef.current;
@@ -198,27 +198,20 @@ export default function InlinePhotoCropper({
         const pts = Array.from(pointersRef.current.values());
 
         if (pts.length === 1 && dragStartRef.current) {
-            const dx = (pts[0].x - dragStartRef.current.x) / safeSize;
-            const dy = (pts[0].y - dragStartRef.current.y) / safeSize;
-            updateTransform((prev) => ({
-                ...prev,
-                panX: dragStartRef.current.panX + dx,
-                panY: dragStartRef.current.panY + dy
-            }));
+            const start = dragStartRef.current;
+            const nextPanX = start.panX + (pts[0].x - start.x) / safeSize;
+            const nextPanY = start.panY + (pts[0].y - start.y) / safeSize;
+            updateTransform({ panX: nextPanX, panY: nextPanY });
         } else if (pts.length === 2 && pinchStartRef.current) {
+            const start = pinchStartRef.current;
             const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
             const midX = (pts[0].x + pts[1].x) / 2;
             const midY = (pts[0].y + pts[1].y) / 2;
-            const scaleRatio = dist / pinchStartRef.current.dist;
-            const dx = (midX - pinchStartRef.current.midX) / safeSize;
-            const dy = (midY - pinchStartRef.current.midY) / safeSize;
+            const nextZoom = start.zoom * (dist / start.dist);
+            const nextPanX = start.panX + (midX - start.midX) / safeSize;
+            const nextPanY = start.panY + (midY - start.midY) / safeSize;
 
-            updateTransform((prev) => ({
-                ...prev,
-                zoom: pinchStartRef.current.zoom * scaleRatio,
-                panX: pinchStartRef.current.panX + dx,
-                panY: pinchStartRef.current.panY + dy
-            }));
+            updateTransform({ zoom: nextZoom, panX: nextPanX, panY: nextPanY });
         }
     };
 
@@ -257,7 +250,8 @@ export default function InlinePhotoCropper({
         }
     };
 
-    const activeError = localError || error || (isEditing && !bgStatus.passed ? 'ব্যাকগ্রাউন্ড সাদা হতে হবে' : '');
+    const isNonWhiteBg = isEditing && !bgStatus.passed;
+    const activeError = localError || error || (isNonWhiteBg ? 'ব্যাকগ্রাউন্ড সাদা হতে হবে' : '');
 
     const totalDeg = (Number(transform.rotate90) || 0) + (Number(transform.tilt) || 0);
     const minScale = cropSource
@@ -403,9 +397,10 @@ export default function InlinePhotoCropper({
                                     max="3.5"
                                     step="0.01"
                                     value={transform.zoom}
-                                    onChange={(e) =>
-                                        updateTransform((p) => ({ ...p, zoom: parseFloat(e.target.value) }))
-                                    }
+                                    onChange={(e) => {
+                                        const nextZoom = parseFloat(e.target.value);
+                                        updateTransform({ zoom: nextZoom });
+                                    }}
                                     className="w-full accent-emerald cursor-pointer"
                                 />
                                 <button
@@ -468,13 +463,18 @@ export default function InlinePhotoCropper({
                                 </Button>
 
                                 <Button
-                                    variant="outline"
-                                    size="sm"
+                                    variant={isNonWhiteBg ? 'gold' : 'outline'}
+                                    size={isNonWhiteBg ? 'md' : 'sm'}
                                     leftIcon={UploadCloud}
                                     disabled={isSaving}
                                     onClick={() => fileInputRef.current?.click()}
+                                    className={cn(
+                                        isNonWhiteBg && 'ring-2 ring-danger/50 shadow-md font-bold animate-pulse'
+                                    )}
                                 >
-                                    <span className="font-bengali">অন্য ছবি</span>
+                                    <span className="font-bengali">
+                                        {isNonWhiteBg ? 'অন্য ছবি নির্বাচন করুন' : 'অন্য ছবি'}
+                                    </span>
                                 </Button>
                             </div>
                         </>
