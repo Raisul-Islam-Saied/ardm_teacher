@@ -1,3 +1,6 @@
+// ব্যাকগ্রাউন্ড সাদা করার ফিচার অন/অফ করার সুইচ (false করলে বাটনটি দেখাবে না)
+const ENABLE_AUTO_WHITE_BG = true;
+
 import { Button } from '@components/ui';
 import { cn } from '@utils/cn';
 import {
@@ -12,10 +15,8 @@ import {
     AlertCircle,
     Check,
     Crop,
-    FlipHorizontal2,
     Image as ImageIcon,
-    RotateCcw,
-    RotateCw,
+    Sparkles,
     Trash2,
     UploadCloud,
     ZoomIn,
@@ -31,6 +32,47 @@ const INITIAL_TRANSFORM = {
     tilt: 0,
     flipX: false
 };
+
+// ট্রান্সপারেন্ট PNG-এর পেছনে পিউর সাদা (#FFFFFF) ব্যাকগ্রাউন্ড বসানোর হেল্পার
+function compositeOnWhiteBackground(transparentBlob) {
+    return new Promise((resolve, reject) => {
+        const tempUrl = URL.createObjectURL(transparentBlob);
+        const img = new Image();
+
+        img.onload = () => {
+            const w = img.naturalWidth || img.width;
+            const h = img.naturalHeight || img.height;
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, w, h);
+            ctx.drawImage(img, 0, 0, w, h);
+            URL.revokeObjectURL(tempUrl);
+
+            canvas.toBlob(
+                (whiteBlob) => {
+                    if (!whiteBlob) {
+                        reject(new Error('ব্যাকগ্রাউন্ড সাদা করা যায়নি।'));
+                        return;
+                    }
+                    resolve(new File([whiteBlob], 'white-bg.jpg', { type: 'image/jpeg' }));
+                },
+                'image/jpeg',
+                0.95
+            );
+        };
+
+        img.onerror = () => {
+            URL.revokeObjectURL(tempUrl);
+            reject(new Error('ছবিটি প্রসেস করা যায়নি।'));
+        };
+
+        img.src = tempUrl;
+    });
+}
 
 export default function InlinePhotoCropper({
     photoData,
@@ -51,6 +93,7 @@ export default function InlinePhotoCropper({
     const [viewportSize, setViewportSize] = useState(280);
     const [isDraggingFile, setIsDraggingFile] = useState(false);
     const [isLoadingFile, setIsLoadingFile] = useState(false);
+    const [isRemovingBg, setIsRemovingBg] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [localError, setLocalError] = useState('');
     const [bgStatus, setBgStatus] = useState({ passed: true, message: '' });
@@ -138,7 +181,7 @@ export default function InlinePhotoCropper({
     }, [isEditing, cropSource, transform]);
 
     const handleFileSelect = async (file) => {
-        if (!file || disabled) return;
+        if (!file || disabled || isRemovingBg) return;
         setIsLoadingFile(true);
         setLocalError('');
         try {
@@ -156,8 +199,30 @@ export default function InlinePhotoCropper({
         }
     };
 
+    // AI দিয়ে ব্যাকগ্রাউন্ড মুছে পিউর সাদা করা (Lazy Loaded)
+    const handleMakeBackgroundWhite = async () => {
+        if (!ENABLE_AUTO_WHITE_BG || !cropSource?.objectUrl || isRemovingBg || isSaving) return;
+        setIsRemovingBg(true);
+        setLocalError('');
+        try {
+            const { removeBackground } = await import('@imgly/background-removal');
+            const transparentBlob = await removeBackground(cropSource.objectUrl);
+            const whiteBgFile = await compositeOnWhiteBackground(transparentBlob);
+            const loaded = await loadImageFromFile(whiteBgFile);
+
+            setCropSource((prev) => {
+                if (prev?.objectUrl) URL.revokeObjectURL(prev.objectUrl);
+                return loaded;
+            });
+        } catch {
+            setLocalError('ব্যাকগ্রাউন্ড সাদা করা যায়নি। অনুগ্রহ করে সাদা ব্যাকগ্রাউন্ডের অন্য ছবি দিন।');
+        } finally {
+            setIsRemovingBg(false);
+        }
+    };
+
     const handlePointerDown = (e) => {
-        if (!isEditing || disabled) return;
+        if (!isEditing || disabled || isRemovingBg) return;
         e.preventDefault();
         try {
             e.currentTarget.setPointerCapture(e.pointerId);
@@ -233,7 +298,7 @@ export default function InlinePhotoCropper({
     };
 
     const handleConfirmCrop = async () => {
-        if (!cropSource?.image || !bgStatus.passed || isSaving) return;
+        if (!cropSource?.image || !bgStatus.passed || isSaving || isRemovingBg) return;
         setIsSaving(true);
         setLocalError('');
         try {
@@ -264,7 +329,7 @@ export default function InlinePhotoCropper({
         <div
             onDragOver={(e) => {
                 e.preventDefault();
-                if (!disabled) setIsDraggingFile(true);
+                if (!disabled && !isRemovingBg) setIsDraggingFile(true);
             }}
             onDragLeave={(e) => {
                 e.preventDefault();
@@ -273,7 +338,7 @@ export default function InlinePhotoCropper({
             onDrop={(e) => {
                 e.preventDefault();
                 setIsDraggingFile(false);
-                if (!disabled) {
+                if (!disabled && !isRemovingBg) {
                     const file = e.dataTransfer?.files?.[0];
                     if (file) handleFileSelect(file);
                 }
@@ -298,12 +363,12 @@ export default function InlinePhotoCropper({
                     if (file) handleFileSelect(file);
                     e.target.value = '';
                 }}
-                disabled={disabled}
+                disabled={disabled || isRemovingBg}
                 className="hidden"
             />
 
             <div className="flex flex-col md:flex-row items-center md:items-start gap-5">
-                {/* বড় স্কয়ার ছবির বক্স (ক্লিক করলে ছবি সিলেক্ট, আর এডিটিং মোডে সরাসরি ক্রপ) */}
+                {/* বড় স্কয়ার ছবির বক্স */}
                 {isEditing && cropSource ? (
                     <div
                         ref={viewportRef}
@@ -313,7 +378,8 @@ export default function InlinePhotoCropper({
                         onPointerCancel={handlePointerUp}
                         className={cn(
                             'relative w-full max-w-[290px] sm:max-w-[320px] aspect-square shrink-0 rounded-2xl overflow-hidden select-none touch-none cursor-grab active:cursor-grabbing bg-neutral-900 border-2 shadow-card',
-                            bgStatus.passed ? 'border-emerald' : 'border-danger'
+                            bgStatus.passed ? 'border-emerald' : 'border-danger',
+                            isRemovingBg && 'opacity-70 pointer-events-none'
                         )}
                     >
                         <img
@@ -386,6 +452,7 @@ export default function InlinePhotoCropper({
                             <div className="flex items-center gap-2">
                                 <button
                                     type="button"
+                                    disabled={isRemovingBg}
                                     onClick={() => updateTransform((p) => ({ ...p, zoom: p.zoom - 0.15 }))}
                                     className="p-1.5 rounded-lg border border-ink-faint hover:border-gold text-ink-soft"
                                 >
@@ -396,6 +463,7 @@ export default function InlinePhotoCropper({
                                     min="1"
                                     max="3.5"
                                     step="0.01"
+                                    disabled={isRemovingBg}
                                     value={transform.zoom}
                                     onChange={(e) => {
                                         const nextZoom = parseFloat(e.target.value);
@@ -405,6 +473,7 @@ export default function InlinePhotoCropper({
                                 />
                                 <button
                                     type="button"
+                                    disabled={isRemovingBg}
                                     onClick={() => updateTransform((p) => ({ ...p, zoom: p.zoom + 0.15 }))}
                                     className="p-1.5 rounded-lg border border-ink-faint hover:border-gold text-ink-soft"
                                 >
@@ -412,49 +481,13 @@ export default function InlinePhotoCropper({
                                 </button>
                             </div>
 
-                            {/* রোটেট, ফ্লিপ ও রিসেট */}
-                            <div className="flex flex-wrap items-center gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() =>
-                                        updateTransform((p) => ({ ...p, rotate90: (p.rotate90 - 90) % 360 }))
-                                    }
-                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-ink-faint hover:border-gold text-xs font-bengali text-emerald-deep bg-paper-panel"
-                                >
-                                    <RotateCcw className="w-3.5 h-3.5" /> বামে ৯০°
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() =>
-                                        updateTransform((p) => ({ ...p, rotate90: (p.rotate90 + 90) % 360 }))
-                                    }
-                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-ink-faint hover:border-gold text-xs font-bengali text-emerald-deep bg-paper-panel"
-                                >
-                                    <RotateCw className="w-3.5 h-3.5" /> ডানে ৯০°
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => updateTransform((p) => ({ ...p, flipX: !p.flipX }))}
-                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-ink-faint hover:border-gold text-xs font-bengali text-emerald-deep bg-paper-panel"
-                                >
-                                    <FlipHorizontal2 className="w-3.5 h-3.5" /> ফ্লিপ
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setTransform(INITIAL_TRANSFORM)}
-                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-ink-faint hover:border-gold text-xs font-bengali text-ink-soft bg-paper-panel"
-                                >
-                                    রিসেট
-                                </button>
-                            </div>
-
-                            {/* সেভ ও পরিবর্তন বাটন */}
+                            {/* সেভ, ব্যাকগ্রাউন্ড সাদা ও পরিবর্তন বাটন */}
                             <div className="flex flex-wrap items-center gap-2.5 pt-1">
                                 <Button
                                     variant="emerald"
                                     size="sm"
                                     leftIcon={Check}
-                                    disabled={!bgStatus.passed || isSaving}
+                                    disabled={!bgStatus.passed || isSaving || isRemovingBg}
                                     isLoading={isSaving}
                                     loadingText="সংরক্ষণ হচ্ছে..."
                                     onClick={handleConfirmCrop}
@@ -462,11 +495,25 @@ export default function InlinePhotoCropper({
                                     <span className="font-bengali">সংরক্ষণ করুন</span>
                                 </Button>
 
+                                {ENABLE_AUTO_WHITE_BG && isNonWhiteBg && (
+                                    <Button
+                                        variant="emerald"
+                                        size="sm"
+                                        leftIcon={Sparkles}
+                                        disabled={isSaving || isRemovingBg}
+                                        isLoading={isRemovingBg}
+                                        loadingText="সাদা করা হচ্ছে..."
+                                        onClick={handleMakeBackgroundWhite}
+                                    >
+                                        <span className="font-bengali">ব্যাকগ্রাউন্ড সাদা করুন</span>
+                                    </Button>
+                                )}
+
                                 <Button
                                     variant={isNonWhiteBg ? 'gold' : 'outline'}
                                     size={isNonWhiteBg ? 'md' : 'sm'}
                                     leftIcon={UploadCloud}
-                                    disabled={isSaving}
+                                    disabled={isSaving || isRemovingBg}
                                     onClick={() => fileInputRef.current?.click()}
                                     className={cn(
                                         isNonWhiteBg && 'ring-2 ring-danger/50 shadow-md font-bold animate-pulse'
