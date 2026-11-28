@@ -1,13 +1,12 @@
 /**
  * ARDM Enterprise ERP — Registration Step 4: Photograph, Password, Full Ledger Review & Attestation
  * Features:
- * - Client-side HTML5 Canvas 500x500 Square Photo Processor (Drag & Drop + File Picker)
+ * - Next-Level Manual 500x500 Square Photo Crop Studio with Mandatory Pure White Background Check
  * - Mandatory Portal Password (6–64 chars) with Visibility Toggle
  * - Complete Bilingual Ledger Summary of Steps 1, 2 & 3 with 1-Click "Edit Step" links
  * - Mandatory Official Attestation Checkbox with Military-Grade Validation
  */
 
-import { processImageToSquare500 } from '@api/cloudinaryClient';
 import { Badge, Button, FormInput } from '@components/ui';
 import { DEGREE_LEVELS } from '@constants/app.constants';
 import { cn } from '@utils/cn';
@@ -18,10 +17,12 @@ import {
     formatTeacherAddress,
     toBengaliDigits
 } from '@utils/formatters';
+import { loadImageFromFile } from '@utils/photoCropEngine';
 import {
     AlertCircle,
     Camera,
     CheckCircle2,
+    Crop,
     Edit3,
     Eye,
     EyeOff,
@@ -36,7 +37,8 @@ import {
     UploadCloud,
     User
 } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import PhotoCropStudioModal from './PhotoCropStudioModal';
 
 /**
  * পুরো Step 4 (ছবি, পাসওয়ার্ড ও শপথনামা) যাচাই করার এক্সপোর্টেড ফাংশন
@@ -45,7 +47,7 @@ export function validateStep4PhotoReviewData(formData, photoData) {
     const errors = {};
 
     if (!photoData || (!photoData.blob && !photoData.uploadedUrl)) {
-        errors.photo = 'নিবন্ধন সম্পন্ন করার জন্য আপনার স্পষ্ট পাসপোর্ট/স্কয়ার সাইজের ছবি আপলোড করা আবশ্যক।';
+        errors.photo = 'নিবন্ধন সম্পন্ন করার জন্য আপনার স্পষ্ট সাদা ব্যাকগ্রাউন্ডের ছবি ক্রপ করে আপলোড করা আবশ্যক।';
     }
 
     const trimmedPassword = String(formData.password || '').trim();
@@ -79,36 +81,49 @@ export default function Step4PhotoReview({
 }) {
     const fileInputRef = useRef(null);
     const [isDragging, setIsDragging] = useState(false);
-    const [photoProcessing, setPhotoProcessing] = useState(false);
+    const [photoLoading, setPhotoLoading] = useState(false);
     const [localPhotoError, setLocalPhotoError] = useState('');
     const [showPassword, setShowPassword] = useState(false);
 
+    // ম্যানুয়াল ক্রপ স্টুডিও স্টেট
+    const [cropSource, setCropSource] = useState(null);
+    const [isCropModalOpen, setIsCropModalOpen] = useState(false);
+
     const isSubmitting = Boolean(submittingState?.isSubmitting);
 
-    // ছবি সিলেক্ট বা ড্রপ করলে ৫০০×৫০০ স্কয়ারে প্রসেস করা
-    const handleProcessSelectedFile = async (file) => {
+    // কম্পোনেন্ট আনমাউন্ট হলে ObjectURL ক্লিনআপ
+    useEffect(() => {
+        return () => {
+            if (cropSource?.objectUrl) {
+                URL.revokeObjectURL(cropSource.objectUrl);
+            }
+        };
+    }, [cropSource]);
+
+    // ছবি সিলেক্ট বা ড্রপ করলে ম্যানুয়াল ক্রপ স্টুডিও ওপেন করা
+    const handleOpenCropperWithFile = async (file) => {
         if (!file || isSubmitting) return;
-        setPhotoProcessing(true);
+        setPhotoLoading(true);
         setLocalPhotoError('');
 
         try {
-            const processed = await processImageToSquare500(file, {
-                targetSize: 500,
-                quality: 0.92,
-                enforceStrictSquareInput: false
+            const loaded = await loadImageFromFile(file);
+            setCropSource((prev) => {
+                if (prev?.objectUrl) URL.revokeObjectURL(prev.objectUrl);
+                return loaded;
             });
-            onUpdatePhoto(processed);
+            setIsCropModalOpen(true);
         } catch (err) {
-            setLocalPhotoError(err.message || 'ছবি প্রসেস করতে সমস্যা হয়েছে।');
+            setLocalPhotoError(err.message || 'ছবি লোড করতে সমস্যা হয়েছে।');
         } finally {
-            setPhotoProcessing(false);
+            setPhotoLoading(false);
         }
     };
 
     const handleFileInputChange = (e) => {
         const file = e.target.files?.[0];
         if (file) {
-            handleProcessSelectedFile(file);
+            handleOpenCropperWithFile(file);
         }
         e.target.value = '';
     };
@@ -132,7 +147,7 @@ export default function Step4PhotoReview({
         if (isSubmitting) return;
         const file = e.dataTransfer?.files?.[0];
         if (file) {
-            handleProcessSelectedFile(file);
+            handleOpenCropperWithFile(file);
         }
     };
 
@@ -147,18 +162,18 @@ export default function Step4PhotoReview({
         <div className="space-y-8 animate-fade-up">
 
             {/* =================================================================
-                SECTION 1: 500x500 SQUARE PHOTOGRAPH STUDIO
+                SECTION 1: 500x500 MANUAL PHOTOGRAPH STUDIO (PURE WHITE REQUIRED)
                ================================================================= */}
             <section>
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-4 pb-2 border-b border-ink-faint">
                     <div className="flex items-center gap-2">
                         <Camera className="w-4 h-4 text-emerald" />
                         <h3 className="font-bengali text-sm font-bold text-emerald-deep">
-                            ১. শিক্ষকের অফিশিয়াল ছবি আপলোড (অটো ৫০০×৫০০ পিক্সেল বর্গাকার ইঞ্জিন)
+                            ১. শিক্ষকের অফিশিয়াল ছবি আপলোড (ম্যানুয়াল ক্রপ ও পিউর সাদা ব্যাকগ্রাউন্ড)
                         </h3>
                     </div>
                     <Badge variant="gold" size="sm" mono>
-                        500 × 500 px Square
+                        500 × 500 px · WHITE BG
                     </Badge>
                 </div>
 
@@ -199,7 +214,7 @@ export default function Step4PhotoReview({
                                             500 × 500 px
                                         </span>
                                         <span className="font-bengali text-[11px] text-ink-soft">
-                                            ছবি নেই
+                                            সাদা ব্যাকগ্রাউন্ড
                                         </span>
                                     </div>
                                 )}
@@ -207,7 +222,7 @@ export default function Step4PhotoReview({
 
                             {photoData?.dataUrl && (
                                 <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-emerald-deep text-gold-soft font-mono text-[10px] font-bold border border-gold/40 shadow-sm whitespace-nowrap">
-                                    500×500 READY
+                                    WHITE BG VERIFIED
                                 </span>
                             )}
                         </div>
@@ -216,13 +231,14 @@ export default function Step4PhotoReview({
                         <div className="flex-1 text-center sm:text-left">
                             <h4 className="font-bengali text-base font-bold text-emerald-deep">
                                 {photoData?.dataUrl
-                                    ? 'মাশাআল্লাহ! আপনার ছবিটি ৫০০×৫০০ বর্গাকারে প্রস্তুত হয়েছে'
-                                    : 'স্পষ্ট পাসপোর্ট বা স্কয়ার সাইজের রঙিন ছবি নির্বাচন করুন'}
+                                    ? 'মাশাআল্লাহ! আপনার সাদা ব্যাকগ্রাউন্ডের ছবিটি ৫০০×৫০০ বর্গাকারে প্রস্তুত'
+                                    : 'পিউর সাদা ব্যাকগ্রাউন্ডের রঙিন ছবি নির্বাচন করে ক্রপ করুন'}
                             </h4>
 
                             <p className="font-bengali text-xs text-ink-soft mt-1 leading-relaxed">
-                                যেকোনো মাপের ছবি দিলেই সিস্টেম স্বয়ংক্রিয়ভাবে মাঝখান থেকে কেটে নিখুঁত{' '}
-                                <b className="font-mono text-emerald-deep">500×500px Square JPEG</b> বানিয়ে নেবে। এই ছবিটি আপনার ডিজিটাল আইডি কার্ড ও প্রোফাইলে ব্যবহৃত হবে।
+                                ছবি নির্বাচন করলে ক্রপ স্টুডিও ওপেন হবে। আপনি নিজেই ছবিটি জুম ও অ্যাডজাস্ট করে{' '}
+                                <b className="font-mono text-emerald-deep">500×500px</b> আকারে ক্রপ করতে পারবেন।{' '}
+                                <b className="text-emerald-deep">সাদা ব্যাকগ্রাউন্ড ছাড়া ছবি গ্রহণ করা হবে না।</b>
                             </p>
 
                             {/* মেটাডেটা ব্যাজ */}
@@ -230,17 +246,17 @@ export default function Step4PhotoReview({
                                 <div className="mt-3 p-2.5 rounded-xl bg-success-bg border border-success-border inline-flex flex-wrap items-center gap-3 text-xs font-bengali text-emerald-deep">
                                     <span className="flex items-center gap-1 font-bold text-success">
                                         <CheckCircle2 className="w-4 h-4" />
-                                        অটো-স্কয়ার সম্পন্ন
+                                        সাদা ব্যাকগ্রাউন্ড যাচাইকৃত
                                     </span>
                                     <span className="font-mono text-[11px] text-ink-soft">
-                                        Original: {photoData.originalWidth}×{photoData.originalHeight}px ➔{' '}
-                                        <b className="text-emerald-deep">500×500px</b> ({toBengaliDigits(photoData.sizeKB)} KB)
+                                        500×500px ({toBengaliDigits(photoData.sizeKB)} KB)
+                                        {photoData.whiteScore ? ` · White: ${photoData.whiteScore}%` : ''}
                                     </span>
                                 </div>
                             )}
 
                             {/* বাটন বার */}
-                            <div className="mt-4 flex flex-wrap items-center justify-center sm:justify-start gap-3">
+                            <div className="mt-4 flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
                                 <input
                                     ref={fileInputRef}
                                     type="file"
@@ -255,14 +271,26 @@ export default function Step4PhotoReview({
                                     size="sm"
                                     leftIcon={UploadCloud}
                                     disabled={isSubmitting}
-                                    isLoading={photoProcessing}
-                                    loadingText="প্রসেস হচ্ছে..."
+                                    isLoading={photoLoading}
+                                    loadingText="লোড হচ্ছে..."
                                     onClick={() => fileInputRef.current?.click()}
                                 >
                                     <span className="font-bengali">
-                                        {photoData?.dataUrl ? 'অন্য ছবি পরিবর্তন করুন' : 'ছবি নির্বাচন করুন (JPG / PNG)'}
+                                        {photoData?.dataUrl ? 'অন্য ছবি নির্বাচন করুন' : 'ছবি নির্বাচন করুন (JPG / PNG)'}
                                     </span>
                                 </Button>
+
+                                {photoData?.dataUrl && cropSource && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        leftIcon={Crop}
+                                        disabled={isSubmitting}
+                                        onClick={() => setIsCropModalOpen(true)}
+                                    >
+                                        <span className="font-bengali">পুনরায় ক্রপ করুন</span>
+                                    </Button>
+                                )}
 
                                 {photoData?.dataUrl && allowPhotoRemove && (
                                     <Button
@@ -289,6 +317,18 @@ export default function Step4PhotoReview({
                     )}
                 </div>
             </section>
+
+            {/* ম্যানুয়াল ক্রপ স্টুডিও মডাল */}
+            <PhotoCropStudioModal
+                isOpen={isCropModalOpen}
+                sourceImage={cropSource}
+                onClose={() => setIsCropModalOpen(false)}
+                onConfirmCrop={(croppedResult) => {
+                    onUpdatePhoto(croppedResult);
+                    setLocalPhotoError('');
+                    setIsCropModalOpen(false);
+                }}
+            />
 
             {!photoOnly && (
                 <>
